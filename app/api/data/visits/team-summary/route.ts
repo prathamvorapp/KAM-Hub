@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { visitService } from '@/lib/services';
+import { visitService, userService } from '@/lib/services';
 import NodeCache from 'node-cache';
 
 const teamSummaryCache = new NodeCache({ stdTTL: 300 });
@@ -33,13 +33,22 @@ export async function GET(request: NextRequest) {
 
     console.log(`📊 Getting team visit summary for: ${userEmail}`);
 
-    const statistics = await visitService.getVisitStatistics(userEmail);
+    const userProfile = await userService.getUserProfileByEmail(userEmail);
+    if (!userProfile || !userProfile.team_name) {
+      return NextResponse.json({
+        success: false,
+        error: 'Team Lead must have an assigned team'
+      }, { status: 400 });
+    }
+
+    const summary = await visitService.getTeamSummary(userProfile.team_name);
     const visits = await visitService.getVisits({ email: userEmail, page: 1, limit: 1000 });
 
     const response = {
       success: true,
+      summary,
       data: {
-        statistics,
+        statistics: await visitService.getVisitStatistics(userEmail),
         recent_visits: visits.page.slice(0, 10)
       }
     };

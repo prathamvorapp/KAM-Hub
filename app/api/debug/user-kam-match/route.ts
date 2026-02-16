@@ -31,38 +31,40 @@ export async function GET(request: NextRequest) {
       .select('kam')
       .limit(1000);
 
-    const uniqueKAMs = [...new Set(churnRecords?.map(r => r.kam) || [])].sort();
+    const records = (churnRecords || []) as any[];
+    const uniqueKAMs = Array.from(new Set(records.map(r => r.kam))).sort();
 
     // Check if user's full_name matches any KAM
-    const matchingRecordsCount = churnRecords?.filter(r => r.kam === userProfile.full_name).length || 0;
+    const profile = userProfile as any;
+    const matchingRecordsCount = records.filter(r => r.kam === profile.full_name).length;
 
     // Get team members if Team Lead
     let teamMembers = null;
-    if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
+    if (profile.role === 'Team Lead' || profile.role === 'team_lead') {
       const { data: members } = await supabase
         .from('user_profiles')
         .select('full_name, email, role')
-        .eq('team_name', userProfile.team_name)
+        .eq('team_name', profile.team_name)
         .eq('is_active', true);
       teamMembers = members;
     }
 
     return NextResponse.json({
       user_profile: {
-        email: userProfile.email,
-        full_name: userProfile.full_name,
-        role: userProfile.role,
-        team_name: userProfile.team_name
+        email: profile.email,
+        full_name: profile.full_name,
+        role: profile.role,
+        team_name: profile.team_name
       },
       matching_records_count: matchingRecordsCount,
       all_kam_names: uniqueKAMs,
       team_members: teamMembers,
       diagnosis: {
         has_matching_records: matchingRecordsCount > 0,
-        full_name_in_kam_list: uniqueKAMs.includes(userProfile.full_name),
+        full_name_in_kam_list: uniqueKAMs.includes(profile.full_name),
         possible_matches: uniqueKAMs.filter(kam => 
-          kam.toLowerCase().includes(userProfile.full_name.toLowerCase()) ||
-          userProfile.full_name.toLowerCase().includes(kam.toLowerCase())
+          kam.toLowerCase().includes(profile.full_name.toLowerCase()) ||
+          profile.full_name.toLowerCase().includes(kam.toLowerCase())
         )
       }
     });

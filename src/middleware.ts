@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { verifySession } from '../lib/session';
 
 // Public routes that don't require authentication
 const PUBLIC_ROUTES = [
@@ -13,7 +14,7 @@ const PUBLIC_ROUTES = [
   '/',
 ];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Skip middleware for static files and Next.js internals
@@ -46,8 +47,17 @@ export function middleware(request: NextRequest) {
       }, { status: 401 });
     }
 
+    const verifiedData = await verifySession(userSession.value);
+    if (!verifiedData) {
+      console.log('❌ [MIDDLEWARE] Invalid session signature');
+      return NextResponse.json({
+        error: 'Invalid session',
+        detail: 'Session signature verification failed'
+      }, { status: 401 });
+    }
+
     try {
-      const userData = JSON.parse(userSession.value);
+      const userData = JSON.parse(verifiedData);
       console.log('🔵 [MIDDLEWARE] User data:', { email: userData.email, role: userData.role });
       
       // Validate session data

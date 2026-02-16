@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { UserService } from '../../../../lib/services/userService';
+import { userService } from '../../../../lib/services/userService';
 import { checkRateLimit, getClientIdentifier } from '../../../../lib/rate-limit';
-
-const userService = new UserService();
+import { signSession } from '../../../../lib/session';
 
 // Validation schema
 const LoginSchema = z.object({
@@ -70,12 +69,14 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // Set a simple session cookie (no JWT needed)
-    response.cookies.set('user-session', JSON.stringify({
+    // Set a signed session cookie
+    const sessionData = JSON.stringify({
       email: user.email,
       role: user.role,
       team_name: user.team_name
-    }), {
+    });
+
+    response.cookies.set('user-session', await signSession(sessionData), {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',

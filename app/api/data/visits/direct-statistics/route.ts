@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-client';
+import { normalizeRole } from '@/lib/utils/roleUtils';
 import NodeCache from 'node-cache';
 
 const statisticsCache = new NodeCache({ stdTTL: 180 });
@@ -51,19 +52,22 @@ export async function GET(request: NextRequest) {
       }, { status: 404 });
     }
 
+    const profile = userProfile as any;
+    const normalizedRole = normalizeRole(profile.role);
+
     console.log('✅ [STEP 1] User found:', {
-      email: userProfile.email,
-      role: userProfile.role,
-      team: userProfile.team_name
+      email: profile.email,
+      role: profile.role,
+      team: profile.team_name
     });
 
     // STEP 2: Get brands based on user role - fetch directly with filters
-    console.log('📊 [STEP 2] Fetching brands for user role:', userProfile.role);
+    console.log('📊 [STEP 2] Fetching brands for user role:', profile.role);
     
     let userBrands: any[] = [];
     let brandFilter: string[] = [];
 
-    if (userProfile.role === 'agent' || userProfile.role === 'Agent') {
+    if (normalizedRole === 'agent') {
       // For agents: fetch brands directly with email filter
       const { data: agentBrands, error: brandsError } = await supabase
         .from('master_data')
@@ -84,22 +88,22 @@ export async function GET(request: NextRequest) {
       brandFilter = userBrands.map(b => b.brand_name);
       console.log('✅ [STEP 2] Agent brands found:', userBrands.length);
       
-    } else if (userProfile.role === 'team_lead' || userProfile.role === 'Team Lead') {
-      // For team leads: get all agents in team, then fetch their brands
-      if (!userProfile.team_name) {
+    } else if (normalizedRole === 'team_lead') {
+      // For team leads: get all members in team, then fetch their brands
+      if (!profile.team_name) {
         return NextResponse.json({
           success: false,
           error: 'Team lead must have a team assigned'
         }, { status: 400 });
       }
 
-      const { data: teamAgents } = await supabase
+      const { data: teamMembers } = await supabase
         .from('user_profiles')
         .select('email, full_name')
-        .eq('team_name', userProfile.team_name)
-        .in('role', ['agent', 'Agent']);
+        .eq('team_name', profile.team_name)
+        .eq('is_active', true);
 
-      const agentEmails = teamAgents?.map(a => a.email) || [];
+      const agentEmails = (teamMembers as any[])?.map(a => a.email) || [];
       
       // Fetch brands for all team agents
       const { data: teamBrands, error: brandsError } = await supabase
@@ -121,7 +125,7 @@ export async function GET(request: NextRequest) {
       brandFilter = userBrands.map(b => b.brand_name);
       console.log('✅ [STEP 2] Team lead brands found:', userBrands.length);
       
-    } else if (userProfile.role === 'admin' || userProfile.role === 'Admin') {
+    } else if (normalizedRole === 'admin') {
       // For admins: fetch all brands
       const { data: allBrands, error: brandsError } = await supabase
         .from('master_data')
@@ -151,10 +155,10 @@ export async function GET(request: NextRequest) {
       .eq('visit_year', currentYear);
 
     // Apply role-based filtering on visits table
-    if (userProfile.role === 'agent' || userProfile.role === 'Agent') {
+    if (normalizedRole === 'agent') {
       visitQuery = visitQuery.eq('agent_id', email);
-    } else if (userProfile.role === 'team_lead' || userProfile.role === 'Team Lead') {
-      visitQuery = visitQuery.eq('team_name', userProfile.team_name);
+    } else if (normalizedRole === 'team_lead') {
+      visitQuery = visitQuery.eq('team_name', profile.team_name);
     }
 
     const { data: allVisits, error: visitsError } = await visitQuery;
@@ -172,8 +176,8 @@ export async function GET(request: NextRequest) {
 
     // Filter visits by user's brands
     const visits = brandFilter.length > 0
-      ? allVisits?.filter(visit => brandFilter.includes(visit.brand_name)) || []
-      : allVisits || [];
+      ? (allVisits as any[])?.filter(visit => brandFilter.includes(visit.brand_name)) || []
+      : (allVisits as any[]) || [];
 
     console.log('✅ [STEP 4] Visits for user brands:', visits.length);
 
@@ -270,8 +274,8 @@ export async function GET(request: NextRequest) {
       data: statistics,
       metadata: {
         user_email: email,
-        user_role: userProfile.role,
-        user_team: userProfile.team_name,
+        user_role: profile.role,
+        user_team: profile.team_name,
         query_year: currentYear,
         fetched_at: new Date().toISOString()
       }

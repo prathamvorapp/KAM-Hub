@@ -4,6 +4,7 @@
  */
 
 import { supabase, getSupabaseAdmin } from '../supabase-client';
+import { normalizeRole } from '../utils/roleUtils';
 
 export const PRODUCTS = [
   "Task",
@@ -36,10 +37,11 @@ export const demoService = {
       throw new Error("Brand not found in Master_Data");
     }
     
+    const brand = brandData as any;
     const { data: agentProfile } = await supabase
       .from('user_profiles')
       .select('*')
-      .eq('email', brandData.kam_email_id)
+      .eq('email', brand.kam_email_id)
       .single();
     
     const now = new Date().toISOString();
@@ -58,15 +60,15 @@ export const demoService = {
     for (const product of PRODUCTS) {
       const demoId = `${brandId}_${product.replace(/\s+/g, '_')}_${Date.now()}`;
       
-      const { error } = await getSupabaseAdmin().from('demos').insert({
+      const { error } = await (getSupabaseAdmin().from('demos') as any).insert({
         demo_id: demoId,
-        brand_name: brandData.brand_name,
+        brand_name: brand.brand_name,
         brand_id: brandId,
         product_name: product,
-        agent_id: brandData.kam_email_id,
-        agent_name: brandData.kam_name,
-        team_name: agentProfile?.team_name,
-        zone: brandData.zone,
+        agent_id: brand.kam_email_id,
+        agent_name: brand.kam_name,
+        team_name: (agentProfile as any)?.team_name,
+        zone: brand.zone,
         current_status: "Step 1 Pending",
         workflow_completed: false,
         created_at: now,
@@ -86,7 +88,7 @@ export const demoService = {
     role: string;
     teamName?: string;
   }) {
-    const normalizedRole = params.role.toLowerCase().replace(/\s+/g, '_');
+    const normalizedRole = normalizeRole(params.role);
     
     let query = getSupabaseAdmin().from('demos').select('*');
     
@@ -100,7 +102,7 @@ export const demoService = {
     
     const { data: demos } = await query;
     
-    const brandGroups = (demos || []).reduce((acc, demo) => {
+    const brandGroups = (demos as any[] || []).reduce((acc, demo) => {
       if (!acc[demo.brand_name]) {
         acc[demo.brand_name] = {
           brandName: demo.brand_name,
@@ -134,7 +136,8 @@ export const demoService = {
       throw new Error("Demo not found");
     }
     
-    if (demo.step1_completed_at) {
+    const d = demo as any;
+    if (d.step1_completed_at) {
       throw new Error("Step 1 already completed - cannot modify");
     }
     
@@ -153,8 +156,8 @@ export const demoService = {
       newStatus = "Step 2 Pending";
     }
     
-    await getSupabaseAdmin()
-      .from('demos')
+    await (getSupabaseAdmin()
+      .from('demos') as any)
       .update({
         is_applicable: params.isApplicable,
         non_applicable_reason: params.nonApplicableReason,
@@ -183,11 +186,12 @@ export const demoService = {
       throw new Error("Demo not found");
     }
     
-    if (!demo.step1_completed_at || !demo.is_applicable) {
+    const d = demo as any;
+    if (!d.step1_completed_at || !d.is_applicable) {
       throw new Error("Step 1 must be completed first and product must be applicable");
     }
     
-    if (demo.step2_completed_at) {
+    if (d.step2_completed_at) {
       throw new Error("Step 2 already completed - cannot modify");
     }
     
@@ -202,8 +206,8 @@ export const demoService = {
       newStatus = "Demo Pending";
     }
     
-    await getSupabaseAdmin()
-      .from('demos')
+    await (getSupabaseAdmin()
+      .from('demos') as any)
       .update({
         usage_status: params.usageStatus,
         step2_completed_at: now,
@@ -233,29 +237,30 @@ export const demoService = {
       throw new Error("Demo not found");
     }
     
-    if (demo.current_status !== "Demo Pending" && demo.current_status !== "Demo Scheduled") {
+    const d = demo as any;
+    if (d.current_status !== "Demo Pending" && d.current_status !== "Demo Scheduled") {
       throw new Error("Demo can only be scheduled when status is 'Demo Pending' or 'Demo Scheduled'");
     }
     
     const now = new Date().toISOString();
-    const isReschedule = demo.demo_scheduled_date !== undefined && demo.demo_scheduled_date !== null;
+    const isReschedule = d.demo_scheduled_date !== undefined && d.demo_scheduled_date !== null;
     
-    const history = demo.demo_scheduling_history || [];
+    const history = d.demo_scheduling_history || [];
     if (isReschedule) {
       history.push({
-        scheduled_date: demo.demo_scheduled_date!,
-        scheduled_time: demo.demo_scheduled_time!,
+        scheduled_date: d.demo_scheduled_date!,
+        scheduled_time: d.demo_scheduled_time!,
         rescheduled_at: now,
         reason: params.reason,
       });
     }
     
-    await getSupabaseAdmin()
-      .from('demos')
+    await (getSupabaseAdmin()
+      .from('demos') as any)
       .update({
         demo_scheduled_date: params.scheduledDate,
         demo_scheduled_time: params.scheduledTime,
-        demo_rescheduled_count: (demo.demo_rescheduled_count || 0) + (isReschedule ? 1 : 0),
+        demo_rescheduled_count: ((demo as any).demo_rescheduled_count || 0) + (isReschedule ? 1 : 0),
         demo_scheduling_history: history,
         current_status: "Demo Scheduled",
         updated_at: now,
@@ -281,7 +286,8 @@ export const demoService = {
       throw new Error("Demo not found");
     }
     
-    if (demo.current_status !== "Demo Scheduled") {
+    const d = demo as any;
+    if (d.current_status !== "Demo Scheduled") {
       throw new Error("Demo must be scheduled before completion");
     }
     
@@ -291,8 +297,8 @@ export const demoService = {
     
     const now = new Date().toISOString();
     
-    await getSupabaseAdmin()
-      .from('demos')
+    await (getSupabaseAdmin()
+      .from('demos') as any)
       .update({
         demo_completed: true,
         demo_completed_date: now,
@@ -322,7 +328,8 @@ export const demoService = {
       throw new Error("Demo not found");
     }
     
-    if (demo.current_status !== "Feedback Awaited") {
+    const d = demo as any;
+    if (d.current_status !== "Feedback Awaited") {
       throw new Error("Demo must be completed before conversion decision");
     }
     
@@ -332,8 +339,8 @@ export const demoService = {
     
     const now = new Date().toISOString();
     
-    await getSupabaseAdmin()
-      .from('demos')
+    await (getSupabaseAdmin()
+      .from('demos') as any)
       .update({
         conversion_status: params.conversionStatus,
         non_conversion_reason: params.nonConversionReason,
@@ -356,7 +363,7 @@ export const demoService = {
     rescheduleBy: string;
     rescheduleByRole: string;
   }) {
-    const normalizedRole = params.rescheduleByRole.toLowerCase().replace(/\s+/g, '_');
+    const normalizedRole = normalizeRole(params.rescheduleByRole);
     if (normalizedRole !== "team_lead" && normalizedRole !== "admin") {
       throw new Error("Only Team Lead and Admin can reschedule demos");
     }
@@ -378,36 +385,37 @@ export const demoService = {
         .eq('email', params.rescheduleBy)
         .single();
       
-      if (!rescheduleByProfile || rescheduleByProfile.team_name !== demo.team_name) {
+      if (!rescheduleByProfile || (rescheduleByProfile as any).team_name !== (demo as any).team_name) {
         throw new Error("Team Lead can only reschedule demos from their team");
       }
     }
     
-    if (!demo.step1_completed_at) {
+    const d = demo as any;
+    if (!d.step1_completed_at) {
       throw new Error("Demo must complete Step 1 (applicability decision) before it can be rescheduled");
     }
     
     const now = new Date().toISOString();
-    const isReschedule = demo.demo_scheduled_date !== undefined && demo.demo_scheduled_date !== null;
+    const isReschedule = d.demo_scheduled_date !== undefined && d.demo_scheduled_date !== null;
     
-    const history = demo.demo_scheduling_history || [];
+    const history = d.demo_scheduling_history || [];
     if (isReschedule) {
       history.push({
-        scheduled_date: demo.demo_scheduled_date!,
-        scheduled_time: demo.demo_scheduled_time!,
+        scheduled_date: d.demo_scheduled_date!,
+        scheduled_time: d.demo_scheduled_time!,
         rescheduled_at: now,
         reason: `${params.reason} (Rescheduled by ${params.rescheduleByRole}: ${params.rescheduleBy})`,
       });
     }
     
-    await getSupabaseAdmin()
-      .from('demos')
+    await (getSupabaseAdmin()
+      .from('demos') as any)
       .update({
         demo_scheduled_date: params.scheduledDate,
         demo_scheduled_time: params.scheduledTime,
-        demo_rescheduled_count: (demo.demo_rescheduled_count || 0) + (isReschedule ? 1 : 0),
+        demo_rescheduled_count: ((demo as any).demo_rescheduled_count || 0) + (isReschedule ? 1 : 0),
         demo_scheduling_history: history,
-        ...(demo.workflow_completed ? {} : { current_status: "Demo Scheduled" }),
+        ...((demo as any).workflow_completed ? {} : { current_status: "Demo Scheduled" }),
         updated_at: now,
       })
       .eq('demo_id', params.demoId);
@@ -426,7 +434,7 @@ export const demoService = {
     teamName?: string;
     role: string;
   }) {
-    const normalizedRole = params.role.toLowerCase().replace(/\s+/g, '_');
+    const normalizedRole = normalizeRole(params.role);
     
     let query = getSupabaseAdmin().from('demos').select('*');
     
@@ -449,7 +457,7 @@ export const demoService = {
       pending: 0,
     };
     
-    demos?.forEach(demo => {
+    (demos as any[] || []).forEach(demo => {
       stats.byStatus[demo.current_status] = (stats.byStatus[demo.current_status] || 0) + 1;
       stats.byProduct[demo.product_name] = (stats.byProduct[demo.product_name] || 0) + 1;
       

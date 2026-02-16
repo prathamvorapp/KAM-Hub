@@ -35,11 +35,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (userData) {
           const parsedUser = JSON.parse(userData)
           
-          // Restore cookie if it's missing (e.g., after browser restart)
-          if (!document.cookie.includes('user-session=')) {
-            document.cookie = `user-session=${encodeURIComponent(JSON.stringify(parsedUser))}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
-          }
-          
           // Set user immediately from localStorage - trust the stored data
           // The API calls will validate the session when they're made
           setUser(parsedUser)
@@ -48,7 +43,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         console.error('Error initializing auth:', error)
         localStorage.removeItem('user_data')
-        document.cookie = 'user-session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
       } finally {
         setLoading(false)
       }
@@ -92,9 +86,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Store user data in localStorage (no tokens needed)
       localStorage.setItem('user_data', JSON.stringify(authResult.user));
       
-      // Set cookie for middleware authentication
-      document.cookie = `user-session=${encodeURIComponent(JSON.stringify(authResult.user))}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
-      
       setUser(authResult.user)
       setUserProfile(authResult.user)
 
@@ -116,9 +107,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Clear user data
       localStorage.removeItem('user_data');
       
-      // Clear cookie
-      document.cookie = 'user-session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-      
       setUser(null)
       setUserProfile(null)
       
@@ -128,7 +116,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // Force clear even if there's an error
       localStorage.removeItem('user_data');
-      document.cookie = 'user-session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
       setUser(null)
       setUserProfile(null)
     } finally {
@@ -149,9 +136,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             permissions: getRolePermissions(result.data.role)
           }
           
-          // Update stored user data and cookie
+          // Update stored user data
           localStorage.setItem('user_data', JSON.stringify(updatedUser))
-          document.cookie = `user-session=${encodeURIComponent(JSON.stringify(updatedUser))}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
           setUser(updatedUser)
           setUserProfile(updatedUser)
         }

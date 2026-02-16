@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { UserService } from '../../../../lib/services/userService';
-
-const userService = new UserService();
+import { userService } from '../../../../lib/services/userService';
 
 // Validation schema
 const ResetPasswordSchema = z.object({

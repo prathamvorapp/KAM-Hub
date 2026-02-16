@@ -3,6 +3,7 @@
  */
 
 import { supabase, getSupabaseAdmin } from '../supabase-client';
+import { normalizeRole } from '../utils/roleUtils';
 
 export const healthCheckService = {
   // Get health checks with role-based filtering
@@ -24,10 +25,12 @@ export const healthCheckService = {
         .single();
       
       if (userProfile) {
-        if (userProfile.role === 'Agent' || userProfile.role === 'agent') {
+        const prof = userProfile as any;
+        const normalizedRole = normalizeRole(prof.role);
+        if (normalizedRole === 'agent') {
           query = query.eq('kam_email', email);
-        } else if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
-          query = query.eq('team_name', userProfile.team_name);
+        } else if (normalizedRole === 'team_lead') {
+          query = query.eq('team_name', prof.team_name);
         }
       }
     }
@@ -55,7 +58,7 @@ export const healthCheckService = {
   async createHealthCheck(data: any) {
     const now = new Date().toISOString();
     
-    const { error } = await getSupabaseAdmin().from('health_checks').insert({
+    const { error } = await (getSupabaseAdmin().from('health_checks') as any).insert({
       ...data,
       created_at: now,
       updated_at: now,
@@ -69,8 +72,8 @@ export const healthCheckService = {
   async updateHealthCheck(checkId: string, data: any) {
     const now = new Date().toISOString();
     
-    const { error } = await getSupabaseAdmin()
-      .from('health_checks')
+    const { error } = await (getSupabaseAdmin()
+      .from('health_checks') as any)
       .update({
         ...data,
         updated_at: now,
@@ -98,10 +101,12 @@ export const healthCheckService = {
         .single();
       
       if (userProfile) {
-        if (userProfile.role === 'Agent' || userProfile.role === 'agent') {
+        const prof = userProfile as any;
+        const normalizedRole = normalizeRole(prof.role);
+        if (normalizedRole === 'agent') {
           query = query.eq('kam_email', email);
-        } else if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
-          query = query.eq('team_name', userProfile.team_name);
+        } else if (normalizedRole === 'team_lead') {
+          query = query.eq('team_name', prof.team_name);
         }
       }
     }
@@ -110,16 +115,17 @@ export const healthCheckService = {
       query = query.eq('assessment_month', month);
     }
     
-    const { data: records } = await query;
+    const { data: allRecords } = await query;
+    const records = (allRecords || []) as any[];
     
     const stats = {
-      total: records?.length || 0,
+      total: records.length,
       byHealthStatus: {} as Record<string, number>,
       byBrandNature: {} as Record<string, number>,
       byZone: {} as Record<string, number>,
     };
     
-    records?.forEach(record => {
+    records.forEach(record => {
       stats.byHealthStatus[record.health_status] = (stats.byHealthStatus[record.health_status] || 0) + 1;
       stats.byBrandNature[record.brand_nature] = (stats.byBrandNature[record.brand_nature] || 0) + 1;
       stats.byZone[record.zone] = (stats.byZone[record.zone] || 0) + 1;
@@ -145,19 +151,21 @@ export const healthCheckService = {
       throw new Error("User profile not found");
     }
     
+    const prof = userProfile as any;
     // Get all brands for this user
     let brandsQuery = getSupabaseAdmin().from('master_data').select('*');
     
-    if (userProfile.role === 'Agent' || userProfile.role === 'agent') {
+    const normalizedRole = normalizeRole(prof.role);
+    if (normalizedRole === 'agent') {
       brandsQuery = brandsQuery.eq('kam_email_id', email);
-    } else if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
+    } else if (normalizedRole === 'team_lead') {
       const { data: teamMembers } = await supabase
         .from('user_profiles')
         .select('email')
-        .eq('team_name', userProfile.team_name)
-        .in('role', ['agent', 'Agent']);
+        .eq('team_name', prof.team_name)
+        .eq('is_active', true);
       
-      const agentEmails = teamMembers?.map(m => m.email) || [];
+      const agentEmails = (teamMembers as any[])?.map(m => m.email) || [];
       brandsQuery = brandsQuery.in('kam_email_id', agentEmails);
     }
     
@@ -169,12 +177,12 @@ export const healthCheckService = {
       .select('brand_name')
       .eq('assessment_month', month);
     
-    const assessedBrandNames = new Set(assessedChecks?.map(c => c.brand_name) || []);
+    const assessedBrandNames = new Set(assessedChecks?.map(c => (c as any).brand_name) || []);
     
     // Filter out already assessed brands
-    const brandsForAssessment = allBrands?.filter(brand => 
+    const brandsForAssessment = (allBrands as any[] || []).filter(brand =>
       !assessedBrandNames.has(brand.brand_name)
-    ) || [];
+    );
     
     return brandsForAssessment;
   },
@@ -196,19 +204,21 @@ export const healthCheckService = {
       throw new Error("User profile not found");
     }
     
+    const prof = userProfile as any;
     // Get total brands
     let brandsQuery = getSupabaseAdmin().from('master_data').select('*', { count: 'exact' });
     
-    if (userProfile.role === 'Agent' || userProfile.role === 'agent') {
+    const normalizedRole = normalizeRole(prof.role);
+    if (normalizedRole === 'agent') {
       brandsQuery = brandsQuery.eq('kam_email_id', email);
-    } else if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
+    } else if (normalizedRole === 'team_lead') {
       const { data: teamMembers } = await supabase
         .from('user_profiles')
         .select('email')
-        .eq('team_name', userProfile.team_name)
-        .in('role', ['agent', 'Agent']);
+        .eq('team_name', prof.team_name)
+        .eq('is_active', true);
       
-      const agentEmails = teamMembers?.map(m => m.email) || [];
+      const agentEmails = (teamMembers as any[])?.map(m => m.email) || [];
       brandsQuery = brandsQuery.in('kam_email_id', agentEmails);
     }
     
@@ -220,20 +230,20 @@ export const healthCheckService = {
       .select('*', { count: 'exact' })
       .eq('assessment_month', month);
     
-    if (userProfile.role === 'Agent' || userProfile.role === 'agent') {
+    if (normalizedRole === 'agent') {
       assessedQuery = assessedQuery.eq('kam_email', email);
-    } else if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
-      assessedQuery = assessedQuery.eq('team_name', userProfile.team_name);
+    } else if (normalizedRole === 'team_lead') {
+      assessedQuery = assessedQuery.eq('team_name', prof.team_name);
     }
     
     const { count: assessedBrands } = await assessedQuery;
     
-    const progress = totalBrands ? Math.round(((assessedBrands || 0) / totalBrands) * 100) : 0;
+    const progress = totalBrands ? Math.round(((assessedBrands || 0) / (totalBrands as number)) * 100) : 0;
     
     return {
       total_brands: totalBrands || 0,
       assessed_brands: assessedBrands || 0,
-      pending_brands: (totalBrands || 0) - (assessedBrands || 0),
+      pending_brands: (totalBrands as number || 0) - (assessedBrands || 0),
       progress_percentage: progress,
     };
   },

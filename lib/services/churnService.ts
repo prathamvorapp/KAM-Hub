@@ -4,6 +4,7 @@
  */
 
 import { supabase, getSupabaseAdmin } from '../supabase-client';
+import { normalizeRole } from '../utils/roleUtils';
 import { 
   ACTIVE_FOLLOW_UP_REASONS, 
   COMPLETED_CHURN_REASONS,
@@ -68,26 +69,27 @@ export const churnService = {
       console.log(`🔍 User Profile for ${email}:`, profile);
       
       if (profile) {
+        const prof = profile as any;
         // Normalize role for comparison
-        const normalizedRole = profile.role?.toLowerCase().replace(/\s+/g, '_');
+        const normalizedRole = normalizeRole(prof.role);
         console.log(`🔍 Normalized role: ${normalizedRole}`);
         
         if (normalizedRole === 'agent') {
-          kamFilter = [profile.full_name];
-          console.log(`👤 Agent filter - showing records for KAM: ${profile.full_name}`);
-        } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
+          kamFilter = [prof.full_name];
+          console.log(`👤 Agent filter - showing records for KAM: ${prof.full_name}`);
+        } else if (normalizedRole === 'team_lead') {
           const { data: teamMembers } = await getSupabaseAdmin()
             .from('user_profiles')
             .select('full_name')
-            .eq('team_name', profile.team_name)
+            .eq('team_name', prof.team_name)
             .eq('is_active', true);
-          kamFilter = teamMembers?.map(m => m.full_name) || [];
-          console.log(`👥 Team Lead filter - showing records for team ${profile.team_name}:`, kamFilter);
+          kamFilter = (teamMembers as any[])?.map(m => m.full_name) || [];
+          console.log(`👥 Team Lead filter - showing records for team ${prof.team_name}:`, kamFilter);
         } else if (normalizedRole === 'admin') {
           console.log(`👑 Admin - showing all records`);
           kamFilter = null; // Admin sees all
         } else {
-          console.log(`⚠️ Unknown role: ${profile.role}, treating as no filter`);
+          console.log(`⚠️ Unknown role: ${prof.role}, treating as no filter`);
         }
       } else {
         console.error(`❌ No user profile found for email: ${email}`);
@@ -108,52 +110,10 @@ export const churnService = {
     
     // Log first few records to see KAM names
     if (allRecords && allRecords.length > 0) {
-      console.log(`📋 Sample records (first 3):`, allRecords.slice(0, 3).map(r => ({ rid: r.rid, kam: r.kam, restaurant: r.restaurant_name })));
+      console.log(`📋 Sample records (first 3):`, (allRecords as any[]).slice(0, 3).map(r => ({ rid: r.rid, kam: r.kam, restaurant: r.restaurant_name })));
     }
     
-    let records = allRecords || [];
-    
-    // AUTO-FIX: Update any records that have completed reasons but wrong status
-    console.log(`🔧 Auto-fixing records with incorrect statuses...`);
-    let autoFixedCount = 0;
-    const fixPromises = [];
-    
-    for (const record of records) {
-      const churnReason = record.churn_reason?.trim() || "";
-      const callAttempts = record.call_attempts || [];
-      const shouldBeCompleted = isCompletedReason(churnReason) || callAttempts.length >= 3;
-      
-      if (shouldBeCompleted && record.follow_up_status !== "COMPLETED") {
-        console.log(`   🔧 Auto-fixing RID ${record.rid}: "${churnReason}" → COMPLETED`);
-        
-        // Queue the fix (don't await yet for better performance)
-        const fixPromise = getSupabaseAdmin()
-          .from('churn_records')
-          .update({
-            follow_up_status: "COMPLETED",
-            is_follow_up_active: false,
-            next_reminder_time: null,
-            follow_up_completed_at: record.follow_up_completed_at || new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .eq('rid', record.rid)
-          .then(() => {
-            // Update the in-memory record too
-            record.follow_up_status = "COMPLETED";
-            record.is_follow_up_active = false;
-            record.next_reminder_time = null;
-          });
-        
-        fixPromises.push(fixPromise);
-        autoFixedCount++;
-      }
-    }
-    
-    // Wait for all fixes to complete
-    if (fixPromises.length > 0) {
-      await Promise.all(fixPromises);
-      console.log(`✅ Auto-fixed ${autoFixedCount} records`);
-    }
+    let records = (allRecords || []) as any[];
     
     // Calculate categorization
     const today = new Date();
@@ -353,6 +313,7 @@ export const churnService = {
       throw new Error(`Record with RID ${rid} not found`);
     }
     
+    const rec = record as any;
     const currentDateTime = new Date().toISOString();
     const controlledStatus = getControlledStatusHelper(churn_reason);
     
@@ -361,7 +322,7 @@ export const churnService = {
     
     let followUpStatus = "INACTIVE";
     let isFollowUpActive = false;
-    let followUpCompletedAt = record.follow_up_completed_at;
+    let followUpCompletedAt = rec.follow_up_completed_at;
     
     if (shouldActivateFollowUp) {
       followUpStatus = "ACTIVE";
@@ -375,18 +336,18 @@ export const churnService = {
     const updateData: any = {
       churn_reason,
       controlled_status: controlledStatus,
-      remarks: remarks || record.remarks,
-      mail_sent_confirmation: mail_sent_confirmation ?? record.mail_sent_confirmation,
+      remarks: remarks || rec.remarks,
+      mail_sent_confirmation: mail_sent_confirmation ?? rec.mail_sent_confirmation,
       date_time_filled: currentDateTime,
       updated_at: currentDateTime,
       follow_up_status: followUpStatus,
       is_follow_up_active: isFollowUpActive,
-      current_call: shouldActivateFollowUp ? (record.current_call || 1) : record.current_call,
-      mail_sent: mail_sent_confirmation ?? record.mail_sent ?? false,
+      current_call: shouldActivateFollowUp ? (rec.current_call || 1) : rec.current_call,
+      mail_sent: mail_sent_confirmation ?? rec.mail_sent ?? false,
       follow_up_completed_at: followUpCompletedAt,
     };
     
-    if (shouldActivateFollowUp && !record.is_follow_up_active) {
+    if (shouldActivateFollowUp && !rec.is_follow_up_active) {
       const nextReminder = new Date();
       nextReminder.setHours(nextReminder.getHours() + 24);
       updateData.next_reminder_time = nextReminder.toISOString();
@@ -394,8 +355,8 @@ export const churnService = {
       updateData.next_reminder_time = null;
     }
     
-    await getSupabaseAdmin()
-      .from('churn_records')
+    await (getSupabaseAdmin()
+      .from('churn_records') as any)
       .update(updateData)
       .eq('rid', rid);
     
@@ -439,15 +400,17 @@ export const churnService = {
         .single();
       
       if (profile) {
-        if (profile.role === 'Agent' || profile.role === 'agent') {
-          kamFilter = [profile.full_name];
-        } else if (profile.role === 'Team Lead' || profile.role === 'team_lead') {
+        const prof = profile as any;
+        const normalizedRole = normalizeRole(prof.role);
+        if (normalizedRole === 'agent') {
+          kamFilter = [prof.full_name];
+        } else if (normalizedRole === 'team_lead') {
           const { data: teamMembers } = await supabase
             .from('user_profiles')
             .select('full_name')
-            .eq('team_name', profile.team_name)
+            .eq('team_name', prof.team_name)
             .eq('is_active', true);
-          kamFilter = teamMembers?.map(m => m.full_name) || [];
+          kamFilter = (teamMembers as any[])?.map(m => m.full_name) || [];
         }
       }
     }
@@ -457,15 +420,16 @@ export const churnService = {
       query = query.in('kam', kamFilter);
     }
     
-    const { data: records } = await query;
-    const totalRecords = records?.length || 0;
+    const { data: allRecords } = await query;
+    const records = (allRecords || []) as any[];
+    const totalRecords = records.length;
     
     let missingChurnReasons = 0;
     let activeFollowUps = 0;
     let completedFollowUps = 0;
     const churnReasonCounts: Record<string, number> = {};
     
-    records?.forEach(record => {
+    records.forEach(record => {
       if (!record.churn_reason || record.churn_reason.trim() === "") {
         missingChurnReasons++;
       }
@@ -510,6 +474,7 @@ export const churnService = {
       };
     }
     
+    const rec = record as any;
     // Role-based access check
     if (email) {
       const { data: userProfile } = await supabase
@@ -519,20 +484,22 @@ export const churnService = {
         .single();
       
       if (userProfile) {
+        const prof = userProfile as any;
         let hasAccess = false;
+        const normalizedRole = normalizeRole(prof.role);
         
-        if (userProfile.role === 'Admin' || userProfile.role === 'admin') {
+        if (normalizedRole === 'admin') {
           hasAccess = true;
-        } else if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
+        } else if (normalizedRole === 'team_lead') {
           const { data: teamMembers } = await supabase
             .from('user_profiles')
             .select('full_name')
-            .eq('team_name', userProfile.team_name)
+            .eq('team_name', prof.team_name)
             .eq('is_active', true);
-          const teamKams = teamMembers?.map(m => m.full_name) || [];
-          hasAccess = teamKams.includes(record.kam);
-        } else if (userProfile.role === 'Agent' || userProfile.role === 'agent') {
-          hasAccess = record.kam === userProfile.full_name;
+          const teamKams = (teamMembers as any[])?.map(m => m.full_name) || [];
+          hasAccess = teamKams.includes(rec.kam);
+        } else if (normalizedRole === 'agent') {
+          hasAccess = rec.kam === prof.full_name;
         }
         
         if (!hasAccess) {
@@ -542,11 +509,11 @@ export const churnService = {
     }
     
     const currentTime = new Date().toISOString();
-    let dynamicIsActive = record.is_follow_up_active || false;
-    let dynamicFollowUpStatus = record.follow_up_status || "INACTIVE";
+    let dynamicIsActive = rec.is_follow_up_active || false;
+    let dynamicFollowUpStatus = rec.follow_up_status || "INACTIVE";
     
-    if (record.follow_up_status === "INACTIVE" && record.next_reminder_time) {
-      if (record.next_reminder_time <= currentTime) {
+    if (rec.follow_up_status === "INACTIVE" && rec.next_reminder_time) {
+      if (rec.next_reminder_time <= currentTime) {
         dynamicIsActive = true;
         dynamicFollowUpStatus = "ACTIVE";
       }
@@ -554,15 +521,15 @@ export const churnService = {
     
     return {
       success: true,
-      rid: record.rid,
+      rid: rec.rid,
       is_active: dynamicIsActive,
-      current_call: record.current_call || 1,
-      call_attempts: record.call_attempts || [],
-      mail_sent: record.mail_sent || false,
-      next_reminder_time: record.next_reminder_time,
+      current_call: rec.current_call || 1,
+      call_attempts: rec.call_attempts || [],
+      mail_sent: rec.mail_sent || false,
+      next_reminder_time: rec.next_reminder_time,
       follow_up_status: dynamicFollowUpStatus,
-      created_at: record.created_at,
-      updated_at: record.updated_at,
+      created_at: rec.created_at,
+      updated_at: rec.updated_at,
     };
   },
 
@@ -586,6 +553,7 @@ export const churnService = {
       throw new Error(`Churn record with RID ${rid} not found`);
     }
     
+    const rec = record as any;
     // Role-based access check (same as getFollowUpStatus)
     if (email) {
       const { data: userProfile } = await supabase
@@ -595,20 +563,22 @@ export const churnService = {
         .single();
       
       if (userProfile) {
+        const prof = userProfile as any;
         let hasAccess = false;
+        const normalizedRole = normalizeRole(prof.role);
         
-        if (userProfile.role === 'Admin' || userProfile.role === 'admin') {
+        if (normalizedRole === 'admin') {
           hasAccess = true;
-        } else if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
+        } else if (normalizedRole === 'team_lead') {
           const { data: teamMembers } = await supabase
             .from('user_profiles')
             .select('full_name')
-            .eq('team_name', userProfile.team_name)
+            .eq('team_name', prof.team_name)
             .eq('is_active', true);
-          const teamKams = teamMembers?.map(m => m.full_name) || [];
-          hasAccess = teamKams.includes(record.kam);
-        } else if (userProfile.role === 'Agent' || userProfile.role === 'agent') {
-          hasAccess = record.kam === userProfile.full_name;
+          const teamKams = (teamMembers as any[])?.map(m => m.full_name) || [];
+          hasAccess = teamKams.includes(rec.kam);
+        } else if (normalizedRole === 'agent') {
+          hasAccess = rec.kam === prof.full_name;
         }
         
         if (!hasAccess) {
@@ -618,7 +588,7 @@ export const churnService = {
     }
     
     const currentDateTime = new Date().toISOString();
-    const callNumber = record.current_call || 1;
+    const callNumber = rec.current_call || 1;
     
     const newCallAttempt = {
       call_number: callNumber,
@@ -628,7 +598,7 @@ export const churnService = {
       churn_reason,
     };
     
-    const existingAttempts = record.call_attempts || [];
+    const existingAttempts = rec.call_attempts || [];
     const updatedAttempts = [...existingAttempts, newCallAttempt];
     
     const nextCall = callNumber + 1;
@@ -677,20 +647,20 @@ export const churnService = {
     console.log(`   Final Next Reminder: ${nextReminderTime}`);
     
     // Determine controlled status for the churn reason
-    const controlledStatus = churn_reason ? getControlledStatusHelper(churn_reason) : record.controlled_status;
+    const controlledStatus = churn_reason ? getControlledStatusHelper(churn_reason) : rec.controlled_status;
     
-    await getSupabaseAdmin()
-      .from('churn_records')
+    await (getSupabaseAdmin()
+      .from('churn_records') as any)
       .update({
         call_attempts: updatedAttempts,
         current_call: nextCall,
         is_follow_up_active: isFollowUpActive,
         follow_up_status: followUpStatus,
         next_reminder_time: nextReminderTime,
-        follow_up_completed_at: followUpStatus === "COMPLETED" ? currentDateTime : record.follow_up_completed_at,
-        churn_reason: churn_reason || record.churn_reason, // Update churn reason if provided
+        follow_up_completed_at: followUpStatus === "COMPLETED" ? currentDateTime : rec.follow_up_completed_at,
+        churn_reason: churn_reason || rec.churn_reason, // Update churn reason if provided
         controlled_status: controlledStatus, // Update controlled status based on churn reason
-        date_time_filled: churn_reason ? currentDateTime : record.date_time_filled, // Update timestamp if churn reason changed
+        date_time_filled: churn_reason ? currentDateTime : rec.date_time_filled, // Update timestamp if churn reason changed
         updated_at: currentDateTime,
       })
       .eq('rid', rid);
@@ -718,15 +688,17 @@ export const churnService = {
         .single();
       
       if (userProfile) {
-        if (userProfile.role === 'Agent' || userProfile.role === 'agent') {
-          kamFilter = [userProfile.full_name];
-        } else if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
+        const prof = userProfile as any;
+        const normalizedRole = normalizeRole(prof.role);
+        if (normalizedRole === 'agent') {
+          kamFilter = [prof.full_name];
+        } else if (normalizedRole === 'team_lead') {
           const { data: teamMembers } = await supabase
             .from('user_profiles')
             .select('full_name')
-            .eq('team_name', userProfile.team_name)
+            .eq('team_name', prof.team_name)
             .eq('is_active', true);
-          kamFilter = teamMembers?.map(m => m.full_name) || [];
+          kamFilter = (teamMembers as any[])?.map(m => m.full_name) || [];
         }
       }
     }
@@ -742,9 +714,10 @@ export const churnService = {
       query = query.eq('kam', kam);
     }
     
-    const { data: records } = await query;
+    const { data: allRecords } = await query;
+    const records = (allRecords || []) as any[];
     
-    return records?.map(record => ({
+    return records.map(record => ({
       rid: record.rid,
       restaurant_name: record.restaurant_name,
       kam: record.kam,
@@ -769,15 +742,17 @@ export const churnService = {
         .single();
       
       if (userProfile) {
-        if (userProfile.role === 'Agent' || userProfile.role === 'agent') {
-          kamFilter = [userProfile.full_name];
-        } else if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
+        const prof = userProfile as any;
+        const normalizedRole = normalizeRole(prof.role);
+        if (normalizedRole === 'agent') {
+          kamFilter = [prof.full_name];
+        } else if (normalizedRole === 'team_lead') {
           const { data: teamMembers } = await supabase
             .from('user_profiles')
             .select('full_name')
-            .eq('team_name', userProfile.team_name)
+            .eq('team_name', prof.team_name)
             .eq('is_active', true);
-          kamFilter = teamMembers?.map(m => m.full_name) || [];
+          kamFilter = (teamMembers as any[])?.map(m => m.full_name) || [];
         }
       }
     }
@@ -795,9 +770,10 @@ export const churnService = {
       query = query.eq('kam', kam);
     }
     
-    const { data: records } = await query;
+    const { data: allRecords } = await query;
+    const records = (allRecords || []) as any[];
     
-    return records?.map(record => ({
+    return records.map(record => ({
       rid: record.rid,
       restaurant_name: record.restaurant_name,
       kam: record.kam,
@@ -817,7 +793,7 @@ export const churnService = {
       .select('rid')
       .in('rid', rids);
     
-    return records?.map(r => r.rid) || [];
+    return (records as any[])?.map(r => r.rid) || [];
   },
 
   // Bulk create churn records (for CSV upload)
@@ -836,8 +812,8 @@ export const churnService = {
       const batch = records.slice(i, i + batchSize);
       
       try {
-        const { error } = await getSupabaseAdmin()
-          .from('churn_records')
+        const { error } = await (getSupabaseAdmin()
+          .from('churn_records') as any)
           .insert(batch);
         
         if (error) {

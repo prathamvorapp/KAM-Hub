@@ -7,6 +7,7 @@ import DashboardLayout from '@/components/Layout/DashboardLayout'
 import MOMOpenPointsTable from '@/components/MOMOpenPointsTable'
 import { convexAPI } from '@/lib/convex-api'
 import { Ticket, MessageSquare, Clock, CheckCircle, Calendar, User, Building, Filter, ArrowLeft, Eye, AlertTriangle, Download } from 'lucide-react'
+import { Suspense } from 'react'
 
 interface OpenPoint {
   topic: string;
@@ -44,6 +45,18 @@ interface MOMRecord {
 }
 
 export default function TicketsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center">
+        <div className="text-white text-xl">Loading MOM Tracker...</div>
+      </div>
+    }>
+      <TicketsContent />
+    </Suspense>
+  )
+}
+
+function TicketsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const visitId = searchParams.get('visit_id')

@@ -41,7 +41,7 @@ async function fixAllChurnRecords() {
       'inconsistent_status': []
     };
     
-    for (const record of allRecords) {
+    for (const record of (allRecords as any[])) {
       const churnReason = record.churn_reason?.trim() || "";
       const callAttempts = record.call_attempts || [];
       const currentStatus = record.follow_up_status;
@@ -106,8 +106,8 @@ async function fixAllChurnRecords() {
       // Fix each record in the batch
       const fixPromises = batch.map(async (record) => {
         try {
-          const { error } = await getSupabaseAdmin()
-            .from('churn_records')
+          const { error } = await (getSupabaseAdmin()
+            .from('churn_records') as any)
             .update({
               follow_up_status: "COMPLETED",
               is_follow_up_active: false,

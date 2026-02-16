@@ -49,7 +49,8 @@ export async function POST(request: NextRequest) {
     const fixedRecords: any[] = [];
     const errorRecords: any[] = [];
     
-    for (const record of allRecords || []) {
+    const records = (allRecords || []) as any[];
+    for (const record of records) {
       try {
         const churnReason = record.churn_reason?.trim() || "";
         const callAttempts = record.call_attempts || [];
@@ -105,8 +106,8 @@ export async function POST(request: NextRequest) {
         
         if (needsUpdate) {
           // Update the record
-          const { error: updateError } = await getSupabaseAdmin()
-            .from('churn_records')
+          const { error: updateError } = await (getSupabaseAdmin()
+            .from('churn_records') as any)
             .update({
               follow_up_status: correctStatus,
               is_follow_up_active: correctIsActive,

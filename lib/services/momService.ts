@@ -3,6 +3,7 @@
  */
 
 import { supabase, getSupabaseAdmin } from '../supabase-client';
+import { normalizeRole } from '../utils/roleUtils';
 
 export const momService = {
   // Get MOMs with role-based filtering
@@ -25,10 +26,12 @@ export const momService = {
         .single();
       
       if (userProfile) {
-        if (userProfile.role === 'Agent' || userProfile.role === 'agent') {
+        const prof = userProfile as any;
+        const normalizedRole = normalizeRole(prof.role);
+        if (normalizedRole === 'agent') {
           query = query.eq('created_by', email);
-        } else if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
-          query = query.eq('team', userProfile.team_name);
+        } else if (normalizedRole === 'team_lead') {
+          query = query.eq('team', prof.team_name);
         }
       }
     }
@@ -71,7 +74,7 @@ export const momService = {
   async createMOM(data: any) {
     const now = new Date().toISOString();
     
-    const { error } = await getSupabaseAdmin().from('mom').insert({
+    const { error } = await (getSupabaseAdmin().from('mom') as any).insert({
       ...data,
       created_at: now,
       updated_at: now,
@@ -85,8 +88,8 @@ export const momService = {
   async updateMOM(ticketId: string, data: any) {
     const now = new Date().toISOString();
     
-    const { error } = await getSupabaseAdmin()
-      .from('mom')
+    const { error } = await (getSupabaseAdmin()
+      .from('mom') as any)
       .update({
         ...data,
         updated_at: now,
@@ -115,7 +118,8 @@ export const momService = {
       throw new Error("MOM not found");
     }
     
-    const openPoints = mom.open_points || [];
+    const m = mom as any;
+    const openPoints = m.open_points || [];
     if (pointIndex < 0 || pointIndex >= openPoints.length) {
       throw new Error("Invalid point index");
     }
@@ -123,8 +127,8 @@ export const momService = {
     openPoints[pointIndex].status = status;
     openPoints[pointIndex].updated_at = new Date().toISOString();
     
-    const { error } = await getSupabaseAdmin()
-      .from('mom')
+    const { error } = await (getSupabaseAdmin()
+      .from('mom') as any)
       .update({
         open_points: openPoints,
         updated_at: new Date().toISOString(),
@@ -147,10 +151,12 @@ export const momService = {
         .single();
       
       if (userProfile) {
-        if (userProfile.role === 'Agent' || userProfile.role === 'agent') {
+        const prof = userProfile as any;
+        const normalizedRole = normalizeRole(prof.role);
+        if (normalizedRole === 'agent') {
           query = query.eq('created_by', email);
-        } else if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
-          query = query.eq('team', userProfile.team_name);
+        } else if (normalizedRole === 'team_lead') {
+          query = query.eq('team', prof.team_name);
         }
       }
     }
@@ -167,7 +173,7 @@ export const momService = {
       openPointsOpen: 0,
     };
     
-    records?.forEach(record => {
+    (records as any[] || []).forEach(record => {
       stats.byStatus[record.status] = (stats.byStatus[record.status] || 0) + 1;
       stats.byPriority[record.priority] = (stats.byPriority[record.priority] || 0) + 1;
       if (record.category) {
@@ -175,8 +181,8 @@ export const momService = {
       }
       
       if (record.open_points) {
-        stats.totalOpenPoints += record.open_points.length;
-        record.open_points.forEach((point: any) => {
+        stats.totalOpenPoints += (record.open_points as any[]).length;
+        (record.open_points as any[]).forEach((point: any) => {
           if (point.status === 'Closed') {
             stats.openPointsClosed++;
           } else {

@@ -3,6 +3,7 @@
  */
 
 import { supabase, getSupabaseAdmin } from '../supabase-client';
+import { normalizeRole } from '../utils/roleUtils';
 
 export const masterDataService = {
   // Get all master data with role-based filtering
@@ -26,22 +27,31 @@ export const masterDataService = {
       console.log(`🔍 Master Data - User Profile for ${email}:`, userProfile);
       
       if (userProfile) {
-        if (userProfile.role === 'Agent' || userProfile.role === 'agent') {
+        const prof = userProfile as any;
+        const normalizedRole = normalizeRole(prof.role);
+        if (normalizedRole === 'agent') {
           query = query.eq('kam_email_id', email);
           console.log(`👤 Agent filter - showing brands for email: ${email}`);
-        } else if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
-          const { data: teamMembers } = await supabase
-            .from('user_profiles')
-            .select('email')
-            .eq('team_name', userProfile.team_name)
-            .in('role', ['agent', 'Agent']);
-          
-          const agentEmails = teamMembers?.map(m => m.email) || [];
-          console.log(`👥 Team Lead filter - showing brands for team ${userProfile.team_name}:`, agentEmails);
-          if (agentEmails.length > 0) {
-            query = query.in('kam_email_id', agentEmails);
+        } else if (normalizedRole === 'team_lead') {
+          if (!prof.team_name) {
+            query = query.eq('kam_email_id', '___NON_EXISTENT_TEAM___');
+          } else {
+            const { data: teamMembers } = await supabase
+              .from('user_profiles')
+              .select('email')
+              .eq('team_name', prof.team_name)
+              .eq('is_active', true);
+
+            const agentEmails = (teamMembers as any[])?.map(m => m.email) || [];
+            console.log(`👥 Team Lead filter - showing brands for team ${prof.team_name}:`, agentEmails);
+
+            if (agentEmails.length > 0) {
+              query = query.in('kam_email_id', agentEmails);
+            } else {
+              query = query.eq('kam_email_id', '___NO_TEAM_MEMBERS___');
+            }
           }
-        } else if (userProfile.role === 'Admin' || userProfile.role === 'admin') {
+        } else if (normalizedRole === 'admin') {
           console.log(`👑 Admin - showing all brands`);
         }
       }
@@ -49,7 +59,7 @@ export const masterDataService = {
     
     const { data: allRecords, count } = await query;
     console.log(`📊 Master Data query returned ${allRecords?.length || 0} records`);
-    let records = allRecords || [];
+    let records = (allRecords || []) as any[];
     
     // Apply search filter
     if (search) {
@@ -100,7 +110,7 @@ export const masterDataService = {
   async createMasterData(data: any) {
     const now = new Date().toISOString();
     
-    const { error } = await getSupabaseAdmin().from('master_data').insert({
+    const { error } = await (getSupabaseAdmin().from('master_data') as any).insert({
       ...data,
       created_at: now,
       updated_at: now,
@@ -114,8 +124,8 @@ export const masterDataService = {
   async updateMasterData(id: string, data: any) {
     const now = new Date().toISOString();
     
-    const { error } = await getSupabaseAdmin()
-      .from('master_data')
+    const { error } = await (getSupabaseAdmin()
+      .from('master_data') as any)
       .update({
         ...data,
         updated_at: now,
@@ -138,18 +148,26 @@ export const masterDataService = {
         .single();
       
       if (userProfile) {
-        if (userProfile.role === 'Agent' || userProfile.role === 'agent') {
+        const prof = userProfile as any;
+        const normalizedRole = normalizeRole(prof.role);
+        if (normalizedRole === 'agent') {
           query = query.eq('kam_email_id', email);
-        } else if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
-          const { data: teamMembers } = await supabase
-            .from('user_profiles')
-            .select('email')
-            .eq('team_name', userProfile.team_name)
-            .in('role', ['agent', 'Agent']);
-          
-          const agentEmails = teamMembers?.map(m => m.email) || [];
-          if (agentEmails.length > 0) {
-            query = query.in('kam_email_id', agentEmails);
+        } else if (normalizedRole === 'team_lead') {
+          if (!prof.team_name) {
+            query = query.eq('kam_email_id', '___NON_EXISTENT_TEAM___');
+          } else {
+            const { data: teamMembers } = await supabase
+              .from('user_profiles')
+              .select('email')
+              .eq('team_name', prof.team_name)
+              .eq('is_active', true);
+
+            const agentEmails = (teamMembers as any[])?.map(m => m.email) || [];
+            if (agentEmails.length > 0) {
+              query = query.in('kam_email_id', agentEmails);
+            } else {
+              query = query.eq('kam_email_id', '___NO_TEAM_MEMBERS___');
+            }
           }
         }
       }
@@ -165,7 +183,7 @@ export const masterDataService = {
       totalOutlets: 0,
     };
     
-    records?.forEach(record => {
+    (records as any[] || []).forEach(record => {
       stats.byZone[record.zone] = (stats.byZone[record.zone] || 0) + 1;
       stats.byState[record.brand_state] = (stats.byState[record.brand_state] || 0) + 1;
       stats.byKAM[record.kam_name] = (stats.byKAM[record.kam_name] || 0) + 1;

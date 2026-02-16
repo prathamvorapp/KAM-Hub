@@ -66,7 +66,7 @@ async function verifyCategorizationLogic() {
       invalid: [] as any[]
     };
     
-    for (const record of allRecords) {
+    for (const record of (allRecords as any[])) {
       const recordDate = safeParseDate(record.date);
       if (!recordDate) {
         categories.invalid.push(record);

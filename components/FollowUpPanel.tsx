@@ -119,7 +119,7 @@ export const FollowUpPanel: React.FC<FollowUpPanelProps> = ({
         rid, 
         call_response: 'No Response', // Default call response
         notes: notes.trim() || undefined,
-        churn_reason: churnReason,
+        churn_reason: churnReason || '',
         email: user.email
       });
       

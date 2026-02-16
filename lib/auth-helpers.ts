@@ -1,7 +1,6 @@
 import { NextRequest } from 'next/server';
-import { UserService } from './services/userService';
-
-const userService = new UserService();
+import { userService } from './services';
+import { verifySession } from './session';
 
 export interface AuthenticatedUser {
   email: string;
@@ -21,7 +20,10 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<Authen
   }
   
   try {
-    const sessionData = JSON.parse(sessionCookie.value);
+    const verifiedData = await verifySession(sessionCookie.value);
+    if (!verifiedData) return null;
+
+    const sessionData = JSON.parse(verifiedData);
     
     // Verify user still exists and is active
     const userProfile = await userService.getUserProfileByEmail(sessionData.email);

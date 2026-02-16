@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { UserService } from '../../../../lib/services/userService';
-import { UserRole } from '../../../../lib/models/user';
-
-const userService = new UserService();
+import { userService } from '../../../../lib/services/userService';
+import { normalizeRole } from '../../../../lib/utils/roleUtils';
 
 // Validation schema
 const ProfileByEmailSchema = z.object({
@@ -51,7 +49,7 @@ export async function GET(request: NextRequest) {
     // 1. User is requesting their own profile
     // 2. User is an admin
     // 3. No authentication (for initial auth flow)
-    if (authenticatedEmail && authenticatedEmail !== email && authenticatedRole !== UserRole.ADMIN) {
+    if (authenticatedEmail && authenticatedEmail !== email && normalizeRole(authenticatedRole) !== 'admin') {
       return NextResponse.json({
         error: 'Insufficient permissions',
         detail: 'Only admins can view other users profiles'

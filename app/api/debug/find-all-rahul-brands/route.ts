@@ -16,17 +16,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'No data' }, { status: 500 });
     }
     
+    const records = allRecords as any[];
+
     // Search variations
     const searches = {
-      exact_email: allRecords.filter(r => r.kam_email_id === 'rahul.taak@petpooja.com'),
-      email_lowercase: allRecords.filter(r => r.kam_email_id?.toLowerCase() === 'rahul.taak@petpooja.com'),
-      email_contains_rahul_taak: allRecords.filter(r => r.kam_email_id?.toLowerCase().includes('rahul.taak')),
-      email_contains_rahul: allRecords.filter(r => r.kam_email_id?.toLowerCase().includes('rahul')),
-      name_exact: allRecords.filter(r => r.kam_name === 'Rahul Taak'),
-      name_lowercase: allRecords.filter(r => r.kam_name?.toLowerCase() === 'rahul taak'),
-      name_contains_rahul: allRecords.filter(r => r.kam_name?.toLowerCase().includes('rahul')),
-      secondary_email: allRecords.filter(r => r.kam_email_id_secondary?.toLowerCase().includes('rahul.taak')),
-      secondary_name: allRecords.filter(r => r.kam_name_secondary?.toLowerCase().includes('rahul')),
+      exact_email: records.filter(r => r.kam_email_id === 'rahul.taak@petpooja.com'),
+      email_lowercase: records.filter(r => r.kam_email_id?.toLowerCase() === 'rahul.taak@petpooja.com'),
+      email_contains_rahul_taak: records.filter(r => r.kam_email_id?.toLowerCase().includes('rahul.taak')),
+      email_contains_rahul: records.filter(r => r.kam_email_id?.toLowerCase().includes('rahul')),
+      name_exact: records.filter(r => r.kam_name === 'Rahul Taak'),
+      name_lowercase: records.filter(r => r.kam_name?.toLowerCase() === 'rahul taak'),
+      name_contains_rahul: records.filter(r => r.kam_name?.toLowerCase().includes('rahul')),
+      secondary_email: records.filter(r => r.kam_email_id_secondary?.toLowerCase().includes('rahul.taak')),
+      secondary_name: records.filter(r => r.kam_name_secondary?.toLowerCase().includes('rahul')),
     };
     
     // Get unique brands across all searches
@@ -36,7 +38,7 @@ export async function GET(request: NextRequest) {
     });
     
     // Check for any column that might contain rahul.taak
-    const anyFieldContainsRahul = allRecords.filter(r => {
+    const anyFieldContainsRahul = records.filter(r => {
       const recordStr = JSON.stringify(r).toLowerCase();
       return recordStr.includes('rahul.taak') || recordStr.includes('rahul taak');
     });
