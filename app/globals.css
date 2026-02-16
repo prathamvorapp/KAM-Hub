@@ -1,0 +1,788 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 30, 41, 59;
+  --background-start-rgb: 248, 250, 252;
+  --background-end-rgb: 255, 255, 255;
+  --glass-bg: rgba(255, 255, 255, 0.95);
+  --glass-border: rgba(226, 232, 240, 0.8);
+  --shadow-3d: 0 8px 25px rgba(0, 0, 0, 0.08);
+  
+  /* Professional Light Theme Colors */
+  --primary-background: #FAFBFC;
+  --card-surface: #FFFFFF;
+  --primary-blue: #6B94E3;
+  --sidebar-background: #FFFFFF;
+  --primary-text: #1E293B;
+  --secondary-text: #64748B;
+  --main-background: #FFFFFF;
+  --secondary-surface: #F8FAFC;
+  --accent-blue: #4A72C2;
+  --success-state: #10B981;
+  --warning-state: #F59E0B;
+  --error-state: #EF4444;
+  --page-canvas: #F8FAFC;
+  --table-headers: #F1F5F9;
+  --action-blue: #6B94E3;
+  --divider-lines: #E2E8F0;
+  --status-pills: #E0E7FF;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  color: #1E293B !important;
+  background: var(--page-canvas);
+  min-height: 100vh;
+  overflow-x: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Force text visibility across all components */
+* {
+  color: inherit;
+}
+
+/* Ensure all text elements have proper contrast */
+h1, h2, h3, h4, h5, h6 {
+  color: #1E293B !important;
+}
+
+p, span, div, td, th, label, input, textarea, select, button {
+  color: #1E293B !important;
+}
+
+/* Override Tailwind's text-white classes for light theme */
+.text-white {
+  color: #1E293B !important;
+}
+
+.text-white\/90 {
+  color: #1E293B !important;
+}
+
+.text-white\/80 {
+  color: #64748B !important;
+}
+
+.text-white\/70 {
+  color: #64748B !important;
+}
+
+.text-white\/60 {
+  color: #9CA3AF !important;
+}
+
+/* Secondary text elements */
+.text-secondary, .text-gray-600, .text-gray-500 {
+  color: #64748B !important;
+}
+
+.text-gray-400 {
+  color: #9CA3AF !important;
+}
+
+.text-gray-300 {
+  color: #D1D5DB !important;
+}
+
+/* Button text should remain white on colored backgrounds */
+.btn-primary, .bg-primary-600, .bg-blue-600, .bg-red-600, .bg-green-600, .bg-purple-600 {
+  color: white !important;
+}
+
+/* Status pill text */
+.bg-blue-500, .bg-red-500, .bg-green-500, .bg-purple-500 {
+  color: white !important;
+}
+
+/* Table specific fixes */
+table {
+  color: #1E293B !important;
+}
+
+table th {
+  color: #374151 !important;
+  font-weight: 600;
+}
+
+table td {
+  color: #1E293B !important;
+}
+
+/* Glass morphism containers should have dark text */
+.glass-morphism {
+  color: #1E293B !important;
+}
+
+.glass-morphism * {
+  color: #1E293B !important;
+}
+
+.glass-morphism h1, 
+.glass-morphism h2, 
+.glass-morphism h3, 
+.glass-morphism h4, 
+.glass-morphism h5, 
+.glass-morphism h6 {
+  color: #1E293B !important;
+}
+
+.glass-morphism p, 
+.glass-morphism span, 
+.glass-morphism div {
+  color: #1E293B !important;
+}
+
+/* Card containers */
+.card {
+  color: #1E293B !important;
+}
+
+.card * {
+  color: #1E293B !important;
+}
+
+/* Input fields */
+input, textarea, select {
+  color: #1E293B !important;
+}
+
+input::placeholder, textarea::placeholder {
+  color: #9CA3AF !important;
+}
+
+/* Search inputs specifically */
+input[type="text"], input[type="search"] {
+  color: #1E293B !important;
+  background-color: white !important;
+}
+
+/* Ensure proper contrast for all text on light backgrounds */
+.bg-white *, .bg-gray-50 *, .bg-gray-100 * {
+  color: #1E293B !important;
+}
+
+/* Brand cards text */
+.bg-white\/5 * {
+  color: #1E293B !important;
+}
+
+/* Progress text */
+.text-gray-300 {
+  color: #64748B !important;
+}
+
+.text-gray-400 {
+  color: #9CA3AF !important;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--secondary-surface);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--primary-blue);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-blue);
+}
+
+/* Sidebar specific scrollbar styling */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #CBD5E1 #F1F5F9;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: #F8FAFC;
+  border-radius: 3px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 3px;
+  transition: background-color 0.2s ease;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Smooth scrolling behavior */
+.sidebar-scroll {
+  scroll-behavior: smooth;
+}
+
+/* Sidebar scroll fade effects */
+.sidebar-scroll-container {
+  position: relative;
+}
+
+.sidebar-scroll-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 20px;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 1), rgba(255, 255, 255, 0));
+  pointer-events: none;
+  z-index: 1;
+}
+
+.sidebar-scroll-container::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 20px;
+  background: linear-gradient(to top, rgba(255, 255, 255, 1), rgba(255, 255, 255, 0));
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Professional Light Theme Components */
+.glass-morphism {
+  background: var(--glass-bg) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-3d);
+  color: #1E293B !important;
+}
+
+.btn-primary {
+  background: var(--primary-blue) !important;
+  color: white !important;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background: var(--accent-blue) !important;
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: var(--secondary-surface) !important;
+  color: var(--primary-text) !important;
+  border: 1px solid var(--divider-lines);
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: var(--divider-lines) !important;
+}
+
+/* Success button for Complete actions */
+.btn-success {
+  background: #10B981 !important; /* Green-500 */
+  color: white !important;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+}
+
+.btn-success:hover {
+  background: #059669 !important; /* Green-600 */
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
+}
+
+/* Danger button for Cancel actions */
+.btn-danger {
+  background: #EF4444 !important; /* Red-500 */
+  color: white !important;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
+}
+
+.btn-danger:hover {
+  background: #DC2626 !important; /* Red-600 */
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(239, 68, 68, 0.3);
+}
+
+/* Small button variants */
+.btn-sm {
+  padding: 8px 16px !important;
+  font-size: 14px !important;
+  border-radius: 6px !important;
+}
+
+.card {
+  background: var(--card-surface) !important;
+  border: 1px solid var(--divider-lines);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
+  color: #1E293B !important;
+}
+
+.card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.input-3d {
+  background: var(--card-surface) !important;
+  border: 1px solid var(--divider-lines);
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: var(--primary-text) !important;
+  transition: all 0.2s ease;
+}
+
+.input-3d:focus {
+  outline: none;
+  border-color: var(--primary-blue);
+  box-shadow: 0 0 0 3px rgba(107, 148, 227, 0.1);
+}
+
+/* Override any conflicting styles */
+.sidebar-item {
+  color: #64748B !important;
+}
+
+.sidebar-item.active {
+  color: var(--primary-blue) !important;
+}
+
+/* Fix input placeholder and icon rendering with proper spacing */
+.input-3d::placeholder {
+  color: #9CA3AF !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 14px !important;
+  opacity: 1 !important;
+}
+
+.input-3d {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 14px !important;
+}
+
+/* Icon spacing fix for login form */
+.input-3d.pl-12 {
+  padding-left: 48px !important; /* Proper spacing between icon and text */
+}
+
+.input-3d.pr-12 {
+  padding-right: 48px !important; /* Proper spacing for password toggle */
+}
+
+/* Ensure icons are positioned correctly */
+.relative .absolute.left-4 {
+  left: 16px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  pointer-events: none !important;
+  z-index: 1 !important;
+}
+
+.relative .absolute.right-4 {
+  right: 16px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  z-index: 2 !important;
+}
+
+/* Ensure icons render properly */
+svg {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* Fix any text rendering issues */
+input[type="email"], 
+input[type="password"] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  font-family: inherit !important;
+}
+
+/* Clear any browser default styling that might interfere */
+input::-webkit-input-placeholder {
+  color: #9CA3AF !important;
+  font-family: inherit !important;
+}
+
+input::-moz-placeholder {
+  color: #9CA3AF !important;
+  font-family: inherit !important;
+  opacity: 1;
+}
+
+input:-ms-input-placeholder {
+  color: #9CA3AF !important;
+  font-family: inherit !important;
+}
+
+input:-moz-placeholder {
+  color: #9CA3AF !important;
+  font-family: inherit !important;
+  opacity: 1;
+}
+
+/* Filter button improvements */
+.filter-button-group {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 4px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.filter-button {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.filter-button:hover {
+  transform: translateY(-1px);
+}
+
+.filter-button.active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.nav-item {
+  color: #64748B !important;
+}
+
+.nav-item.active {
+  color: var(--primary-blue) !important;
+}
+
+/* Health Check Navigation Button Enhancements */
+.health-nav-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.health-nav-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.health-nav-button:hover::before {
+  left: 100%;
+}
+
+.health-nav-button.active {
+  position: relative;
+}
+
+.health-nav-button.active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80%;
+  height: 3px;
+  background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+  border-radius: 2px;
+}
+
+/* Scale hover effect utility */
+.hover\:scale-102:hover {
+  transform: scale(1.02);
+}
+
+/* Chip/Status styling */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 9999px;
+  border: 1px solid;
+}
+
+/* Ensure clickable chips work properly */
+.chip.cursor-pointer,
+button.chip {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  user-select: none !important;
+  transition: all 0.2s ease !important;
+}
+
+.chip.cursor-pointer:hover,
+button.chip:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+.chip.cursor-pointer:active,
+button.chip:active {
+  transform: translateY(0) !important;
+}
+
+/* Override any conflicting styles for clickable chips */
+button.chip {
+  background: inherit !important;
+  color: inherit !important;
+  border: inherit !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+  font-weight: inherit !important;
+  text-decoration: none !important;
+  outline: none !important;
+}
+
+button.chip:focus {
+  outline: 2px solid #3b82f6 !important;
+  outline-offset: 2px !important;
+}
+
+/* Enhanced border styling for MOM Details button */
+button.chip.border-2 {
+  border-width: 2px !important;
+  border-style: solid !important;
+}
+
+button.chip.border-blue-400 {
+  border-color: #60a5fa !important;
+}
+
+button.chip.hover\:border-blue-500:hover {
+  border-color: #3b82f6 !important;
+}
+
+/* Table styling */
+.table-header {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background-color: var(--table-headers);
+  border-bottom: 1px solid var(--divider-lines);
+}
+
+.table-cell {
+  padding: 12px 16px;
+  color: #1E293B !important;
+  border-bottom: 1px solid var(--divider-lines);
+}
+
+/* Remove any transparent backgrounds that might hide text */
+.bg-white\/10, .bg-white\/20, .bg-white\/30 {
+  background: white !important;
+}
+
+/* Ensure all text in tables is visible */
+tbody tr td {
+  color: #1E293B !important;
+}
+
+thead tr th {
+  color: #374151 !important;
+}
+
+/* Status pills with proper contrast */
+.status-pill {
+  font-weight: 600 !important;
+}
+
+/* Navigation text */
+.text-white {
+  color: #1E293B !important;
+}
+
+.text-white\/80 {
+  color: #64748B !important;
+}
+
+.text-white\/60 {
+  color: #9CA3AF !important;
+}
+
+/* Ensure proper text contrast in all containers */
+.bg-white\/5, .bg-white\/10, .bg-white\/20, .bg-white\/30 {
+  background: white !important;
+}
+
+/* Loading states */
+.animate-spin {
+  border-color: #6B94E3 !important;
+}
+
+/* Search help text */
+.text-gray-400 {
+  color: #9CA3AF !important;
+}
+
+/* Ensure buttons maintain proper text colors */
+button {
+  color: inherit !important;
+}
+
+/* Specific overrides for common problematic classes */
+.text-gray-300 {
+  color: #64748B !important;
+}
+
+.text-gray-400 {
+  color: #9CA3AF !important;
+}
+
+/* Placeholder text */
+::placeholder {
+  color: #9CA3AF !important;
+}
+
+/* Focus states */
+input:focus, textarea:focus, select:focus {
+  color: #1E293B !important;
+}
+
+/* Ensure all text in light theme containers is dark */
+.bg-gray-50 *, .bg-gray-100 *, .bg-white * {
+  color: #1E293B !important;
+}
+
+/* Exception for colored backgrounds that should have white text */
+.bg-blue-500 *, .bg-blue-600 *, .bg-red-500 *, .bg-red-600 *, 
+.bg-green-500 *, .bg-green-600 *, .bg-purple-500 *, .bg-purple-600 *,
+.bg-yellow-500 *, .bg-yellow-600 *, .bg-orange-500 *, .bg-orange-600 *,
+.bg-pink-500 *, .bg-pink-600 *, .bg-indigo-500 *, .bg-indigo-600 * {
+  color: white !important;
+}
+
+/* Status pills and badges */
+.bg-blue-100 *, .bg-red-100 *, .bg-green-100 *, .bg-purple-100 *,
+.bg-yellow-100 *, .bg-orange-100 *, .bg-pink-100 *, .bg-indigo-100 * {
+  color: inherit !important;
+}
+
+/* Modal z-index override */
+.modal-overlay {
+  z-index: 99999 !important;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.modal-content {
+  z-index: 100000 !important;
+  position: relative !important;
+}
+
+/* Additional fixes for login form icon spacing and symbol issues */
+.input-3d {
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+    text-rendering: optimizeLegibility !important;
+    -webkit-font-smoothing: antialiased !important;
+}
+
+/* Enhanced auto-fill fixes with proper spacing */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px white inset !important;
+    -webkit-text-fill-color: #1e293b !important;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    background-color: white !important;
+    color: #1e293b !important;
+    padding-left: 48px !important; /* Maintain icon spacing */
+}
+
+/* Ensure proper icon positioning in login form */
+.group .absolute.left-4 {
+    left: 16px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    pointer-events: none !important;
+    z-index: 1 !important;
+}
+
+.group .absolute.right-4 {
+    right: 16px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    z-index: 2 !important;
+}
+
+/* Clean text rendering for all input types */
+input[type="email"], 
+input[type="password"] {
+    font-feature-settings: normal !important;
+    font-variant: normal !important;
+    font-kerning: auto !important;
+    background-image: none !important;
+    list-style: none !important;
+}
+
+/* Remove any pseudo-elements that might add symbols */
+input::before,
+input::after {
+    content: none !important;
+    display: none !important;
+}
+
+/* Ensure Lucide icons don't interfere with input text */
+.lucide {
+    pointer-events: none !important;
+}
+
+/* Force clean font stack for login inputs */
+#email, #password {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    color: #1e293b !important;
+    background: white !important;
+}

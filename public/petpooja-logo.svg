@@ -1,0 +1,10 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="90" fill="#DC2626"/>
+  
+  <!-- Inner white circle -->
+  <circle cx="100" cy="100" r="70" fill="#FFFFFF"/>
+  
+  <!-- PetPooja "P" -->
+  <text x="100" y="120" font-family="Arial, sans-serif" font-size="80" font-weight="bold" text-anchor="middle" fill="#DC2626">P</text>
+</svg>

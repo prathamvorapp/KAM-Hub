@@ -1,0 +1,67 @@
+# KAM Dashboard - Unified Caddy Configuration
+# Single entry point: https://localhost:3020
+# Caddy handles HTTPS and proxies to Next.js on internal port 3022
+{
+	log {
+		level INFO
+		output file caddy.log
+	}
+	admin off
+}
+
+# Main application server - listens on port 3020 with HTTPS
+:3020 {
+	# Enable TLS for secure connections
+	tls internal
+
+	# Performance optimizations
+	encode gzip zstd
+
+	# Security headers
+	header {
+		# CORS headers for API access
+		Access-Control-Allow-Origin "*"
+		Access-Control-Allow-Methods "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+		Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+		Access-Control-Max-Age "3600"
+
+		# Security headers
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		X-XSS-Protection "1; mode=block"
+		Referrer-Policy "strict-origin-when-cross-origin"
+
+		# Remove server identification
+		-Server
+	}
+
+	# Handle preflight OPTIONS requests
+	@options {
+		method OPTIONS
+	}
+	respond @options 204
+
+	# Proxy all requests to Next.js dev server on internal port 3022
+	reverse_proxy localhost:3022 {
+		# Health check
+		health_uri /api/auth/health
+		health_interval 30s
+		health_timeout 5s
+
+		# Preserve original headers
+		header_up Host {host}
+		header_up X-Real-IP {remote_host}
+
+		# Timeouts
+		transport http {
+			dial_timeout 10s
+			response_header_timeout 30s
+		}
+	}
+
+	# Logging
+	log {
+		output file access.log
+		format json
+	}
+}

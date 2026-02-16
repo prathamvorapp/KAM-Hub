@@ -1,0 +1,33 @@
+
+CONVEX TABLE BACKUP SUMMARY
+============================
+Backup Date: 2026-02-05T07:54:39.688Z
+Convex Deployment: opulent-rabbit-360.convex.cloud
+
+TABLES BACKED UP:
+-----------------
+1. Master_Data
+   - Records: 1389
+   - Files: master_data_backup_2026-02-05_07-54-39-688Z.json, master_data_backup_2026-02-05_07-54-39-688Z.csv
+
+2. user_profiles  
+   - Records: 61
+   - Files: user_profiles_backup_2026-02-05_07-54-39-688Z.json, user_profiles_backup_2026-02-05_07-54-39-688Z.csv
+
+COMBINED BACKUP:
+----------------
+- File: complete_backup_2026-02-05_07-54-39-688Z.json
+- Total Records: 1450
+
+BACKUP LOCATION:
+----------------
+Directory: C:\Users\Petpooja-439\Desktop\KAM Project\convex_backups
+
+FILES CREATED:
+--------------
+- master_data_backup_2026-02-05_07-54-39-688Z.json
+- master_data_backup_2026-02-05_07-54-39-688Z.csv
+- user_profiles_backup_2026-02-05_07-54-39-688Z.json
+- user_profiles_backup_2026-02-05_07-54-39-688Z.csv
+- complete_backup_2026-02-05_07-54-39-688Z.json
+- backup_summary_2026-02-05_07-54-39-688Z.txt

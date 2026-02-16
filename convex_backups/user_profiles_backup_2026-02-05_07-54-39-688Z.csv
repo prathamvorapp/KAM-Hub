@@ -1,0 +1,62 @@
+contact_number,created_at,email,employee_code,full_name,is_active,password,role,team_name,updated_at
+8155093935,2026-01-28T07:40:33.628184Z,akash.yedur@petpooja.com,399,Akash Yedur,true,Test@123,Team Lead,BO Team,2026-01-28T07:40:33.628184Z
+8155098887,2026-01-28T07:40:33.628184Z,helly.gandhi@petpooja.com,485,Helly Gandhi,true,Test@123,Admin,,2026-01-28T07:40:33.628184Z
+6358941204,2026-01-28T07:40:33.628184Z,mahima.sali@petpooja.com,934,Sali Mahima Sunilbhai,true,Test@123,Agent,Central-West Team,2026-01-28T07:40:33.628184Z
+6357191960,2026-01-28T07:40:33.628184Z,sagar.kothari@petpooja.com,1110,Sagar Prakashkumar Kothari,true,Test@123,Team Lead,South_2 Team,2026-01-28T07:40:33.628184Z
+6358910634,2026-01-28T07:40:33.628184Z,shaikh.farhan@petpooja.com,1112,Shaikh Mohammad Farhan,true,Test@123,Team Lead,South_1 Team,2026-01-28T07:40:33.628184Z
+6357191949,2026-01-28T07:40:33.628184Z,kasim.kamalakar@petpooja.com,1135,Kasim Kamalakar,true,Test@123,Agent,South_2 Team,2026-01-28T07:40:33.628184Z
+6358919952,2026-01-28T07:40:33.628184Z,kripal.patel@petpooja.com,1315,Patel Kripal Bipin,true,Test@123,Agent,Central-West Team,2026-01-28T07:40:33.628184Z
+6358897160,2026-01-28T07:40:33.628184Z,bhanvi.gupta@petpooja.com,1453,Bhanvi Gupta,true,Test@123,Agent,North-East Team,2026-01-28T07:40:33.628184Z
+6358929784,2026-01-28T07:40:33.628184Z,manisha.balotiya@petpooja.com,1732,Manisha Khemchand Balotiya,true,Test@123,Team Lead,Central-West Team,2026-01-28T07:40:33.628184Z
+7486040767,2026-01-28T07:40:33.628184Z,jitwin.purohit@petpooja.com,1766,Jitwin Purohit,true,Test@123,Agent,North-East Team,2026-01-28T07:40:33.628184Z
+6358929964,2026-01-28T07:40:33.628184Z,snehal.dwivedi@petpooja.com,1811,Dwivedi Snehal,true,Test@123,Team Lead,North-East Team,2026-01-28T07:40:33.628184Z
+6358929778,2026-01-28T07:40:33.628184Z,ghanshyam.soni@petpooja.com,1882,Ghanshyam Soni,true,Test@123,Agent,Central-West Team,2026-01-28T07:40:33.628184Z
+6358921485,2026-01-28T07:40:33.628184Z,chirag.patel@petpooja.com,2073,Chirag Patel,true,Test@123,Agent,Central-West Team,2026-01-28T07:40:33.628184Z
+6353717869,2026-01-28T07:40:33.628184Z,krutika.christian@petpooja.com,2106,Krutika Veshalskumar Christian,true,Test@123,Agent,Central-West Team,2026-01-28T07:40:33.628184Z
+6358897129,2026-01-28T07:40:33.628184Z,priyal.dadhaniya@petpooja.com,2254,Dadhaniya Priyal Yashavant,true,Test@123,Agent,BO Team,2026-01-28T07:40:33.628184Z
+8155977373,2026-01-28T07:40:33.628184Z,kinab.shah@petpooja.com,2285,Kinab Binditbhai Shah,true,Test@123,Agent,South_1 Team,2026-01-28T07:40:33.628184Z
+9875176994,2026-01-28T07:40:33.628184Z,saloni.vaghela@petpooja.com,2300,Vaghela Saloni Kiritbhai,true,Test@123,Agent,Central-West Team,2026-01-28T07:40:33.628184Z
+6358897159,2026-01-28T07:40:33.628184Z,khushbu.chauhan@petpooja.com,2310,Chauhan Khushbu Girishkumar,true,Test@123,Agent,North-East Team,2026-01-28T07:40:33.628184Z
+6351303597,2026-01-28T07:40:33.628184Z,shitanshu.shah@petpooja.com,2385,Shitanshu Shah,true,Test@123,Agent,Central-West Team,2026-01-28T07:40:33.628184Z
+6357303449,2026-01-28T07:40:33.628184Z,anchal.nair@petpooja.com,2511,Nair Anchal,true,Test@123,Agent,South_1 Team,2026-01-28T07:40:33.628184Z
+8155093300,2026-01-28T07:40:33.628184Z,naveen.m@petpooja.com,2596,Naveen M,true,Test@123,Agent,South_2 Team,2026-01-28T07:40:33.628184Z
+7227015554,2026-01-28T07:40:33.628184Z,rajendra.singh@petpooja.com,2676,Rajendra Singh,true,Test@123,Agent,BO Team,2026-01-28T07:40:33.628184Z
+6353533629,2026-01-28T07:40:33.628184Z,rahul.taak@petpooja.com,2750,Rahul Taak,true,Test@123,Agent,South_1 Team,2026-01-28T07:40:33.628184Z
+7486007586,2026-01-28T07:40:33.628184Z,dhruv.rajput@petpooja.com,2753,Rajput Dhruv,true,Test@123,Agent,BO Team,2026-01-28T07:40:33.628184Z
+7486007595,2026-01-28T07:40:33.628184Z,ranjan.singh@petpooja.com,2768,Ranjan Singh,true,Test@123,Admin,BO Team,2026-01-28T07:40:33.628184Z
+6358941194,2026-01-28T07:40:33.628184Z,aman.kota@petpooja.com,2835,Kota Amankumar,true,Test@123,Agent,South_1 Team,2026-01-28T07:40:33.628184Z
+6358897151,2026-01-28T07:40:33.628184Z,avesh.shaikh@petpooja.com,2849,Shaikh Mohammed Avesh Abdul Aziz,true,Test@123,Agent,BO Team,2026-01-28T07:40:33.628184Z
+6353074168,2026-01-28T07:40:33.628184Z,aman.mutneja@petpooja.com,2920,Aman Mutneja,true,Test@123,Agent,North-East Team,2026-01-28T07:40:33.628184Z
+6358929753,2026-01-28T07:40:33.628184Z,dilna.p@petpooja.com,3029,Dilna P,true,Test@123,Agent,South_2 Team,2026-01-28T07:40:33.628184Z
+8155977003,2026-01-28T07:40:33.628184Z,ali.bukhari@petpooja.com,3125,Bukhari Ali Mukhtayar,true,Test@123,Agent,BO Team,2026-01-28T07:40:33.628184Z
+6358897139,2026-01-28T07:40:33.628184Z,pradipta.sen@petpooja.com,3212,Pradipta Sen,true,Test@123,Agent,North-East Team,2026-01-28T07:40:33.628184Z
+9662143074,2026-01-28T07:40:33.628184Z,pratham.vora@petpooja.com,3237,Pratham Jatilbhai Vora,true,Test@123,Admin,,2026-01-28T07:40:33.628184Z
+9974386746,2026-01-28T07:40:33.628184Z,lakshita.thakor@petpooja.com,3242,Lakshita Juvansinh Thakor,true,Test@123,Agent,North-East Team,2026-01-28T07:40:33.628184Z
+7486906200,2026-01-28T07:40:33.628184Z,rishi.kadam@petpooja.com,3256,Kadam Rishi Uday,true,Test@123,Agent,BO Team,2026-01-28T07:40:33.628184Z
+9157929513,2026-01-28T07:40:33.628184Z,vishv.solanki@petpooja.com,3258,Solanki Vishvkumar Vijaybhai,true,Test@123,Agent,BO Team,2026-01-28T07:40:33.628184Z
+7041373950,2026-01-28T07:40:33.628184Z,shreyansha.rajput@petpooja.com,3320,Rajput Shreyansha,true,Test@123,Agent,BO Team,2026-01-28T07:40:33.628184Z
+7041331689,2026-01-28T07:40:33.628184Z,arpit.acharya@petpooja.com,3322,Acharya Arpit,true,Test@123,Agent,South_1 Team,2026-01-28T07:40:33.628184Z
+6358871180,2026-01-28T07:40:33.628184Z,harsh.gohel@petpooja.com,3332,Gohel Harsh Jayantibhai,true,Test@123,Agent,Central-West Team,2026-01-28T07:40:33.628184Z
+6353710811,2026-01-28T07:40:33.628184Z,kaushik.khandla@petpooja.com,3441,Khandla Kaushik Ganpatbhai,true,Test@123,Agent,Central-West Team,2026-01-28T07:40:33.628184Z
+6358987968,2026-01-28T07:40:33.628184Z,sudhin.raveendran@petpooja.com,3504,Sudhin Raveendran,true,Test@123,Agent,South_2 Team,2026-01-28T07:40:33.628184Z
+8155090006,2026-01-28T07:40:33.628184Z,shalvi.jhaveri@petpooja.com,3525,Jhaveri Shalvi Nehalbhai,true,Test@123,Agent,North-East Team,2026-01-28T07:40:33.628184Z
+6358870747,2026-01-28T07:40:33.628184Z,abijith.nair@petpooja.com,3528,Abijith K S,true,Test@123,Agent,South_2 Team,2026-01-28T07:40:33.628184Z
+9662317148,2026-01-28T07:40:33.628184Z,imon.ghosh@petpooja.com,3537,Imon Ghosh,true,Test@123,Agent,North-East Team,2026-01-28T07:40:33.628184Z
+7227015545,2026-01-28T07:40:33.628184Z,nikhil.kumar@petpooja.com,3600,Nikhil Kumar,true,Test@123,Agent,North-East Team,2026-01-28T07:40:33.628184Z
+6358919953,2026-01-28T07:40:33.628184Z,lakhan.pareek@petpooja.com,3629,Lakhan Pareek,true,Test@123,Agent,North-East Team,2026-01-28T07:40:33.628184Z
+9974740598,2026-01-28T07:40:33.628184Z,dhaval.dhir@petpooja.com,3708,Dhaval Charanjeet Dhir,true,Test@123,Agent,North-East Team,2026-01-28T07:40:33.628184Z
+6358941202,2026-01-28T07:40:33.628184Z,jitendra.parmar1@petpooja.com,3815,Parmar Jitendra,true,Test@123,Agent,North-East Team,2026-01-28T07:40:33.628184Z
+8155090044,2026-01-28T07:40:33.628184Z,vishal.panchal@petpooja.com,3890,Panchal Vishal,true,Test@123,Agent,BO Team,2026-01-28T07:40:33.628184Z
+6358871167,2026-01-28T07:40:33.628184Z,jagadeshwaran.b@petpooja.com,3983,Jagadeshwaran,true,Test@123,Agent,South_2 Team,2026-01-28T07:40:33.628184Z
+6357192029,2026-01-28T07:40:33.628184Z,rishit.talati@petpooja.com,4190,Rishit Sunilkumar Talati,true,Test@123,Agent,North-East Team,2026-01-28T07:40:33.628184Z
+6353717221,2026-01-28T07:40:33.628184Z,virbhdrasinh.shaktawat@petpooja.com,4314,Shaktawat Virbhdrasinh,true,Test@123,Agent,BO Team,2026-01-28T07:40:33.628184Z
+8155091333,2026-01-28T07:40:33.628184Z,gautam.parmar@petpooja.com,4473,Parmar Gautam Babubhai,true,Test@123,Agent,South_1 Team,2026-01-28T07:40:33.628184Z
+9227980768,2026-01-28T07:40:33.628184Z,antolina.francis@petpooja.com,4539,Antolina Anil Francis,true,Test@123,Agent,South_1 Team,2026-01-28T07:40:33.628184Z
+9974740281,2026-01-28T07:40:33.628184Z,aakash.biswas@petpooja.com,4553,Aakash Biswas,true,Test@123,Agent,North-East Team,2026-01-28T07:40:33.628184Z
+6358921469,2026-01-28T07:40:33.628184Z,robin.rajput@petpooja.com,4695,Robin Singh Rajput,true,Test@123,Agent,Central-West Team,2026-01-28T07:40:33.628184Z
+6357191959,2026-01-28T07:40:33.628184Z,rajesh.parmar@petpooja.com,4703,Parmar Rajeshbhai Kalubhai,true,Test@123,Agent,Central-West Team,2026-01-28T07:40:33.628184Z
+8155097744,2026-01-28T07:40:33.628184Z,arpit.dave@petpooja.com,4744,Dave Arpitkumar Ashishkumar,true,Test@123,Agent,North-East Team,2026-01-28T07:40:33.628184Z
+9974016935,2026-01-28T07:40:33.628184Z,dev.jani@petpooja.com,5012,Jani Dev Ashishkumar,true,Test@123,Agent,,2026-01-28T07:40:33.628184Z
+6358921486,2026-01-28T07:40:33.628184Z,omkar.borkar@petpooja.com,5035,Omkar Manojkumar Borkar,true,Test@123,Agent,,2026-01-28T07:40:33.628184Z
+7041313349,2026-01-28T07:40:33.628184Z,vrushabh.soni@petpooja.com,5044,Soni Vrushabh Mansukhlal,true,Test@123,Agent,BO Team,2026-01-28T07:40:33.628184Z
+6351266885,2026-01-28T07:40:33.628184Z,jinal.chavda@petpooja.com,3729,Jinal Chavda,true,Test@123,Agent,South_1 Team,2026-01-28T07:40:33.628184Z
