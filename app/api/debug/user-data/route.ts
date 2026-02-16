@@ -26,11 +26,12 @@ export async function GET(request: NextRequest) {
       }, { status: 404 });
     }
     
+    const profile = userProfile as any;
     console.log('✅ [STEP 1] User profile found:', {
-      email: userProfile.email,
-      role: userProfile.role,
-      team: userProfile.team_name,
-      name: userProfile.full_name
+      email: profile.email,
+      role: profile.role,
+      team: profile.team_name,
+      name: profile.full_name
     });
     
     // Step 2: Get brands assigned to this user
@@ -54,25 +55,26 @@ export async function GET(request: NextRequest) {
     // Filter brands based on user role
     let userBrands: any[] = [];
     
-    if (userProfile.role === 'agent' || userProfile.role === 'Agent') {
-      userBrands = allBrands?.filter(brand => 
-        brand.kam_email_id === email || brand.kam_name === userProfile.full_name
-      ) || [];
+    const brands = (allBrands || []) as any[];
+    if (profile.role === 'agent' || profile.role === 'Agent') {
+      userBrands = brands.filter(brand =>
+        brand.kam_email_id === email || brand.kam_name === profile.full_name
+      );
       console.log('✅ [STEP 2] Agent brands (filtered by kam_email_id or kam_name):', userBrands.length);
-    } else if (userProfile.role === 'team_lead' || userProfile.role === 'Team Lead') {
+    } else if (profile.role === 'team_lead' || profile.role === 'Team Lead') {
       // Get all agents in the team
       const { data: teamAgents } = await supabase
         .from('user_profiles')
         .select('email, full_name')
-        .eq('team_name', userProfile.team_name)
+        .eq('team_name', profile.team_name)
         .in('role', ['agent', 'Agent']);
       
-      const agentEmails = teamAgents?.map(agent => agent.email) || [];
-      userBrands = allBrands?.filter(brand => 
+      const agentEmails = (teamAgents as any[])?.map(agent => agent.email) || [];
+      userBrands = brands.filter(brand =>
         agentEmails.includes(brand.kam_email_id)
-      ) || [];
-      console.log('✅ [STEP 2] Team lead brands (team:', userProfile.team_name, '):', userBrands.length);
-    } else if (userProfile.role === 'admin' || userProfile.role === 'Admin') {
+      );
+      console.log('✅ [STEP 2] Team lead brands (team:', profile.team_name, '):', userBrands.length);
+    } else if (profile.role === 'admin' || profile.role === 'Admin') {
       userBrands = allBrands || [];
       console.log('✅ [STEP 2] Admin - all brands:', userBrands.length);
     }
@@ -87,10 +89,10 @@ export async function GET(request: NextRequest) {
       .eq('visit_year', currentYear);
     
     // Apply role-based filtering
-    if (userProfile.role === 'agent' || userProfile.role === 'Agent') {
+    if (profile.role === 'agent' || profile.role === 'Agent') {
       visitQuery = visitQuery.eq('agent_id', email);
-    } else if (userProfile.role === 'team_lead' || userProfile.role === 'Team Lead') {
-      visitQuery = visitQuery.eq('team_name', userProfile.team_name);
+    } else if (profile.role === 'team_lead' || profile.role === 'Team Lead') {
+      visitQuery = visitQuery.eq('team_name', profile.team_name);
     }
     
     const { data: allVisits, error: visitsError } = await visitQuery;
@@ -109,7 +111,7 @@ export async function GET(request: NextRequest) {
     
     // Filter visits by user's brands
     const brandNames = userBrands.map(b => b.brand_name);
-    const userVisits = allVisits?.filter(visit => 
+    const userVisits = (allVisits as any[])?.filter(visit =>
       brandNames.includes(visit.brand_name)
     ) || [];
     
@@ -142,10 +144,10 @@ export async function GET(request: NextRequest) {
     const result = {
       success: true,
       user: {
-        email: userProfile.email,
-        name: userProfile.full_name,
-        role: userProfile.role,
-        team: userProfile.team_name
+        email: profile.email,
+        name: profile.full_name,
+        role: profile.role,
+        team: profile.team_name
       },
       brands: {
         total: userBrands.length,

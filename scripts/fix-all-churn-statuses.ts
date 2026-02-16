@@ -30,7 +30,7 @@ async function fixAllChurnStatuses() {
     let alreadyCorrectCount = 0;
     let errors = 0;
     
-    for (const record of allRecords || []) {
+    for (const record of (allRecords as any[] || [])) {
       try {
         const churnReason = record.churn_reason?.trim() || "";
         const callAttempts = record.call_attempts || [];
@@ -107,8 +107,8 @@ async function fixAllChurnStatuses() {
           console.log(`   Current Active: ${record.is_follow_up_active} → ${correctIsActive}`);
           
           // Update the record
-          const { error: updateError } = await getSupabaseAdmin()
-            .from('churn_records')
+          const { error: updateError } = await (getSupabaseAdmin()
+            .from('churn_records') as any)
             .update({
               follow_up_status: correctStatus,
               is_follow_up_active: correctIsActive,

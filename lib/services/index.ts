@@ -10,7 +10,4 @@ export { healthCheckService } from './healthCheckService';
 export { momService } from './momService';
 export { masterDataService } from './masterDataService';
 
-// UserService is a class, export an instance
-import { UserService } from './userService';
-export const userService = new UserService();
-export { UserService };
+export { userService } from './userService';

@@ -41,6 +41,7 @@ class AuthErrorHandler {
 
   // Get authentication token with fallback logic
   getAuthToken(): string | null {
+    if (typeof window === 'undefined') return null;
     try {
       // Try to get JWT token first
       const jwtToken = localStorage.getItem('jwt_token');
@@ -80,6 +81,7 @@ class AuthErrorHandler {
 
   // Store authentication tokens properly
   storeAuthTokens(tokens: AuthTokens): void {
+    if (typeof window === 'undefined') return;
     try {
       if (tokens.jwt_token) {
         localStorage.setItem('jwt_token', tokens.jwt_token);
@@ -102,6 +104,7 @@ class AuthErrorHandler {
 
   // Clear all authentication data
   clearAuthTokens(): void {
+    if (typeof window === 'undefined') return;
     try {
       localStorage.removeItem('jwt_token');
       localStorage.removeItem('token');
@@ -121,6 +124,7 @@ class AuthErrorHandler {
 
   // Get user data from storage
   getUserData(): any | null {
+    if (typeof window === 'undefined') return null;
     try {
       const userData = localStorage.getItem('user_data');
       if (userData && userData !== 'undefined' && userData !== 'null') {
@@ -145,6 +149,7 @@ class AuthErrorHandler {
 
   // Handle authentication errors
   private async handleAuthError(): Promise<void> {
+    if (typeof window === 'undefined') return;
     try {
       console.log('🔄 Handling authentication error...');
       

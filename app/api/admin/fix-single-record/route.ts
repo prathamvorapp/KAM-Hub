@@ -24,10 +24,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Record not found' }, { status: 404 });
     }
 
-    const churnReason = record.churn_reason?.trim() || "";
-    const callAttempts = record.call_attempts || [];
+    const rec = record as any;
+    const churnReason = rec.churn_reason?.trim() || "";
+    const callAttempts = rec.call_attempts || [];
     
-    console.log(`   Current Status: ${record.follow_up_status}`);
+    console.log(`   Current Status: ${rec.follow_up_status}`);
     console.log(`   Churn Reason: "${churnReason}"`);
     console.log(`   Call Attempts: ${callAttempts.length}`);
 
@@ -36,15 +37,15 @@ export async function POST(request: NextRequest) {
     
     console.log(`   Should Be Completed: ${shouldBeCompleted}`);
 
-    if (shouldBeCompleted && record.follow_up_status !== "COMPLETED") {
+    if (shouldBeCompleted && rec.follow_up_status !== "COMPLETED") {
       // Fix the record
-      const { error: updateError } = await getSupabaseAdmin()
-        .from('churn_records')
+      const { error: updateError } = await (getSupabaseAdmin()
+        .from('churn_records') as any)
         .update({
           follow_up_status: "COMPLETED",
           is_follow_up_active: false,
           next_reminder_time: null,
-          follow_up_completed_at: record.follow_up_completed_at || new Date().toISOString(),
+          follow_up_completed_at: rec.follow_up_completed_at || new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
         .eq('rid', rid);
@@ -53,13 +54,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Update failed', detail: updateError.message }, { status: 500 });
       }
 
-      console.log(`   ✅ Fixed: ${record.follow_up_status} → COMPLETED`);
+      console.log(`   ✅ Fixed: ${rec.follow_up_status} → COMPLETED`);
 
       return NextResponse.json({
         success: true,
         message: 'Record fixed',
         rid,
-        old_status: record.follow_up_status,
+        old_status: rec.follow_up_status,
         new_status: 'COMPLETED',
         churn_reason: churnReason
       });
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
         success: true,
         message: 'Record already correct',
         rid,
-        status: record.follow_up_status
+        status: rec.follow_up_status
       });
     }
 

@@ -9,6 +9,7 @@
     "build": "next build",
     "start": "next start -p 3022",
     "start:prod": "concurrently --names \"NEXT,CADDY\" --prefix-colors \"green,blue\" \"next start -p 3022\" \"node scripts/start-caddy.js 3000\"",
+    "test": "node scripts/test-services.js",
     "lint": "next lint",
     "caddy:start": "node scripts/start-caddy.js 0",
     "caddy:validate": "caddy\\caddy.exe validate --config Caddyfile",

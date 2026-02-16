@@ -42,7 +42,7 @@ export default function FixChurnStatusesPage() {
 
   if (userProfile?.role?.toLowerCase() !== 'admin') {
     return (
-      <DashboardLayout>
+      <DashboardLayout userProfile={userProfile}>
         <div className="p-8">
           <div className="bg-red-50 border border-red-200 rounded-lg p-6">
             <h2 className="text-xl font-bold text-red-800 mb-2">Access Denied</h2>
@@ -54,7 +54,7 @@ export default function FixChurnStatusesPage() {
   }
 
   return (
-    <DashboardLayout>
+    <DashboardLayout userProfile={userProfile}>
       <div className="p-8 max-w-4xl mx-auto">
         <div className="bg-white rounded-lg shadow-lg p-8">
           <div className="flex items-center gap-3 mb-6">

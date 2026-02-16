@@ -42,6 +42,7 @@ export interface Brand {
 
 export interface Visit {
   _id: Id<"visits">;
+  id?: string;
   visit_id: string; // The string ID used in mutations
   brand_name: string;
   agent_id?: string; // Agent ID (email)

@@ -5,6 +5,26 @@
  */
 
 export const convexAPI = {
+  // Master Data
+  getMasterData: async (email: string, page: number = 1, limit: number = 100, search?: string) => {
+    try {
+      const searchParams = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString()
+      });
+      if (search) searchParams.append('search', search);
+
+      const response = await fetch(`/api/data/master-data?${searchParams}`, {
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error getting master data:', error);
+      return { success: false, error: 'Failed to get master data' };
+    }
+  },
+
   // User Profile
   getUserProfile: async (email: string) => {
     try {
@@ -15,6 +35,33 @@ export const convexAPI = {
     } catch (error) {
       console.error('Error getting user profile:', error);
       return { success: false, error: 'Failed to get user profile' };
+    }
+  },
+
+  // Auth
+  authenticateUser: async (params: any) => {
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params)
+      });
+      return await response.json();
+    } catch (error) {
+      return { success: false, error: 'Authentication failed' };
+    }
+  },
+
+  forgotPassword: async (email: string) => {
+    try {
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      return await response.json();
+    } catch (error) {
+      return { success: false, error: 'Failed to request password reset' };
     }
   },
   
@@ -41,7 +88,7 @@ export const convexAPI = {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       
-      const agentRecords = data.data.filter((r: any) => r.kam === agentName);
+      const agentRecords = data.data.data.filter((r: any) => r.kam === agentName);
       const recordsWithResponse = agentRecords.filter((r: any) => r.churn_reason && r.churn_reason.trim() !== '').length;
       const recordsWithoutResponse = agentRecords.length - recordsWithResponse;
       
@@ -87,7 +134,7 @@ export const convexAPI = {
   getFollowUpStatus: async (rid: string, churnReason?: string, email?: string) => {
     try {
       const response = await fetch(`/api/follow-up/${rid}/status`, {
-        credentials: 'include' // Ensure cookies are sent for authentication
+        credentials: 'include'
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return await response.json();
@@ -107,9 +154,8 @@ export const convexAPI = {
       if (params.search) searchParams.append('search', params.search);
       if (params.filter) searchParams.append('filter', params.filter);
       
-      // Email is passed via cookies/headers, not query params
       const response = await fetch(`/api/churn?${searchParams}`, {
-        credentials: 'include' // Ensure cookies are sent
+        credentials: 'include'
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return await response.json();
@@ -123,7 +169,7 @@ export const convexAPI = {
   getChurnStatistics: async (email: string) => {
     try {
       const response = await fetch(`/api/churn/statistics`, {
-        credentials: 'include' // Ensure cookies are sent
+        credentials: 'include'
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return await response.json();
@@ -163,7 +209,7 @@ export const convexAPI = {
       if (params.search) searchParams.append('search', params.search);
       
       const response = await fetch(`/api/data/visits?${searchParams}`, {
-        credentials: 'include' // Ensure cookies are sent for authentication
+        credentials: 'include'
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return await response.json();
@@ -185,6 +231,21 @@ export const convexAPI = {
     } catch (error) {
       console.error('Error getting visit statistics:', error);
       return { success: false, error: 'Failed to get visit statistics' };
+    }
+  },
+
+  // Team Visit Statistics
+  getTeamVisitStatistics: async (email: string) => {
+    try {
+      const response = await fetch(`/api/data/visits/team-statistics?email=${encodeURIComponent(email)}`, {
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      return data.success ? data.data : data;
+    } catch (error) {
+      console.error('Error getting team visit statistics:', error);
+      return { success: false, error: 'Failed to get team visit statistics' };
     }
   },
 
@@ -227,22 +288,7 @@ export const convexAPI = {
 
   // Get MOMs (alias)
   getMOMs: async (params: { email: string; search?: string; page?: number; limit?: number }) => {
-    try {
-      const searchParams = new URLSearchParams({
-        page: (params.page || 1).toString(),
-        limit: (params.limit || 1000).toString()
-      });
-      if (params.search) searchParams.append('search', params.search);
-      
-      const response = await fetch(`/api/data/mom?${searchParams}`, {
-        credentials: 'include'
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return await response.json();
-    } catch (error) {
-      console.error('Error getting MOMs:', error);
-      return { success: false, error: 'Failed to get MOMs' };
-    }
+    return await convexAPI.getMOM(params);
   },
 
   // Approve or reject a visit
@@ -312,7 +358,7 @@ export const convexAPI = {
       const url = `/api/data/master-data/brands/${encodeURIComponent(email)}${queryString ? `?${queryString}` : ''}`;
       
       const response = await fetch(url, {
-        credentials: 'include' // Ensure cookies are sent for authentication
+        credentials: 'include'
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return await response.json();
@@ -326,7 +372,7 @@ export const convexAPI = {
   getOverdueFollowUps: async (kam?: string, email?: string) => {
     try {
       const response = await fetch(`/api/follow-up/reminders/overdue`, {
-        credentials: 'include' // Ensure cookies are sent
+        credentials: 'include'
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return await response.json();
@@ -340,7 +386,7 @@ export const convexAPI = {
   getActiveFollowUps: async (kam?: string, email?: string) => {
     try {
       const response = await fetch(`/api/follow-up/reminders/active`, {
-        credentials: 'include' // Ensure cookies are sent
+        credentials: 'include'
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return await response.json();
@@ -481,6 +527,131 @@ export const convexAPI = {
     } catch (error) {
       console.error('Error scheduling backdated visit:', error);
       return { success: false, error: 'Failed to schedule backdated visit' };
+    }
+  },
+
+  // Demo operations
+  getDemosForAgent: async (agentId: string, role: string, teamName?: string) => {
+    try {
+      const response = await fetch(`/api/data/demos`, {
+        credentials: 'include'
+      });
+      return await response.json();
+    } catch (error) {
+      return { success: false, error: 'Failed to get demos' };
+    }
+  },
+
+  initializeBrandDemos: async (brandId: string) => {
+    try {
+      const response = await fetch(`/api/data/demos/initialize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ brandId })
+      });
+      return await response.json();
+    } catch (error) {
+      return { success: false, error: 'Failed to initialize demos' };
+    }
+  },
+
+  initializeBrandDemosFromMasterData: async (brandId: string) => {
+    return await convexAPI.initializeBrandDemos(brandId);
+  },
+
+  setProductApplicability: async (demoId: string, isApplicable: boolean, nonApplicableReason?: string) => {
+    try {
+      const response = await fetch(`/api/data/demos/${demoId}/applicability`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ isApplicable, nonApplicableReason })
+      });
+      return await response.json();
+    } catch (error) {
+      return { success: false, error: 'Failed to set applicability' };
+    }
+  },
+
+  setUsageStatus: async (demoId: string, usageStatus: string) => {
+    try {
+      const response = await fetch(`/api/data/demos/${demoId}/usage-status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ usageStatus })
+      });
+      return await response.json();
+    } catch (error) {
+      return { success: false, error: 'Failed to set usage status' };
+    }
+  },
+
+  scheduleDemo: async (demoId: string, scheduledDate: string, scheduledTime: string, reason?: string) => {
+    try {
+      const response = await fetch(`/api/data/demos/${demoId}/schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ scheduledDate, scheduledTime, reason })
+      });
+      return await response.json();
+    } catch (error) {
+      return { success: false, error: 'Failed to schedule demo' };
+    }
+  },
+
+  rescheduleDemo: async (demoId: string, scheduledDate: string, scheduledTime: string, reason: string, rescheduleBy: string, rescheduleByRole: string) => {
+    try {
+      const response = await fetch(`/api/data/demos/${demoId}/reschedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ scheduledDate, scheduledTime, reason, rescheduleBy, rescheduleByRole })
+      });
+      return await response.json();
+    } catch (error) {
+      return { success: false, error: 'Failed to reschedule demo' };
+    }
+  },
+
+  completeDemo: async (demoId: string, conductedBy: string, completionNotes?: string) => {
+    try {
+      const response = await fetch(`/api/data/demos/${demoId}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ conductedBy, completionNotes })
+      });
+      return await response.json();
+    } catch (error) {
+      return { success: false, error: 'Failed to complete demo' };
+    }
+  },
+
+  setConversionDecision: async (demoId: string, conversionStatus: string, nonConversionReason?: string) => {
+    try {
+      const response = await fetch(`/api/data/demos/${demoId}/conversion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ conversionStatus, nonConversionReason })
+      });
+      return await response.json();
+    } catch (error) {
+      return { success: false, error: 'Failed to set conversion decision' };
+    }
+  },
+
+  getDemoStatistics: async (agentId?: string, teamName?: string, role?: string) => {
+    try {
+      const response = await fetch(`/api/data/demos/statistics`, {
+        credentials: 'include'
+      });
+      return await response.json();
+    } catch (error) {
+      return { success: false, error: 'Failed to get demo statistics' };
     }
   }
 };

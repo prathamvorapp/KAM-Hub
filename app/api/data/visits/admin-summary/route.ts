@@ -31,13 +31,14 @@ export async function GET(request: NextRequest) {
 
     console.log(`📊 Getting admin visit summary`);
 
-    const statistics = await visitService.getVisitStatistics(userEmail);
+    const summary = await visitService.getOrganizationSummary();
     const visits = await visitService.getVisits({ email: userEmail, page: 1, limit: 1000 });
 
     const response = {
       success: true,
+      summary,
       data: {
-        statistics,
+        statistics: await visitService.getVisitStatistics(userEmail),
         recent_visits: visits.page.slice(0, 10)
       }
     };

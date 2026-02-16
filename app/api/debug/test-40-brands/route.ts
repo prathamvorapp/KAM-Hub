@@ -21,10 +21,11 @@ export async function GET(request: NextRequest) {
     
     console.log('✅ [TEST 40] Fetched brands:', brands?.length);
     
+    const records = (brands || []) as any[];
     return NextResponse.json({
       success: true,
-      count: brands?.length || 0,
-      brands: brands?.map(b => ({
+      count: records.length,
+      brands: records.map(b => ({
         brand_name: b.brand_name,
         kam_email_id: b.kam_email_id,
         outlet_counts: b.outlet_counts

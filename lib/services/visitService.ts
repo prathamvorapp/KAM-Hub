@@ -4,6 +4,7 @@
  */
 
 import { supabase, getSupabaseAdmin } from '../supabase-client';
+import { normalizeRole } from '../utils/roleUtils';
 
 export const visitService = {
   // Get visit statistics for a user
@@ -30,7 +31,9 @@ export const visitService = {
     visitQuery = visitQuery.eq('visit_year', currentYearStr);
 
     // Role-based filtering
-    if (userProfile.role === 'agent' || userProfile.role === 'Agent') {
+    const prof = userProfile as any;
+    const normalizedRole = normalizeRole(prof.role);
+    if (normalizedRole === 'agent') {
       visitQuery = visitQuery.eq('agent_id', email);
       
       // Fetch brands directly with email filter
@@ -40,22 +43,22 @@ export const visitService = {
         .eq('kam_email_id', email)
         .limit(10000);
       
-      brandFilter = agentBrands?.map(brand => brand.brand_name) || [];
+      brandFilter = (agentBrands as any[])?.map(brand => brand.brand_name) || [];
       
-    } else if (userProfile.role === 'team_lead' || userProfile.role === 'Team Lead') {
-      if (!userProfile.team_name) {
+    } else if (normalizedRole === 'team_lead') {
+      if (!prof.team_name) {
         throw new Error("Team lead must have a team assigned");
       }
       
-      visitQuery = visitQuery.eq('team_name', userProfile.team_name);
+      visitQuery = visitQuery.eq('team_name', prof.team_name);
       
-      const { data: teamAgents } = await getSupabaseAdmin()
+      const { data: teamMembers } = await getSupabaseAdmin()
         .from('user_profiles')
         .select('email')
-        .eq('team_name', userProfile.team_name)
-        .in('role', ['agent', 'Agent']);
+        .eq('team_name', prof.team_name)
+        .eq('is_active', true);
       
-      const agentEmails = teamAgents?.map(agent => agent.email) || [];
+      const agentEmails = (teamMembers as any[])?.map(member => member.email) || [];
       
       // Fetch brands directly with IN filter
       const { data: teamBrands } = await getSupabaseAdmin()
@@ -64,21 +67,55 @@ export const visitService = {
         .in('kam_email_id', agentEmails)
         .limit(10000);
       
-      brandFilter = teamBrands?.map(brand => brand.brand_name) || [];
+      brandFilter = (teamBrands as any[])?.map(brand => brand.brand_name) || [];
       
-    } else if (userProfile.role === 'admin' || userProfile.role === 'Admin') {
+    } else if (normalizedRole === 'admin') {
       // Fetch ALL brands with explicit limit
       const { data: allBrands } = await getSupabaseAdmin()
         .from('master_data')
         .select('*')
         .limit(10000);  // High limit to ensure all records are fetched
-      brandFilter = allBrands?.map(brand => brand.brand_name) || [];
+      brandFilter = (allBrands as any[])?.map(brand => brand.brand_name) || [];
     }
 
     const { data: allVisits } = await visitQuery;
+
+    // If user is an agent and has no assigned brands, they should see zero statistics
+    if ((normalizedRole === 'agent') && brandFilter.length === 0) {
+      return {
+        total_brands: 0,
+        visit_done: 0,
+        pending: 0,
+        completed: 0,
+        cancelled: 0,
+        scheduled: 0,
+        brands_with_visits: 0,
+        brands_pending: 0,
+        total_visits_done: 0,
+        total_visits_pending: 0,
+        total_scheduled_visits: 0,
+        total_cancelled_visits: 0,
+        last_month_visits: 0,
+        current_month_scheduled: 0,
+        current_month_completed: 0,
+        current_month_total: 0,
+        current_month_total_visits: 0,
+        mom_shared_yes: 0,
+        mom_shared_no: 0,
+        mom_shared_pending: 0,
+        mom_pending: 0,
+        approved: 0,
+        rejected: 0,
+        pending_approval: 0,
+        monthly_target: 10,
+        current_month_progress: 0,
+        overall_progress: 0
+      };
+    }
+
     const visits = brandFilter.length > 0 
-      ? allVisits?.filter(visit => brandFilter.includes(visit.brand_name)) || []
-      : allVisits || [];
+      ? (allVisits as any[])?.filter(visit => brandFilter.includes(visit.brand_name)) || []
+      : (allVisits as any[]) || [];
 
     const total_brands = brandFilter.length;
     const nonCancelledVisits = visits.filter(v => v.visit_status !== 'Cancelled');
@@ -86,7 +123,7 @@ export const visitService = {
     // Visit Done should only count brands with MOM approved visits
     const brandsWithApprovedMOM = new Set(
       nonCancelledVisits
-        .filter(v => v.visit_status === 'Completed' && v.approval_status === 'Approved')
+        .filter(v => (v.visit_status === 'Completed' || v.visit_status === 'Approved' || v.visit_status === 'Visit Done') && v.approval_status === 'Approved')
         .map(visit => visit.brand_name)
     );
     const visit_done = brandsWithApprovedMOM.size;
@@ -162,6 +199,143 @@ export const visitService = {
     };
   },
 
+  // Helper to calculate statistics from raw data
+  async _calculateAggregatedStats(agents: any[], brands: any[], visits: any[]) {
+    const currentYearNum = new Date().getFullYear();
+    const currentMonth = new Date().getMonth();
+    const monthlyTarget = 10;
+
+    const stats = agents.map(agent => {
+      const agentBrands = brands.filter(b => b.kam_email_id === agent.email);
+      const agentBrandNames = agentBrands.map(b => b.brand_name);
+      const agentVisits = visits.filter(v => v.agent_id === agent.email || agentBrandNames.includes(v.brand_name));
+
+      const totalBrands = agentBrands.length;
+
+      const nonCancelledVisits = agentVisits.filter(v => v.visit_status !== 'Cancelled');
+
+      const brandsWithApprovedMOM = new Set(
+        nonCancelledVisits
+          .filter(v => (v.visit_status === 'Completed' || v.visit_status === 'Approved' || v.visit_status === 'Visit Done') && v.approval_status === 'Approved')
+          .map(visit => visit.brand_name)
+      );
+      const visitsDone = brandsWithApprovedMOM.size;
+      const visitsPending = totalBrands - visitsDone;
+
+      const currentMonthVisits = nonCancelledVisits.filter(visit => {
+        const visitDate = new Date(visit.scheduled_date);
+        return visitDate.getMonth() === currentMonth && visitDate.getFullYear() === currentYearNum;
+      });
+
+      const currentMonthCompleted = currentMonthVisits.filter(v => v.visit_status === 'Completed').length;
+      const currentMonthScheduled = currentMonthVisits.filter(v => v.visit_status === 'Scheduled').length;
+      const currentMonthTotal = currentMonthCompleted + currentMonthScheduled;
+      const progress = monthlyTarget > 0 ? Math.round((currentMonthTotal / monthlyTarget) * 100) : 0;
+      const momPending = nonCancelledVisits.filter(v => v.mom_shared === 'Pending' || !v.mom_shared).length;
+
+      return {
+        totalBrands,
+        visitsDone,
+        visitsPending,
+        currentMonthCompleted: currentMonthTotal,
+        progress,
+        momPending
+      };
+    });
+
+    const totalAgents = agents.length;
+    const totalBrands = stats.reduce((acc, s) => acc + s.totalBrands, 0);
+    const totalVisitsDone = stats.reduce((acc, s) => acc + s.visitsDone, 0);
+    const totalVisitsPending = stats.reduce((acc, s) => acc + s.visitsPending, 0);
+    const totalCurrentMonthCompleted = stats.reduce((acc, s) => acc + s.currentMonthCompleted, 0);
+    const totalMonthlyTarget = totalAgents * monthlyTarget;
+    const totalMomPending = stats.reduce((acc, s) => acc + s.momPending, 0);
+
+    const agentsAtTarget = stats.filter(s => s.progress >= 100).length;
+    const agentsAbove80 = stats.filter(s => s.progress >= 80 && s.progress < 100).length;
+    const agentsNeedingAttention = stats.filter(s => s.progress < 40).length;
+
+    const progress = totalMonthlyTarget > 0
+      ? Math.round((totalCurrentMonthCompleted / totalMonthlyTarget) * 100)
+      : 0;
+
+    return {
+      totalAgents,
+      totalBrands,
+      totalVisitsDone,
+      totalVisitsPending,
+      totalCurrentMonthCompleted,
+      totalMonthlyTarget,
+      totalMomPending,
+      agentsAtTarget,
+      agentsAbove80,
+      agentsNeedingAttention,
+      progress
+    };
+  },
+
+  // Get organization-wide summary for admin
+  async getOrganizationSummary() {
+    const { data: allAgents } = await getSupabaseAdmin()
+      .from('user_profiles')
+      .select('*')
+      .eq('is_active', true)
+      .in('role', ['Agent', 'agent', 'AGENT']);
+
+    const { data: allBrands } = await getSupabaseAdmin()
+      .from('master_data')
+      .select('*')
+      .limit(10000);
+
+    const currentYearStr = new Date().getFullYear().toString();
+    const { data: allVisits } = await getSupabaseAdmin()
+      .from('visits')
+      .select('*')
+      .eq('visit_year', currentYearStr);
+
+    const aggregated = await this._calculateAggregatedStats(allAgents || [], allBrands || [], allVisits || []);
+
+    return {
+      ...aggregated,
+      organizationProgress: aggregated.progress
+    };
+  },
+
+  // Get team-wide summary for team lead
+  async getTeamSummary(teamName: string) {
+    if (!teamName) throw new Error("Team name is required");
+
+    const { data: teamAgents } = await getSupabaseAdmin()
+      .from('user_profiles')
+      .select('*')
+      .eq('team_name', teamName)
+      .eq('is_active', true)
+      .in('role', ['Agent', 'agent', 'AGENT']);
+
+    const agentEmails = (teamAgents as any[])?.map(a => a.email) || [];
+
+    const { data: teamBrands } = await getSupabaseAdmin()
+      .from('master_data')
+      .select('*')
+      .in('kam_email_id', agentEmails)
+      .limit(10000);
+
+    const currentYearStr = new Date().getFullYear().toString();
+    const { data: teamVisits } = await getSupabaseAdmin()
+      .from('visits')
+      .select('*')
+      .eq('visit_year', currentYearStr)
+      .in('team_name', [teamName]);
+
+    const aggregated = await this._calculateAggregatedStats(teamAgents || [], teamBrands || [], teamVisits || []);
+
+    return {
+      ...aggregated,
+      teamProgress: aggregated.progress,
+      teamName
+    };
+  },
+
   // Get visits for a user with pagination
   async getVisits(params: {
     email: string;
@@ -181,16 +355,18 @@ export const visitService = {
       throw new Error("User profile not found");
     }
 
+    const prof = userProfile as any;
+    const normalizedRole = normalizeRole(prof.role);
     let query = getSupabaseAdmin().from('visits').select('*', { count: 'exact' });
 
-    if (userProfile.role === 'agent' || userProfile.role === 'Agent') {
+    if (normalizedRole === 'agent') {
       query = query.eq('agent_id', email);
-    } else if ((userProfile.role === 'team_lead' || userProfile.role === 'Team Lead') && userProfile.team_name) {
-      query = query.eq('team_name', userProfile.team_name);
+    } else if (normalizedRole === 'team_lead' && prof.team_name) {
+      query = query.eq('team_name', prof.team_name);
     }
 
-    const { data: visits, count } = await query;
-    let filteredVisits = visits || [];
+    const { data: allVisitsData, count } = await query;
+    let filteredVisits = (allVisitsData || []) as any[];
 
     if (search && search.trim()) {
       const searchLower = search.toLowerCase().trim();
@@ -227,8 +403,8 @@ export const visitService = {
       updated_at: now,
     };
 
-    const { error } = await getSupabaseAdmin()
-      .from('visits')
+    const { error } = await (getSupabaseAdmin()
+      .from('visits') as any)
       .insert(visitData);
 
     if (error) throw error;
@@ -256,8 +432,8 @@ export const visitService = {
       throw new Error("Visit not found");
     }
 
-    await getSupabaseAdmin()
-      .from('visits')
+    await (getSupabaseAdmin()
+      .from('visits') as any)
       .update({
         ...updateData,
         updated_at: new Date().toISOString(),
@@ -285,8 +461,8 @@ export const visitService = {
       throw new Error("Visit not found");
     }
 
-    await getSupabaseAdmin()
-      .from('visits')
+    await (getSupabaseAdmin()
+      .from('visits') as any)
       .update({
         ...updateData,
         updated_at: new Date().toISOString(),
@@ -309,6 +485,7 @@ export const visitService = {
     if (!visit) {
       throw new Error("Visit not found");
     }
+    const v = visit as any;
 
     if (!params.open_points || params.open_points.length === 0) {
       if (params.mom_shared) {
@@ -323,8 +500,8 @@ export const visitService = {
           updateData.visit_status = "Pending";
         }
         
-        await getSupabaseAdmin()
-          .from('visits')
+        await (getSupabaseAdmin()
+          .from('visits') as any)
           .update(updateData)
           .eq('visit_id', params.visit_id);
         
@@ -334,9 +511,9 @@ export const visitService = {
       }
     }
 
-    const brand_name = params.brand_name || visit.brand_name;
-    const agent_name = params.agent_name || visit.agent_name;
-    const created_by = params.created_by || visit.agent_id;
+    const brand_name = params.brand_name || v.brand_name;
+    const agent_name = params.agent_name || v.agent_name;
+    const created_by = params.created_by || v.agent_id;
 
     if (!brand_name || !agent_name || !created_by) {
       throw new Error("Missing required information: brand_name, agent_name, or created_by");
@@ -356,7 +533,7 @@ export const visitService = {
       updated_at: point.updated_at || now,
     }));
     
-    await getSupabaseAdmin().from('mom').insert({
+    await (getSupabaseAdmin().from('mom') as any).insert({
       ticket_id: ticketId,
       title: `Visit MOM - ${brand_name}${params.is_resubmission ? ' (Resubmitted)' : ''}`,
       description: `Minutes of Meeting for visit to ${brand_name}${params.is_resubmission ? ' - Resubmitted after feedback' : ''}`,
@@ -364,7 +541,7 @@ export const visitService = {
       priority: 'Medium',
       category: 'Visit MOM',
       created_by: created_by,
-      team: visit.team_name, // Add team field for Team Lead filtering
+      team: v.team_name, // Add team field for Team Lead filtering
       brand_name: brand_name,
       customer_name: brand_name,
       visit_id: params.visit_id,
@@ -387,8 +564,8 @@ export const visitService = {
       }
     }
     
-    await getSupabaseAdmin()
-      .from('visits')
+    await (getSupabaseAdmin()
+      .from('visits') as any)
       .update(updateData)
       .eq('visit_id', params.visit_id);
     
@@ -431,8 +608,8 @@ export const visitService = {
       }
     }
 
-    await getSupabaseAdmin()
-      .from('visits')
+    await (getSupabaseAdmin()
+      .from('visits') as any)
       .update(updateData)
       .eq('visit_id', params.visit_id);
 
@@ -453,20 +630,21 @@ export const visitService = {
     if (!visit) {
       throw new Error("Visit not found");
     }
+    const v = visit as any;
 
-    if (visit.agent_id !== params.agent_email) {
+    if (v.agent_id !== params.agent_email) {
       throw new Error("Unauthorized: Visit does not belong to this agent");
     }
 
-    if (visit.approval_status !== "Rejected") {
+    if (v.approval_status !== "Rejected") {
       throw new Error("Visit is not in rejected status");
     }
 
     const now = new Date().toISOString();
-    const resubmissionCount = (visit.resubmission_count || 0) + 1;
+    const resubmissionCount = (v.resubmission_count || 0) + 1;
 
-    await getSupabaseAdmin()
-      .from('visits')
+    await (getSupabaseAdmin()
+      .from('visits') as any)
       .update({
         approval_status: "Pending",
         visit_status: "Pending",
@@ -495,21 +673,22 @@ export const visitService = {
     if (!visit) {
       throw new Error("Visit not found");
     }
+    const v = visit as any;
 
     const now = new Date().toISOString();
-    const rescheduleCount = (visit.reschedule_count || 0) + 1;
+    const rescheduleCount = (v.reschedule_count || 0) + 1;
 
-    const rescheduleHistory = visit.reschedule_history || [];
+    const rescheduleHistory = v.reschedule_history || [];
     rescheduleHistory.push({
-      old_date: visit.scheduled_date,
+      old_date: v.scheduled_date,
       new_date: params.new_scheduled_date,
       reason: params.reason,
       rescheduled_by: params.rescheduled_by,
       rescheduled_at: now,
     });
 
-    await getSupabaseAdmin()
-      .from('visits')
+    await (getSupabaseAdmin()
+      .from('visits') as any)
       .update({
         scheduled_date: params.new_scheduled_date,
         reschedule_count: rescheduleCount,
@@ -534,12 +713,13 @@ export const visitService = {
     if (!visit) {
       throw new Error("Visit not found");
     }
+    const v = visit as any;
 
     return {
-      visit_id: visit.visit_id,
-      current_date: visit.scheduled_date,
-      reschedule_count: visit.reschedule_count || 0,
-      reschedule_history: visit.reschedule_history || [],
+      visit_id: v.visit_id,
+      current_date: v.scheduled_date,
+      reschedule_count: v.reschedule_count || 0,
+      reschedule_history: v.reschedule_history || [],
     };
   },
 
@@ -558,8 +738,8 @@ export const visitService = {
       updated_at: now,
     };
 
-    const { error } = await getSupabaseAdmin()
-      .from('visits')
+    const { error } = await (getSupabaseAdmin()
+      .from('visits') as any)
       .insert(visitData);
 
     if (error) throw error;

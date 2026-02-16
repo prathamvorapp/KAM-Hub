@@ -57,8 +57,8 @@ export async function GET(request: NextRequest) {
         limitError: limitError?.message,
         rangeError: rangeError?.message
       },
-      sample_brands: allData?.slice(0, 5).map(b => b.brand_name),
-      all_brand_names: allData?.map(b => b.brand_name)
+      sample_brands: (allData as any[])?.slice(0, 5).map(b => b.brand_name),
+      all_brand_names: (allData as any[])?.map(b => b.brand_name)
     });
     
   } catch (error: any) {

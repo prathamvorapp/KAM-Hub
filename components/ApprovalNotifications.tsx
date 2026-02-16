@@ -33,7 +33,7 @@ export default function ApprovalNotifications({ userEmail, userRole }: ApprovalN
       console.log('📋 ApprovalNotifications - Visits response:', visitsResponse);
       
       // Fix: getVisits returns { data: { page: [], isDone, continueCursor } }
-      const allVisits = visitsResponse.data.page || [];
+      const allVisits = (visitsResponse.data.page || []) as any[];
       
       // Filter to show only truly pending MOMs (exclude rejected ones)
       const pendingVisits = allVisits.filter(v => 
@@ -52,9 +52,9 @@ export default function ApprovalNotifications({ userEmail, userRole }: ApprovalN
             search: visit.visit_id // Search by visit_id to find related MOM
           });
           
-          const visitMOM = momResponse.data.data.find(mom => mom.visit_id === visit.visit_id);
+          const visitMOM = (momResponse.data.data as any[]).find(mom => mom.visit_id === visit.visit_id);
           if (visitMOM && visitMOM.open_points) {
-            const openPointsCount = visitMOM.open_points.filter(point => point.status === 'Open').length;
+            const openPointsCount = (visitMOM.open_points as any[]).filter(point => point.status === 'Open').length;
             totalOpenPoints += openPointsCount;
           }
         } catch (error) {
