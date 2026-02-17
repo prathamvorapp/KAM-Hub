@@ -26,11 +26,13 @@ export async function GET(request: NextRequest) {
       }, { status: 404 });
     }
     
+    const profile = userProfile as any;
+    
     console.log('✅ [STEP 1] User profile found:', {
-      email: userProfile.email,
-      role: userProfile.role,
-      team: userProfile.team_name,
-      name: userProfile.full_name
+      email: profile.email,
+      role: profile.role,
+      team: profile.team_name,
+      name: profile.full_name
     });
     
     // Step 2: Get brands assigned to this user
@@ -51,29 +53,31 @@ export async function GET(request: NextRequest) {
     
     console.log('✅ [STEP 2] Total brands in master_data:', allBrands?.length || 0);
     
+    const brands = allBrands as any[];
+    
     // Filter brands based on user role
     let userBrands: any[] = [];
     
-    if (userProfile.role === 'agent' || userProfile.role === 'Agent') {
-      userBrands = allBrands?.filter(brand => 
-        brand.kam_email_id === email || brand.kam_name === userProfile.full_name
+    if (profile.role === 'agent' || profile.role === 'Agent') {
+      userBrands = brands?.filter((brand: any) => 
+        brand.kam_email_id === email || brand.kam_name === profile.full_name
       ) || [];
       console.log('✅ [STEP 2] Agent brands (filtered by kam_email_id or kam_name):', userBrands.length);
-    } else if (userProfile.role === 'team_lead' || userProfile.role === 'Team Lead') {
+    } else if (profile.role === 'team_lead' || profile.role === 'Team Lead') {
       // Get all agents in the team
       const { data: teamAgents } = await supabase
         .from('user_profiles')
         .select('email, full_name')
-        .eq('team_name', userProfile.team_name)
+        .eq('team_name', profile.team_name)
         .in('role', ['agent', 'Agent']);
       
-      const agentEmails = teamAgents?.map(agent => agent.email) || [];
-      userBrands = allBrands?.filter(brand => 
+      const agentEmails = (teamAgents as any)?.map((agent: any) => agent.email) || [];
+      userBrands = brands?.filter((brand: any) => 
         agentEmails.includes(brand.kam_email_id)
       ) || [];
-      console.log('✅ [STEP 2] Team lead brands (team:', userProfile.team_name, '):', userBrands.length);
-    } else if (userProfile.role === 'admin' || userProfile.role === 'Admin') {
-      userBrands = allBrands || [];
+      console.log('✅ [STEP 2] Team lead brands (team:', profile.team_name, '):', userBrands.length);
+    } else if (profile.role === 'admin' || profile.role === 'Admin') {
+      userBrands = brands || [];
       console.log('✅ [STEP 2] Admin - all brands:', userBrands.length);
     }
     
@@ -87,10 +91,10 @@ export async function GET(request: NextRequest) {
       .eq('visit_year', currentYear);
     
     // Apply role-based filtering
-    if (userProfile.role === 'agent' || userProfile.role === 'Agent') {
+    if (profile.role === 'agent' || profile.role === 'Agent') {
       visitQuery = visitQuery.eq('agent_id', email);
-    } else if (userProfile.role === 'team_lead' || userProfile.role === 'Team Lead') {
-      visitQuery = visitQuery.eq('team_name', userProfile.team_name);
+    } else if (profile.role === 'team_lead' || profile.role === 'Team Lead') {
+      visitQuery = visitQuery.eq('team_name', profile.team_name);
     }
     
     const { data: allVisits, error: visitsError } = await visitQuery;
@@ -107,51 +111,53 @@ export async function GET(request: NextRequest) {
     
     console.log('✅ [STEP 3] Total visits found:', allVisits?.length || 0);
     
+    const visits = allVisits as any[];
+    
     // Filter visits by user's brands
-    const brandNames = userBrands.map(b => b.brand_name);
-    const userVisits = allVisits?.filter(visit => 
+    const brandNames = userBrands.map((b: any) => b.brand_name);
+    const userVisits = visits?.filter((visit: any) => 
       brandNames.includes(visit.brand_name)
     ) || [];
     
     console.log('✅ [STEP 3] Visits for user brands:', userVisits.length);
     
     // Calculate statistics
-    const nonCancelledVisits = userVisits.filter(v => v.visit_status !== 'Cancelled');
-    const completedVisits = nonCancelledVisits.filter(v => v.visit_status === 'Completed');
-    const pendingVisits = nonCancelledVisits.filter(v => 
+    const nonCancelledVisits = userVisits.filter((v: any) => v.visit_status !== 'Cancelled');
+    const completedVisits = nonCancelledVisits.filter((v: any) => v.visit_status === 'Completed');
+    const pendingVisits = nonCancelledVisits.filter((v: any) => 
       v.visit_status === 'Pending' || 
       v.visit_status === 'Scheduled' || 
       !v.visit_status
     );
-    const scheduledVisits = nonCancelledVisits.filter(v => v.visit_status === 'Scheduled');
-    const cancelledVisits = userVisits.filter(v => v.visit_status === 'Cancelled');
+    const scheduledVisits = nonCancelledVisits.filter((v: any) => v.visit_status === 'Scheduled');
+    const cancelledVisits = userVisits.filter((v: any) => v.visit_status === 'Cancelled');
     
     // Brands with visits
-    const brandsWithVisits = new Set(nonCancelledVisits.map(v => v.brand_name));
+    const brandsWithVisits = new Set(nonCancelledVisits.map((v: any) => v.brand_name));
     
     // MOM statistics
-    const momSharedYes = nonCancelledVisits.filter(v => v.mom_shared === 'Yes').length;
-    const momSharedNo = nonCancelledVisits.filter(v => v.mom_shared === 'No').length;
-    const momPending = nonCancelledVisits.filter(v => v.mom_shared === 'Pending' || !v.mom_shared).length;
+    const momSharedYes = nonCancelledVisits.filter((v: any) => v.mom_shared === 'Yes').length;
+    const momSharedNo = nonCancelledVisits.filter((v: any) => v.mom_shared === 'No').length;
+    const momPending = nonCancelledVisits.filter((v: any) => v.mom_shared === 'Pending' || !v.mom_shared).length;
     
     // Approval statistics
-    const approved = nonCancelledVisits.filter(v => v.approval_status === 'Approved').length;
-    const rejected = nonCancelledVisits.filter(v => v.approval_status === 'Rejected').length;
-    const pendingApproval = nonCancelledVisits.filter(v => v.approval_status === 'Pending' || !v.approval_status).length;
+    const approved = nonCancelledVisits.filter((v: any) => v.approval_status === 'Approved').length;
+    const rejected = nonCancelledVisits.filter((v: any) => v.approval_status === 'Rejected').length;
+    const pendingApproval = nonCancelledVisits.filter((v: any) => v.approval_status === 'Pending' || !v.approval_status).length;
     
     const result = {
       success: true,
       user: {
-        email: userProfile.email,
-        name: userProfile.full_name,
-        role: userProfile.role,
-        team: userProfile.team_name
+        email: profile.email,
+        name: profile.full_name,
+        role: profile.role,
+        team: profile.team_name
       },
       brands: {
         total: userBrands.length,
         with_visits: brandsWithVisits.size,
         without_visits: userBrands.length - brandsWithVisits.size,
-        list: userBrands.map(b => ({
+        list: userBrands.map((b: any) => ({
           brand_name: b.brand_name,
           kam_email: b.kam_email_id,
           kam_name: b.kam_name

@@ -84,21 +84,33 @@ export default function ApprovalsPage() {
       setLoading(true);
 
       if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
+        console.log('👥 [APPROVALS] Team Lead loading pending visits for:', user.email, 'Team:', userProfile.team_name);
+        
         const visitsResponse = await convexAPI.getVisits({
           email: user.email,
-          search: 'Pending', // Filter by status
+          // Don't filter by search - we'll filter by approval_status instead
         });
         
-        console.log('📋 Visits response structure:', visitsResponse);
+        console.log('📋 [APPROVALS] Visits response structure:', visitsResponse);
         
-        // Fix: getVisits returns { data: { page: [], isDone, continueCursor } }
-        const allVisits = visitsResponse.data?.page || [];
+        // Fix: API returns { success: true, page: [], isDone, ... }
+        const allVisits = visitsResponse.page || [];
         
-        // Filter to show only truly pending MOMs (exclude rejected ones)
+        console.log('📋 [APPROVALS] Total visits received:', allVisits.length);
+        console.log('📋 [APPROVALS] All visits:', allVisits.map((v: any) => ({
+          brand: v.brand_name,
+          status: v.visit_status,
+          approval: v.approval_status,
+          agent: v.agent_name,
+          team: v.team_name
+        })));
+        
+        // Filter to show only visits with pending approval (MOM submitted but not yet approved/rejected)
         const pendingVisits = allVisits.filter((v: any) => 
-          v.visit_status === 'Pending' && 
-          v.approval_status !== 'Rejected'
+          v.approval_status === 'Pending' || v.approval_status === 'pending'
         );
+        
+        console.log('📋 [APPROVALS] Filtered pending visits:', pendingVisits.length);
         
         // Enhance visits with MOM details
         const enhancedVisits = await Promise.all(
@@ -317,7 +329,7 @@ export default function ApprovalsPage() {
                 const daysStyle = getDaysIndicatorStyle(daysBetween);
                 
                 return (
-                  <div key={visit._id.toString()} className="bg-white/5 p-4 rounded-lg border border-white/10">
+                  <div key={visit.visit_id} className="bg-white/5 p-4 rounded-lg border border-white/10">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">

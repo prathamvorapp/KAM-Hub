@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import DashboardLayout from '@/components/Layout/DashboardLayout'
@@ -43,7 +43,7 @@ interface MOMRecord {
   visit_resubmission_count?: number | null;
 }
 
-export default function TicketsPage() {
+function TicketsPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const visitId = searchParams.get('visit_id')
@@ -759,5 +759,21 @@ export default function TicketsPage() {
         )}
       </div>
     </DashboardLayout>
+  )
+}
+
+
+export default function TicketsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+          <p className="mt-4 text-secondary-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <TicketsPageContent />
+    </Suspense>
   )
 }

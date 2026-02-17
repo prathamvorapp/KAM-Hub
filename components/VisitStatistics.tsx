@@ -33,10 +33,10 @@ interface VisitStatistics {
 
 interface VisitStatisticsProps {
   userEmail: string
-  onRefresh?: () => void
+  refreshKey?: number
 }
 
-export default function VisitStatistics({ userEmail, onRefresh }: VisitStatisticsProps) {
+export default function VisitStatistics({ userEmail, refreshKey }: VisitStatisticsProps) {
   const [statistics, setStatistics] = useState<VisitStatistics | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -48,7 +48,7 @@ export default function VisitStatistics({ userEmail, onRefresh }: VisitStatistic
     loadStatistics()
   }
 
-  const loadStatistics = async () => {
+  const loadStatistics = async (bustCache = false) => {
     try {
       setLoading(true)
       setError(null)
@@ -74,10 +74,12 @@ export default function VisitStatistics({ userEmail, onRefresh }: VisitStatistic
           setTimeout(() => reject(new Error('Statistics loading timeout')), 10000)
         );
         
-        const statisticsPromise = convexAPI.getVisitStatistics(userEmail);
+        const statisticsPromise = convexAPI.getVisitStatistics(userEmail, bustCache);
         response = await Promise.race([statisticsPromise, timeoutPromise]);
         
         console.log('📊 Convex visit statistics response:', response)
+        console.log('📊 [CLIENT DEBUG] Scheduled visits:', response.scheduled, 'Total scheduled:', response.total_scheduled_visits)
+        console.log('📊 [CLIENT DEBUG] All stats:', JSON.stringify(response, null, 2))
       } catch (convexError) {
         console.log('⚠️ Convex API failed, trying backend API...', convexError);
         
@@ -177,16 +179,9 @@ export default function VisitStatistics({ userEmail, onRefresh }: VisitStatistic
 
   useEffect(() => {
     if (userEmail) {
-      loadStatistics()
+      loadStatistics(true) // Bust cache on mount and when refreshKey changes
     }
-  }, [userEmail])
-
-  // Refresh statistics when parent component refreshes
-  useEffect(() => {
-    if (onRefresh) {
-      loadStatistics()
-    }
-  }, [onRefresh])
+  }, [userEmail, refreshKey])
 
   if (loading) {
     return (
@@ -326,8 +321,8 @@ export default function VisitStatistics({ userEmail, onRefresh }: VisitStatistic
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-gray-900">Visit Statistics</h2>
         <button
-          onClick={loadStatistics}
-          className="text-sm text-blue-600 hover:text-blue-800 underline"
+          onClick={() => loadStatistics(true)}
+          className="text-sm px-3 py-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
         >
           Refresh
         </button>

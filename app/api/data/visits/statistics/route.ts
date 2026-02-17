@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
     // Check if a specific email is requested via query parameter
     const { searchParams } = new URL(request.url);
     const requestedEmail = searchParams.get('email');
+    const bustCache = searchParams.get('bustCache') === 'true';
     
     // Determine which email to use for statistics
     let targetEmail = loggedInUserEmail;
@@ -46,11 +47,18 @@ export async function GET(request: NextRequest) {
     }
 
     const cacheKey = `visit_stats_${targetEmail}`;
-    const cachedData = statisticsCache.get(cacheKey);
     
-    if (cachedData) {
-      console.log(`📈 Visit statistics served from cache for: ${targetEmail}`);
-      return NextResponse.json(cachedData);
+    // Check cache only if not busting
+    if (!bustCache) {
+      const cachedData = statisticsCache.get(cacheKey);
+      
+      if (cachedData) {
+        console.log(`📈 Visit statistics served from cache for: ${targetEmail}`);
+        return NextResponse.json(cachedData);
+      }
+    } else {
+      console.log(`🔄 Cache busted for: ${targetEmail}`);
+      statisticsCache.del(cacheKey);
     }
 
     console.log(`📊 Getting visit statistics for: ${targetEmail}`);

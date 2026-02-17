@@ -35,3 +35,43 @@ export async function GET(request: NextRequest) {
     }, { status: 500 });
   }
 }
+
+export async function POST(request: NextRequest) {
+  try {
+    const user = await getAuthenticatedUser(request);
+    
+    if (!user) {
+      return NextResponse.json({
+        success: false,
+        error: 'Authentication required'
+      }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { brandId } = body;
+
+    if (!brandId) {
+      return NextResponse.json({
+        success: false,
+        error: 'brandId is required'
+      }, { status: 400 });
+    }
+
+    console.log(`🚀 Initializing demos for brand: ${brandId}`);
+
+    const result = await demoService.initializeBrandDemosFromMasterData(brandId);
+
+    return NextResponse.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    console.error('❌ Error initializing demos:', error);
+    return NextResponse.json({
+      success: false,
+      error: 'Failed to initialize demos',
+      detail: String(error)
+    }, { status: 500 });
+  }
+}

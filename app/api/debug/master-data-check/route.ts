@@ -24,18 +24,20 @@ export async function GET(request: NextRequest) {
     
     console.log('✅ Total records in master_data:', allRecords?.length || 0);
     
+    const records = allRecords as any[];
+    
     // Filter by kam_email_id
-    const byKamEmail = allRecords?.filter(r => r.kam_email_id === email) || [];
+    const byKamEmail = records?.filter((r: any) => r.kam_email_id === email) || [];
     console.log('📊 Records with kam_email_id =', email, ':', byKamEmail.length);
     
     // Filter by kam_email_id (case insensitive)
-    const byKamEmailCI = allRecords?.filter(r => 
+    const byKamEmailCI = records?.filter((r: any) => 
       r.kam_email_id?.toLowerCase() === email.toLowerCase()
     ) || [];
     console.log('📊 Records with kam_email_id (case insensitive):', byKamEmailCI.length);
     
     // Check for variations
-    const emailVariations = allRecords?.filter(r => 
+    const emailVariations = records?.filter((r: any) => 
       r.kam_email_id?.includes('rahul.taak') || 
       r.kam_email_id?.includes('rahul') ||
       r.kam_name?.toLowerCase().includes('rahul')
@@ -43,11 +45,11 @@ export async function GET(request: NextRequest) {
     console.log('📊 Records with "rahul" in kam_email_id or kam_name:', emailVariations.length);
     
     // Get unique kam_email_id values
-    const uniqueEmails = [...new Set(allRecords?.map(r => r.kam_email_id))];
+    const uniqueEmails = Array.from(new Set(records?.map((r: any) => r.kam_email_id)));
     console.log('📊 Unique kam_email_id values:', uniqueEmails.length);
     
     // Sample of records
-    const sampleRecords = allRecords?.slice(0, 10).map(r => ({
+    const sampleRecords = records?.slice(0, 10).map((r: any) => ({
       brand_name: r.brand_name,
       kam_email_id: r.kam_email_id,
       kam_name: r.kam_name,
@@ -55,7 +57,7 @@ export async function GET(request: NextRequest) {
     }));
     
     // Records for this specific email
-    const userRecords = byKamEmailCI.map(r => ({
+    const userRecords = byKamEmailCI.map((r: any) => ({
       brand_name: r.brand_name,
       kam_email_id: r.kam_email_id,
       kam_name: r.kam_name,

@@ -128,7 +128,7 @@ export default function DemoStatistics() {
         <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
           <h3 className="text-lg font-semibold text-white mb-4">Status Breakdown</h3>
           <div className="space-y-3">
-            {Object.entries(stats.byStatus).map(([status, count]) => {
+            {stats.byStatus && Object.entries(stats.byStatus).map(([status, count]) => {
               const percentage = stats.total > 0 ? Math.round((count / stats.total) * 100) : 0;
               const getStatusColor = (status: string) => {
                 const colors: Record<string, string> = {
@@ -164,7 +164,7 @@ export default function DemoStatistics() {
         <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
           <h3 className="text-lg font-semibold text-white mb-4">Product Breakdown</h3>
           <div className="space-y-3">
-            {Object.entries(stats.byProduct).map(([product, count]) => {
+            {stats.byProduct && Object.entries(stats.byProduct).map(([product, count]) => {
               const percentage = stats.total > 0 ? Math.round((count / stats.total) * 100) : 0;
               
               return (

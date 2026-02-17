@@ -51,19 +51,21 @@ export async function GET(request: NextRequest) {
       }, { status: 404 });
     }
 
+    const profile = userProfile as any;
+
     console.log('✅ [STEP 1] User found:', {
-      email: userProfile.email,
-      role: userProfile.role,
-      team: userProfile.team_name
+      email: profile.email,
+      role: profile.role,
+      team: profile.team_name
     });
 
     // STEP 2: Get brands based on user role - fetch directly with filters
-    console.log('📊 [STEP 2] Fetching brands for user role:', userProfile.role);
+    console.log('📊 [STEP 2] Fetching brands for user role:', profile.role);
     
     let userBrands: any[] = [];
     let brandFilter: string[] = [];
 
-    if (userProfile.role === 'agent' || userProfile.role === 'Agent') {
+    if (profile.role === 'agent' || profile.role === 'Agent') {
       // For agents: fetch brands directly with email filter
       const { data: agentBrands, error: brandsError } = await supabase
         .from('master_data')
@@ -84,9 +86,9 @@ export async function GET(request: NextRequest) {
       brandFilter = userBrands.map(b => b.brand_name);
       console.log('✅ [STEP 2] Agent brands found:', userBrands.length);
       
-    } else if (userProfile.role === 'team_lead' || userProfile.role === 'Team Lead') {
+    } else if (profile.role === 'team_lead' || profile.role === 'Team Lead') {
       // For team leads: get all agents in team, then fetch their brands
-      if (!userProfile.team_name) {
+      if (!profile.team_name) {
         return NextResponse.json({
           success: false,
           error: 'Team lead must have a team assigned'
@@ -96,10 +98,10 @@ export async function GET(request: NextRequest) {
       const { data: teamAgents } = await supabase
         .from('user_profiles')
         .select('email, full_name')
-        .eq('team_name', userProfile.team_name)
+        .eq('team_name', profile.team_name)
         .in('role', ['agent', 'Agent']);
 
-      const agentEmails = teamAgents?.map(a => a.email) || [];
+      const agentEmails = (teamAgents as any)?.map((a: any) => a.email) || [];
       
       // Fetch brands for all team agents
       const { data: teamBrands, error: brandsError } = await supabase
@@ -117,11 +119,11 @@ export async function GET(request: NextRequest) {
         }, { status: 500 });
       }
       
-      userBrands = teamBrands || [];
-      brandFilter = userBrands.map(b => b.brand_name);
+      userBrands = (teamBrands as any) || [];
+      brandFilter = userBrands.map((b: any) => b.brand_name);
       console.log('✅ [STEP 2] Team lead brands found:', userBrands.length);
       
-    } else if (userProfile.role === 'admin' || userProfile.role === 'Admin') {
+    } else if (profile.role === 'admin' || profile.role === 'Admin') {
       // For admins: fetch all brands
       const { data: allBrands, error: brandsError } = await supabase
         .from('master_data')
@@ -151,10 +153,10 @@ export async function GET(request: NextRequest) {
       .eq('visit_year', currentYear);
 
     // Apply role-based filtering on visits table
-    if (userProfile.role === 'agent' || userProfile.role === 'Agent') {
+    if (profile.role === 'agent' || profile.role === 'Agent') {
       visitQuery = visitQuery.eq('agent_id', email);
-    } else if (userProfile.role === 'team_lead' || userProfile.role === 'Team Lead') {
-      visitQuery = visitQuery.eq('team_name', userProfile.team_name);
+    } else if (profile.role === 'team_lead' || profile.role === 'Team Lead') {
+      visitQuery = visitQuery.eq('team_name', profile.team_name);
     }
 
     const { data: allVisits, error: visitsError } = await visitQuery;
@@ -172,59 +174,67 @@ export async function GET(request: NextRequest) {
 
     // Filter visits by user's brands
     const visits = brandFilter.length > 0
-      ? allVisits?.filter(visit => brandFilter.includes(visit.brand_name)) || []
-      : allVisits || [];
+      ? (allVisits as any)?.filter((visit: any) => brandFilter.includes(visit.brand_name)) || []
+      : (allVisits as any) || [];
 
     console.log('✅ [STEP 4] Visits for user brands:', visits.length);
 
     // STEP 5: Calculate statistics
     const total_brands = userBrands.length;
-    const nonCancelledVisits = visits.filter(v => v.visit_status !== 'Cancelled');
+    const nonCancelledVisits = visits.filter((v: any) => v.visit_status !== 'Cancelled');
     
     // Visit Done should only count brands with MOM approved visits
     const brandsWithApprovedMOM = new Set(
       nonCancelledVisits
-        .filter(v => v.visit_status === 'Completed' && v.approval_status === 'Approved')
-        .map(visit => visit.brand_name)
+        .filter((v: any) => v.visit_status === 'Completed' && v.approval_status === 'Approved')
+        .map((visit: any) => visit.brand_name)
     );
     const visit_done = brandsWithApprovedMOM.size;
     const pending_visits = total_brands - visit_done;
     
-    const brandsWithVisits = new Set(nonCancelledVisits.map(visit => visit.brand_name));
+    const brandsWithVisits = new Set(nonCancelledVisits.map((visit: any) => visit.brand_name));
     const brands_with_visits = brandsWithVisits.size;
     const brands_pending = total_brands - visit_done;
 
-    const completed = nonCancelledVisits.filter(v => v.visit_status === 'Completed').length;
-    const cancelled = visits.filter(v => v.visit_status === 'Cancelled').length;
-    const scheduled = nonCancelledVisits.filter(v => v.visit_status === 'Scheduled').length;
+    const completed = nonCancelledVisits.filter((v: any) => v.visit_status === 'Completed').length;
+    const cancelled = visits.filter((v: any) => v.visit_status === 'Cancelled').length;
+    const scheduled = nonCancelledVisits.filter((v: any) => v.visit_status === 'Scheduled').length;
 
-    const mom_shared_yes = nonCancelledVisits.filter(v => v.mom_shared === 'Yes').length;
-    const mom_shared_no = nonCancelledVisits.filter(v => v.mom_shared === 'No').length;
-    const mom_shared_pending = nonCancelledVisits.filter(v => v.mom_shared === 'Pending' || !v.mom_shared).length;
+    const mom_shared_yes = nonCancelledVisits.filter((v: any) => v.mom_shared === 'Yes').length;
+    const mom_shared_no = nonCancelledVisits.filter((v: any) => v.mom_shared === 'No').length;
+    const mom_shared_pending = nonCancelledVisits.filter((v: any) => v.mom_shared === 'Pending' || !v.mom_shared).length;
+    
+    // MOM Pending should count:
+    // 1. Visits that are completed but MOM not yet submitted
+    // 2. Visits where MOM was rejected (agent needs to resubmit)
+    const mom_pending = nonCancelledVisits.filter((v: any) => 
+      (v.visit_status === 'Completed' && (!v.mom_shared || v.mom_shared === 'No' || v.mom_shared === 'Pending')) ||
+      (v.approval_status === 'Rejected')
+    ).length;
 
-    const approved = nonCancelledVisits.filter(v => v.approval_status === 'Approved').length;
-    const rejected = nonCancelledVisits.filter(v => v.approval_status === 'Rejected').length;
-    const pending_approval = nonCancelledVisits.filter(v => v.approval_status === 'Pending' || !v.approval_status).length;
+    const approved = nonCancelledVisits.filter((v: any) => v.approval_status === 'Approved').length;
+    const rejected = nonCancelledVisits.filter((v: any) => v.approval_status === 'Rejected').length;
+    const pending_approval = nonCancelledVisits.filter((v: any) => v.approval_status === 'Pending' || !v.approval_status).length;
 
     const currentDate = new Date();
     const currentMonth = currentDate.getMonth();
     const currentYearNum = currentDate.getFullYear();
     
-    const currentMonthVisits = nonCancelledVisits.filter(visit => {
+    const currentMonthVisits = nonCancelledVisits.filter((visit: any) => {
       const visitDate = new Date(visit.scheduled_date);
       return visitDate.getMonth() === currentMonth && visitDate.getFullYear() === currentYearNum;
     });
     
     const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
     const lastMonthYear = currentMonth === 0 ? currentYearNum - 1 : currentYearNum;
-    const lastMonthVisits = nonCancelledVisits.filter(visit => {
+    const lastMonthVisits = nonCancelledVisits.filter((visit: any) => {
       const visitDate = new Date(visit.scheduled_date);
       return visitDate.getMonth() === lastMonth && visitDate.getFullYear() === lastMonthYear;
     });
 
     const monthly_target = 10;
-    const current_month_scheduled = currentMonthVisits.filter(v => v.visit_status === 'Scheduled').length;
-    const current_month_completed = currentMonthVisits.filter(v => v.visit_status === 'Completed').length;
+    const current_month_scheduled = currentMonthVisits.filter((v: any) => v.visit_status === 'Scheduled').length;
+    const current_month_completed = currentMonthVisits.filter((v: any) => v.visit_status === 'Completed').length;
     const current_month_total_visits = current_month_scheduled + current_month_completed;
     const current_month_progress = monthly_target > 0 ? Math.round((current_month_total_visits / monthly_target) * 100) : 0;
     const overall_progress = total_brands > 0 ? Math.round((brands_with_visits / total_brands) * 100) : 0;
@@ -250,7 +260,7 @@ export async function GET(request: NextRequest) {
       mom_shared_yes,
       mom_shared_no,
       mom_shared_pending,
-      mom_pending: mom_shared_pending,
+      mom_pending, // Includes both not-yet-submitted and rejected MOMs
       approved,
       rejected,
       pending_approval,
@@ -270,8 +280,8 @@ export async function GET(request: NextRequest) {
       data: statistics,
       metadata: {
         user_email: email,
-        user_role: userProfile.role,
-        user_team: userProfile.team_name,
+        user_role: profile.role,
+        user_team: profile.team_name,
         query_year: currentYear,
         fetched_at: new Date().toISOString()
       }

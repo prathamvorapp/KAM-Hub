@@ -32,28 +32,28 @@ async function fixAllChurnStatuses() {
     
     for (const record of allRecords || []) {
       try {
-        const churnReason = record.churn_reason?.trim() || "";
-        const callAttempts = record.call_attempts || [];
+        const churnReason = (record as any).churn_reason?.trim() || "";
+        const callAttempts = (record as any).call_attempts || [];
         const hasThreeAttempts = callAttempts.length >= 3;
         
         // Determine what the status SHOULD be
         let correctStatus = "INACTIVE";
         let correctIsActive = false;
-        let correctNextReminder = record.next_reminder_time;
-        let correctCompletedAt = record.follow_up_completed_at;
+        let correctNextReminder = (record as any).next_reminder_time;
+        let correctCompletedAt = (record as any).follow_up_completed_at;
         
         // Check if should be COMPLETED
         const shouldBeCompleted = 
           isCompletedReason(churnReason) || 
           hasThreeAttempts ||
-          record.follow_up_status === "COMPLETED";
+          (record as any).follow_up_status === "COMPLETED";
         
         if (shouldBeCompleted) {
           correctStatus = "COMPLETED";
           correctIsActive = false;
           correctNextReminder = null;
           if (!correctCompletedAt) {
-            correctCompletedAt = record.updated_at || new Date().toISOString();
+            correctCompletedAt = (record as any).updated_at || new Date().toISOString();
           }
         } else {
           // Not completed - check if should be ACTIVE or INACTIVE
@@ -95,20 +95,20 @@ async function fixAllChurnStatuses() {
         
         // Check if current status is wrong
         const needsUpdate = 
-          record.follow_up_status !== correctStatus ||
-          record.is_follow_up_active !== correctIsActive ||
-          (correctStatus === "COMPLETED" && record.next_reminder_time !== null);
+          (record as any).follow_up_status !== correctStatus ||
+          (record as any).is_follow_up_active !== correctIsActive ||
+          (correctStatus === "COMPLETED" && (record as any).next_reminder_time !== null);
         
         if (needsUpdate) {
-          console.log(`🔄 Fixing RID ${record.rid}:`);
+          console.log(`🔄 Fixing RID ${(record as any).rid}:`);
           console.log(`   Churn Reason: "${churnReason}"`);
           console.log(`   Call Attempts: ${callAttempts.length}`);
-          console.log(`   Current Status: ${record.follow_up_status} → ${correctStatus}`);
-          console.log(`   Current Active: ${record.is_follow_up_active} → ${correctIsActive}`);
+          console.log(`   Current Status: ${(record as any).follow_up_status} → ${correctStatus}`);
+          console.log(`   Current Active: ${(record as any).is_follow_up_active} → ${correctIsActive}`);
           
           // Update the record
-          const { error: updateError } = await getSupabaseAdmin()
-            .from('churn_records')
+          const { error: updateError } = await (getSupabaseAdmin()
+            .from('churn_records') as any)
             .update({
               follow_up_status: correctStatus,
               is_follow_up_active: correctIsActive,
@@ -116,10 +116,10 @@ async function fixAllChurnStatuses() {
               follow_up_completed_at: correctCompletedAt,
               updated_at: new Date().toISOString()
             })
-            .eq('rid', record.rid);
+            .eq('rid', (record as any).rid);
           
           if (updateError) {
-            console.error(`   ❌ Error updating RID ${record.rid}:`, updateError);
+            console.error(`   ❌ Error updating RID ${(record as any).rid}:`, updateError);
             errors++;
           } else {
             console.log(`   ✅ Fixed`);
@@ -130,7 +130,7 @@ async function fixAllChurnStatuses() {
         }
         
       } catch (err) {
-        console.error(`❌ Error processing RID ${record.rid}:`, err);
+        console.error(`❌ Error processing RID ${(record as any).rid}:`, err);
         errors++;
       }
     }

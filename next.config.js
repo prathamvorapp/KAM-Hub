@@ -1,9 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Disable Turbopack to avoid crashes
-  experimental: {
-    turbo: false
-  },
   // Configure for production with strict CSP
   async headers() {
     const isDevelopment = process.env.NODE_ENV === 'development';

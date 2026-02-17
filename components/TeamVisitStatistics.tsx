@@ -72,14 +72,14 @@ interface TeamWiseBreakdown {
 
 interface TeamVisitStatisticsProps {
   userEmail: string
-  onRefresh?: () => void
+  refreshKey?: number
   onViewAgentStats?: () => void // Add callback for View Agent-wise Stats button
 }
 
 type SortField = 'name' | 'progress' | 'completed' | 'pending' | 'brands'
 type SortOrder = 'asc' | 'desc'
 
-export default function TeamVisitStatistics({ userEmail, onRefresh, onViewAgentStats }: TeamVisitStatisticsProps) {
+export default function TeamVisitStatistics({ userEmail, refreshKey, onViewAgentStats }: TeamVisitStatisticsProps) {
   const { user, userProfile } = useAuth();
   const [sortField, setSortField] = useState<SortField>('progress')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
@@ -161,7 +161,7 @@ export default function TeamVisitStatistics({ userEmail, onRefresh, onViewAgentS
 
   useEffect(() => {
     loadTeamStatistics();
-  }, [userEmail, user?.email, userProfile?.team_name]);
+  }, [userEmail, user?.email, userProfile?.team_name, refreshKey]);
 
   const refresh = () => {
     loadTeamStatistics();
@@ -198,11 +198,10 @@ export default function TeamVisitStatistics({ userEmail, onRefresh, onViewAgentS
 
   // Handle refresh from parent component
   useEffect(() => {
-    if (onRefresh) {
-      // Override the onRefresh prop to use our robust refresh
-      onRefresh = refresh;
+    if (refreshKey !== undefined) {
+      loadTeamStatistics();
     }
-  }, [onRefresh, refresh]);
+  }, [refreshKey]);
 
   // Handle retry on error
   const handleRetry = () => {
@@ -427,14 +426,14 @@ export default function TeamVisitStatistics({ userEmail, onRefresh, onViewAgentS
           {hasTeamData && (
             <button
               onClick={() => setShowAgentWiseData(!showAgentWiseData)}
-              className="inline-flex items-center px-3 py-1.5 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 transition-colors"
+              className="inline-flex items-center gap-2 px-3 py-2 bg-slate-50 hover:bg-white text-gray-800 border border-gray-300 rounded-lg font-medium transition-all duration-200 shadow-sm hover:shadow"
             >
-              <Users className="w-4 h-4 mr-1.5" />
-              {showAgentWiseData ? 'Hide' : 'Show'} Agent Wise Data
+              <Users className="w-4 h-4 text-gray-800" />
+              <span>{showAgentWiseData ? 'Hide' : 'Show'} Agent Wise Data</span>
               {showAgentWiseData ? (
-                <ChevronUp className="w-4 h-4 ml-1.5" />
+                <ChevronUp className="w-4 h-4 text-gray-800" />
               ) : (
-                <ChevronDown className="w-4 h-4 ml-1.5" />
+                <ChevronDown className="w-4 h-4 text-gray-800" />
               )}
             </button>
           )}
@@ -1008,7 +1007,7 @@ export default function TeamVisitStatistics({ userEmail, onRefresh, onViewAgentS
               </span>
             </div>
           </div>
-          <VisitStatistics userEmail={userEmail} onRefresh={onRefresh} />
+          <VisitStatistics userEmail={userEmail} refreshKey={refreshKey} />
         </div>
       )}
     </div>

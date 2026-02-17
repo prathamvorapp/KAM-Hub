@@ -67,40 +67,40 @@ async function verifyCategorizationLogic() {
     };
     
     for (const record of allRecords) {
-      const recordDate = safeParseDate(record.date);
+      const recordDate = safeParseDate((record as any).date);
       if (!recordDate) {
         categories.invalid.push(record);
         continue;
       }
       
-      const churnReason = record.churn_reason?.trim() || "";
+      const churnReason = (record as any).churn_reason?.trim() || "";
       
       // PRIORITY 1: Check if completed
       const hasCompletedReason = isCompletedReason(churnReason);
-      const hasCompletedStatus = record.follow_up_status === "COMPLETED";
-      const hasThreeCalls = record.call_attempts && record.call_attempts.length >= 3;
+      const hasCompletedStatus = (record as any).follow_up_status === "COMPLETED";
+      const hasThreeCalls = (record as any).call_attempts && (record as any).call_attempts.length >= 3;
       const completed = hasCompletedReason || hasCompletedStatus || hasThreeCalls;
       
       if (completed) {
         categories.completed.push({
-          ...record,
+          ...(record as any),
           reason: hasCompletedReason ? 'completed_reason' : hasThreeCalls ? 'three_calls' : 'completed_status'
         });
         continue;
       }
       
       // PRIORITY 2: Check if in follow-up
-      const hasCallAttempts = record.call_attempts && record.call_attempts.length > 0;
-      const hasActiveFollowUp = record.follow_up_status === "ACTIVE" || 
-                               record.is_follow_up_active ||
-                               (record.follow_up_status === "INACTIVE" && record.next_reminder_time);
+      const hasCallAttempts = (record as any).call_attempts && (record as any).call_attempts.length > 0;
+      const hasActiveFollowUp = (record as any).follow_up_status === "ACTIVE" || 
+                               (record as any).is_follow_up_active ||
+                               ((record as any).follow_up_status === "INACTIVE" && (record as any).next_reminder_time);
       const noResponse = isNoAgentResponse(churnReason);
       const hasRealChurnReason = !noResponse && churnReason !== "";
       const hasAgentAction = hasCallAttempts || hasActiveFollowUp || hasRealChurnReason;
       
       if (hasAgentAction) {
         categories.followUps.push({
-          ...record,
+          ...(record as any),
           reason: hasCallAttempts ? 'has_calls' : hasActiveFollowUp ? 'active_followup' : 'real_reason'
         });
         continue;
@@ -150,7 +150,7 @@ async function verifyCategorizationLogic() {
     
     if (categories.completed.length > 0) {
       console.log('✅ Completed (first 5):');
-      categories.completed.slice(0, 5).forEach(record => {
+      categories.completed.slice(0, 5).forEach((record: any) => {
         console.log(`   RID ${record.rid}: "${record.churn_reason}" (${record.reason})`);
       });
       console.log('');
@@ -158,7 +158,7 @@ async function verifyCategorizationLogic() {
     
     if (categories.followUps.length > 0) {
       console.log('📞 Follow-Ups (first 5):');
-      categories.followUps.slice(0, 5).forEach(record => {
+      categories.followUps.slice(0, 5).forEach((record: any) => {
         console.log(`   RID ${record.rid}: "${record.churn_reason}" (${record.reason})`);
       });
       console.log('');
@@ -166,7 +166,7 @@ async function verifyCategorizationLogic() {
     
     if (categories.overdue.length > 0) {
       console.log('⚠️  Overdue (first 5):');
-      categories.overdue.slice(0, 5).forEach(record => {
+      categories.overdue.slice(0, 5).forEach((record: any) => {
         console.log(`   RID ${record.rid}: date=${record.date}, reason="${record.churn_reason}"`);
       });
       console.log('');
@@ -174,7 +174,7 @@ async function verifyCategorizationLogic() {
     
     if (categories.newCount.length > 0) {
       console.log('🆕 New Count (first 5):');
-      categories.newCount.slice(0, 5).forEach(record => {
+      categories.newCount.slice(0, 5).forEach((record: any) => {
         console.log(`   RID ${record.rid}: date=${record.date}, reason="${record.churn_reason}"`);
       });
       console.log('');
@@ -191,7 +191,7 @@ async function verifyCategorizationLogic() {
     
     if (completedWithWrongStatus.length > 0) {
       console.log(`⚠️  Found ${completedWithWrongStatus.length} records with completed reasons but wrong status:`);
-      completedWithWrongStatus.slice(0, 5).forEach(record => {
+      completedWithWrongStatus.slice(0, 5).forEach((record: any) => {
         console.log(`   RID ${record.rid}: "${record.churn_reason}" (status: ${record.follow_up_status})`);
       });
       console.log('   → Run FIX_ALL_CHURN_COMPREHENSIVE.ps1 to fix these\n');
@@ -201,7 +201,7 @@ async function verifyCategorizationLogic() {
     
     if (categories.invalid.length > 0) {
       console.log(`⚠️  Found ${categories.invalid.length} records with invalid dates:`);
-      categories.invalid.slice(0, 5).forEach(record => {
+      categories.invalid.slice(0, 5).forEach((record: any) => {
         console.log(`   RID ${record.rid}: date="${record.date}"`);
       });
       console.log('');

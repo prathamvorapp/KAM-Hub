@@ -73,6 +73,7 @@ export default function VisitManagementPage() {
   const [visitStatsLoading, setVisitStatsLoading] = useState(true);
   const [showAdminStatsModal, setShowAdminStatsModal] = useState(false);
   const [showTeamLeadStatsModal, setShowTeamLeadStatsModal] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const router = useRouter();
 
   // Pagination and search state
@@ -216,6 +217,7 @@ export default function VisitManagementPage() {
       
       // Note: VisitStatistics component will load its own data via API
       setVisitStats({}); // Set empty object to indicate data loading is complete
+      setRefreshKey(prev => prev + 1); // Trigger statistics refresh
 
       if (user.email.includes('jinal')) {
         console.log('Jinal user data:', visitsData);
@@ -223,6 +225,7 @@ export default function VisitManagementPage() {
     } catch (error) {
       console.error("Failed to load visit management data:", error);
       setVisitStats(null); // Explicitly set to null on error
+      setRefreshKey(prev => prev + 1); // Trigger statistics refresh even on error
     } finally {
       setLoading(false);
       setVisitStatsLoading(false);
@@ -428,25 +431,20 @@ export default function VisitManagementPage() {
       console.log('📝 Submitting MOM for visit:', selectedVisitForMom.visit_id);
       
       // Submit the enhanced MOM with open points
-      await convexAPI.submitVisitMOM({
+      const result = await convexAPI.submitVisitMOM({
         visit_id: selectedVisitForMom.visit_id,
         created_by: user?.email || '',
         brand_name: selectedVisitForMom.brand_name,
         agent_name: selectedVisitForMom.agent_name || userProfile?.full_name || 'Unknown Agent',
         open_points: formData.open_points,
+        mom_shared: "Yes", // ✅ FIX: Add mom_shared to trigger approval workflow
       });
 
-      console.log('✅ MOM submitted, now updating visit status to Pending');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to submit MOM');
+      }
 
-      // Update visit status to "Pending" and set mom_shared to "Yes"
-      await convexAPI.updateVisitStatus(selectedVisitForMom.visit_id, 'Pending');
-      
-      await convexAPI.submitMoM({
-        visit_id: selectedVisitForMom.visit_id,
-        mom_shared: "Yes", 
-      });
-      
-      console.log('✅ Visit status updated to Pending');
+      console.log('✅ MOM submitted successfully with approval workflow triggered');
       
       handleCloseMomModal();
       await loadData(); 
@@ -545,7 +543,8 @@ export default function VisitManagementPage() {
         agent_name: selectedVisitForResubmit.agent_name || user.email,
         open_points: sanitizedOpenPoints,
         is_resubmission: true,
-        resubmission_notes: formData.resubmission_notes
+        resubmission_notes: formData.resubmission_notes,
+        mom_shared: "Yes", // ✅ FIX: Add mom_shared to trigger approval workflow
       });
 
       setIsResubmitModalOpen(false);
@@ -714,12 +713,23 @@ export default function VisitManagementPage() {
       return <div className="chip bg-red-100 text-red-800 border border-red-300"><XCircle className="w-4 h-4" />MOM Rejected</div>;
     }
     
+    // Show approved status if MOM was approved
+    if (approvalStatus === 'Approved' && status === 'Completed') {
+      return <div className="chip bg-green-100 text-green-800"><ThumbsUp className="w-4 h-4" />Visit Done</div>;
+    }
+    
+    // Show pending approval if completed and waiting for approval
+    if (status === 'Completed' && approvalStatus === 'Pending') {
+      return <div className="chip bg-orange-100 text-orange-800"><Clock className="w-4 h-4" />Pending Approval</div>;
+    }
+    
     switch (status) {
       case 'Scheduled':
         return <div className="chip bg-blue-100 text-blue-800"><Calendar className="w-4 h-4" />Scheduled</div>;
       case 'Completed':
         return <div className="chip bg-yellow-100 text-yellow-800"><CheckCircle className="w-4 h-4" />Completed</div>;
       case 'Pending':
+        // Legacy status - treat as pending approval
         return <div className="chip bg-orange-100 text-orange-800"><Clock className="w-4 h-4" />Pending Approval</div>;
       case 'Visit Done':
         return <div className="chip bg-green-100 text-green-800"><ThumbsUp className="w-4 h-4" />Visit Done</div>;
@@ -754,7 +764,7 @@ export default function VisitManagementPage() {
             <div className="flex gap-3">
               <button
                 onClick={handleOpenBackdatedModal}
-                className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-lg font-medium transition-colors shadow-sm"
               >
                 <CalendarPlus className="w-4 h-4" />
                 Schedule Backdated Visit
@@ -777,12 +787,12 @@ export default function VisitManagementPage() {
             />
             <TeamVisitStatistics 
               userEmail={user?.email || ''} 
-              onRefresh={loadData}
+              refreshKey={refreshKey}
               onViewAgentStats={undefined}
             />
           </>
         ) : (
-          <VisitStatistics userEmail={user?.email || ''} onRefresh={loadData} />
+          <VisitStatistics userEmail={user?.email || ''} refreshKey={refreshKey} />
         )}
 
         <div className="glass-morphism p-6 rounded-xl">
@@ -984,7 +994,7 @@ export default function VisitManagementPage() {
                     <tbody className="text-gray-900">
                         {visits.length > 0 ? (
                             visits.map(visit => (
-                                <tr key={visit.visit_id || visit.id || visit._id} className="border-b border-gray-200 hover:bg-gray-50">
+                                <tr key={visit.visit_id || visit._id} className="border-b border-gray-200 hover:bg-gray-50">
                                     <td className="table-cell text-gray-900">{visit.brand_name}</td>
                                     <td className="table-cell">
                                       <div className="text-sm">

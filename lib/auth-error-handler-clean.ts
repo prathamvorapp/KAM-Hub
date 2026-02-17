@@ -41,6 +41,11 @@ class AuthErrorHandler {
 
   // Get authentication token with fallback logic
   getAuthToken(): string | null {
+    // Check if we're in browser environment
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
     try {
       // Try to get JWT token first
       const jwtToken = localStorage.getItem('jwt_token');

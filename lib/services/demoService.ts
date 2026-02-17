@@ -5,6 +5,36 @@
 
 import { supabase, getSupabaseAdmin } from '../supabase-client';
 
+// Type definitions
+interface BrandData {
+  id: string;
+  kam_email_id: string;
+  brand_name?: string;
+  [key: string]: any;
+}
+
+interface UserProfile {
+  email: string;
+  full_name: string;
+  role: string;
+  team_name?: string;
+  [key: string]: any;
+}
+
+interface Demo {
+  demo_id: string;
+  brand_name: string;
+  brand_id: string;
+  product_name: string;
+  agent_id: string;
+  agent_name: string;
+  team_name?: string;
+  zone?: string;
+  current_status: string;
+  workflow_completed: boolean;
+  [key: string]: any;
+}
+
 export const PRODUCTS = [
   "Task",
   "Purchase", 
@@ -30,7 +60,7 @@ export const demoService = {
       .from('master_data')
       .select('*')
       .eq('id', brandId)
-      .single();
+      .single() as { data: BrandData | null; error: any };
     
     if (!brandData) {
       throw new Error("Brand not found in Master_Data");
@@ -40,7 +70,7 @@ export const demoService = {
       .from('user_profiles')
       .select('*')
       .eq('email', brandData.kam_email_id)
-      .single();
+      .single() as { data: UserProfile | null; error: any };
     
     const now = new Date().toISOString();
     
@@ -58,7 +88,7 @@ export const demoService = {
     for (const product of PRODUCTS) {
       const demoId = `${brandId}_${product.replace(/\s+/g, '_')}_${Date.now()}`;
       
-      const { error } = await getSupabaseAdmin().from('demos').insert({
+      const { error } = await (getSupabaseAdmin().from('demos') as any).insert({
         demo_id: demoId,
         brand_name: brandData.brand_name,
         brand_id: brandId,
@@ -98,7 +128,7 @@ export const demoService = {
       query = query.eq('agent_id', params.agentId);
     }
     
-    const { data: demos } = await query;
+    const { data: demos } = await query as { data: Demo[] | null; error: any };
     
     const brandGroups = (demos || []).reduce((acc, demo) => {
       if (!acc[demo.brand_name]) {
@@ -128,7 +158,7 @@ export const demoService = {
       .from('demos')
       .select('*')
       .eq('demo_id', params.demoId)
-      .single();
+      .single() as { data: Demo | null; error: any };
     
     if (!demo) {
       throw new Error("Demo not found");
@@ -153,8 +183,8 @@ export const demoService = {
       newStatus = "Step 2 Pending";
     }
     
-    await getSupabaseAdmin()
-      .from('demos')
+    await (getSupabaseAdmin()
+      .from('demos') as any)
       .update({
         is_applicable: params.isApplicable,
         non_applicable_reason: params.nonApplicableReason,
@@ -177,7 +207,7 @@ export const demoService = {
       .from('demos')
       .select('*')
       .eq('demo_id', params.demoId)
-      .single();
+      .single() as { data: Demo | null; error: any };
     
     if (!demo) {
       throw new Error("Demo not found");
@@ -202,8 +232,8 @@ export const demoService = {
       newStatus = "Demo Pending";
     }
     
-    await getSupabaseAdmin()
-      .from('demos')
+    await (getSupabaseAdmin()
+      .from('demos') as any)
       .update({
         usage_status: params.usageStatus,
         step2_completed_at: now,
@@ -227,7 +257,7 @@ export const demoService = {
       .from('demos')
       .select('*')
       .eq('demo_id', params.demoId)
-      .single();
+      .single() as { data: Demo | null; error: any };
     
     if (!demo) {
       throw new Error("Demo not found");
@@ -250,8 +280,8 @@ export const demoService = {
       });
     }
     
-    await getSupabaseAdmin()
-      .from('demos')
+    await (getSupabaseAdmin()
+      .from('demos') as any)
       .update({
         demo_scheduled_date: params.scheduledDate,
         demo_scheduled_time: params.scheduledTime,
@@ -275,7 +305,7 @@ export const demoService = {
       .from('demos')
       .select('*')
       .eq('demo_id', params.demoId)
-      .single();
+      .single() as { data: Demo | null; error: any };
     
     if (!demo) {
       throw new Error("Demo not found");
@@ -291,8 +321,8 @@ export const demoService = {
     
     const now = new Date().toISOString();
     
-    await getSupabaseAdmin()
-      .from('demos')
+    await (getSupabaseAdmin()
+      .from('demos') as any)
       .update({
         demo_completed: true,
         demo_completed_date: now,
@@ -316,7 +346,7 @@ export const demoService = {
       .from('demos')
       .select('*')
       .eq('demo_id', params.demoId)
-      .single();
+      .single() as { data: Demo | null; error: any };
     
     if (!demo) {
       throw new Error("Demo not found");
@@ -332,8 +362,8 @@ export const demoService = {
     
     const now = new Date().toISOString();
     
-    await getSupabaseAdmin()
-      .from('demos')
+    await (getSupabaseAdmin()
+      .from('demos') as any)
       .update({
         conversion_status: params.conversionStatus,
         non_conversion_reason: params.nonConversionReason,
@@ -365,7 +395,7 @@ export const demoService = {
       .from('demos')
       .select('*')
       .eq('demo_id', params.demoId)
-      .single();
+      .single() as { data: Demo | null; error: any };
     
     if (!demo) {
       throw new Error("Demo not found");
@@ -376,7 +406,7 @@ export const demoService = {
         .from('user_profiles')
         .select('*')
         .eq('email', params.rescheduleBy)
-        .single();
+        .single() as { data: UserProfile | null; error: any };
       
       if (!rescheduleByProfile || rescheduleByProfile.team_name !== demo.team_name) {
         throw new Error("Team Lead can only reschedule demos from their team");
@@ -400,8 +430,8 @@ export const demoService = {
       });
     }
     
-    await getSupabaseAdmin()
-      .from('demos')
+    await (getSupabaseAdmin()
+      .from('demos') as any)
       .update({
         demo_scheduled_date: params.scheduledDate,
         demo_scheduled_time: params.scheduledTime,
@@ -438,7 +468,7 @@ export const demoService = {
       query = query.eq('agent_id', params.agentId);
     }
     
-    const { data: demos } = await query;
+    const { data: demos } = await query as { data: Demo[] | null; error: any };
     
     const stats = {
       total: demos?.length || 0,

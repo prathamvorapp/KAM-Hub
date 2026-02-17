@@ -8,13 +8,41 @@ interface ApprovalNotificationsProps {
   userRole: string;
 }
 
+interface Visit {
+  _id: string;
+  visit_id: string;
+  brand_name: string;
+  visit_status: string;
+  approval_status?: string;
+  agent_id?: string;
+  agent_name?: string;
+  scheduled_date: string;
+  visit_date?: string;
+}
+
+interface OpenPoint {
+  status: string;
+  description?: string;
+  responsible?: string;
+  deadline?: string;
+}
+
+interface MOM {
+  visit_id: string;
+  open_points?: OpenPoint[];
+  meeting_notes?: string;
+}
+
 export default function ApprovalNotifications({ userEmail, userRole }: ApprovalNotificationsProps) {
   const [pendingCount, setPendingCount] = useState(0);
   const [totalOpenPoints, setTotalOpenPoints] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (userRole === 'Team Lead') {
+    // Check for both 'Team Lead' and 'team_lead' role formats
+    const isTeamLead = userRole === 'Team Lead' || userRole === 'team_lead';
+    
+    if (isTeamLead) {
       loadPendingApprovals();
       
       // Refresh every 30 seconds
@@ -27,18 +55,17 @@ export default function ApprovalNotifications({ userEmail, userRole }: ApprovalN
     try {
       const visitsResponse = await convexAPI.getVisits({
         email: userEmail,
-        limit: 100
+        limit: 1000 // Increase limit to get all visits
       });
       
       console.log('📋 ApprovalNotifications - Visits response:', visitsResponse);
       
-      // Fix: getVisits returns { data: { page: [], isDone, continueCursor } }
-      const allVisits = visitsResponse.data.page || [];
+      // Fix: getVisits returns { success: true, page: [], isDone, continueCursor }
+      const allVisits = visitsResponse.page || [];
       
-      // Filter to show only truly pending MOMs (exclude rejected ones)
-      const pendingVisits = allVisits.filter(v => 
-        v.visit_status === 'Pending' && 
-        v.approval_status !== 'Rejected'
+      // Filter to show only visits with pending approval (MOM submitted but not yet approved/rejected)
+      const pendingVisits = allVisits.filter((v: Visit) => 
+        v.approval_status === 'Pending' || v.approval_status === 'pending'
       );
       
       console.log('📊 ApprovalNotifications - Pending visits:', pendingVisits.length, 'out of', allVisits.length);
@@ -52,15 +79,23 @@ export default function ApprovalNotifications({ userEmail, userRole }: ApprovalN
             search: visit.visit_id // Search by visit_id to find related MOM
           });
           
-          const visitMOM = momResponse.data.data.find(mom => mom.visit_id === visit.visit_id);
+          console.log('📋 ApprovalNotifications - MOM response for', visit.visit_id, ':', momResponse);
+          
+          // Fix: getMOM returns { success: true, data: { data: [...] } }
+          const moms = momResponse.data?.data || momResponse.data || [];
+          const visitMOM = moms.find((mom: MOM) => mom.visit_id === visit.visit_id);
+          
           if (visitMOM && visitMOM.open_points) {
-            const openPointsCount = visitMOM.open_points.filter(point => point.status === 'Open').length;
+            const openPointsCount = visitMOM.open_points.filter((point: OpenPoint) => point.status === 'Open').length;
             totalOpenPoints += openPointsCount;
+            console.log('📊 ApprovalNotifications - Open points for', visit.brand_name, ':', openPointsCount);
           }
         } catch (error) {
           console.error('Error fetching MOM for visit:', visit.visit_id, error);
         }
       }
+      
+      console.log('✅ ApprovalNotifications - Total pending:', pendingVisits.length, 'Total open points:', totalOpenPoints);
       
       setPendingCount(pendingVisits.length);
       setTotalOpenPoints(totalOpenPoints);
@@ -71,7 +106,10 @@ export default function ApprovalNotifications({ userEmail, userRole }: ApprovalN
     }
   };
 
-  if (userRole !== 'Team Lead' || loading) {
+  // Check for both 'Team Lead' and 'team_lead' role formats
+  const isTeamLead = userRole === 'Team Lead' || userRole === 'team_lead';
+  
+  if (!isTeamLead || loading) {
     return null;
   }
 

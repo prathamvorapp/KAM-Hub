@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
@@ -76,7 +76,7 @@ interface PaginationInfo {
   categorization?: Categorization
 }
 
-export default function ChurnDataPage() {
+function ChurnDataPageContent() {
   const { user, userProfile, loading: authLoading } = useAuth()
   const [records, setRecords] = useState<ChurnRecord[]>([])
   const [allRecords, setAllRecords] = useState<ChurnRecord[]>([]) // Store all records for filtering
@@ -1043,5 +1043,21 @@ export default function ChurnDataPage() {
         </div>
       )}
     </>
+  )
+}
+
+
+export default function ChurnDataPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+          <p className="mt-4 text-secondary-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <ChurnDataPageContent />
+    </Suspense>
   )
 }

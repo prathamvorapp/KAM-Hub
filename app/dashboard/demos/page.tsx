@@ -69,13 +69,14 @@ interface Demo {
 }
 
 interface Brand {
-  brandName: string;
-  brandEmailId?: string;
-  kamName: string;
-  brandState: string;
+  brand_name: string;
+  brand_email_id?: string;
+  kam_name: string;
+  brand_state: string;
   zone: string;
-  kamEmailId: string;
+  kam_email_id: string;
   _id: string;
+  id?: string;
 }
 
 interface BrandWithDemos extends Brand {
@@ -117,9 +118,9 @@ export default function DemosPage() {
         setFilteredBrands(brands);
       } else {
         const filtered = brands.filter(brand =>
-          brand.brandName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          brand.kamName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          brand.brandState.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          brand.brand_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          brand.kam_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          brand.brand_state.toLowerCase().includes(searchTerm.toLowerCase()) ||
           brand.zone.toLowerCase().includes(searchTerm.toLowerCase())
         );
         setFilteredBrands(filtered);
@@ -137,7 +138,7 @@ export default function DemosPage() {
       
       // Get brands from Master_Data table - request all brands for frontend pagination
       const brandsResponse = await api.getBrandsByAgentEmail(user?.email || ""); // Get all brands
-      const brandsData = brandsResponse.data || [];
+      const brandsData = brandsResponse.data?.data || [];
       
       console.log('📊 DEMOS PAGE DEBUG - Brands response:', brandsResponse);
       console.log('📊 DEMOS PAGE DEBUG - Brands data:', brandsData.length);
@@ -145,12 +146,13 @@ export default function DemosPage() {
       // Get demos for the user based on their role
       let demosData: any[] = [];
       try {
-        demosData = await api.getDemosForAgent(
+        const demosResponse = await api.getDemosForAgent(
           user?.email || "",
           user?.role || "agent",
           user?.team_name
         );
-        console.log('📊 DEMOS PAGE DEBUG - Demos data:', demosData);
+        console.log('📊 DEMOS PAGE DEBUG - Demos data:', demosResponse);
+        demosData = demosResponse.data || [];
       } catch (demoError) {
         console.warn('Could not load demos:', demoError);
         // Continue without demos - they can be initialized
@@ -190,13 +192,13 @@ export default function DemosPage() {
 
   const initializeBrandDemos = async (brand: Brand) => {
     try {
-      console.log('🚀 Initializing demos for brand:', brand.brandName);
+      console.log('🚀 Initializing demos for brand:', brand.brand_name);
       
       // Initialize demos using the brand's Master_Data _id
       await api.initializeBrandDemosFromMasterData(brand._id);
       
-      console.log('✅ Demos initialized successfully for:', brand.brandName);
-      alert(`Demos initialized successfully for ${brand.brandName}! All 8 products are now ready.`);
+      console.log('✅ Demos initialized successfully for:', brand.brand_name);
+      alert(`Demos initialized successfully for ${brand.brand_name}! All 8 products are now ready.`);
       
       // Reload the page data
       await loadBrandsAndDemos();
@@ -503,10 +505,10 @@ export default function DemosPage() {
                   <div className="p-6 border-b">
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-2">{brand.brandName}</h3>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">{brand.brand_name}</h3>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600">
-                          <div>KAM: {brand.kamName}</div>
-                          <div>State: {brand.brandState}</div>
+                          <div>KAM: {brand.kam_name}</div>
+                          <div>State: {brand.brand_state}</div>
                           <div>Zone: {brand.zone}</div>
                           <div>Progress: {brand.demoProgress.completed}/{brand.demoProgress.total}</div>
                         </div>

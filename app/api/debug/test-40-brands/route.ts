@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       count: brands?.length || 0,
-      brands: brands?.map(b => ({
+      brands: (brands as any)?.map((b: any) => ({
         brand_name: b.brand_name,
         kam_email_id: b.kam_email_id,
         outlet_counts: b.outlet_counts

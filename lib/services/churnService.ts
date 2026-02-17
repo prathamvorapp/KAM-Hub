@@ -12,6 +12,27 @@ import {
   isCompletedReason
 } from '../constants/churnReasons';
 
+// User profile type
+interface UserProfile {
+  email: string;
+  full_name: string;
+  role: string;
+  team_name?: string;
+  is_active: boolean;
+}
+
+// Churn record type
+interface ChurnRecord {
+  rid: string;
+  kam: string;
+  restaurant_name: string;
+  churn_reason?: string;
+  churn_date?: string;
+  follow_up_date?: string;
+  status?: string;
+  [key: string]: any; // Allow other properties
+}
+
 // Safe date parser
 function safeParseDate(dateStr: string): Date | null {
   if (!dateStr || typeof dateStr !== 'string') return null;
@@ -48,7 +69,7 @@ export const churnService = {
   }) {
     const { email, page = 1, limit = 100, search, filter = 'all' } = params;
     
-    let userProfile: any = null;
+    let userProfile: UserProfile | null = null;
     let kamFilter: string[] | null = null;
     
     if (email) {
@@ -57,7 +78,7 @@ export const churnService = {
         .from('user_profiles')
         .select('*')
         .eq('email', email)
-        .single();
+        .single() as { data: UserProfile | null; error: any };
       
       if (profileError) {
         console.error(`❌ Error fetching user profile:`, profileError);
@@ -76,13 +97,18 @@ export const churnService = {
           kamFilter = [profile.full_name];
           console.log(`👤 Agent filter - showing records for KAM: ${profile.full_name}`);
         } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
-          const { data: teamMembers } = await getSupabaseAdmin()
-            .from('user_profiles')
-            .select('full_name')
-            .eq('team_name', profile.team_name)
-            .eq('is_active', true);
-          kamFilter = teamMembers?.map(m => m.full_name) || [];
-          console.log(`👥 Team Lead filter - showing records for team ${profile.team_name}:`, kamFilter);
+          if (profile.team_name) {
+            const { data: teamMembers } = await getSupabaseAdmin()
+              .from('user_profiles')
+              .select('full_name')
+              .eq('team_name', profile.team_name)
+              .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
+            kamFilter = teamMembers?.map(m => m.full_name) || [];
+            console.log(`👥 Team Lead filter - showing records for team ${profile.team_name}:`, kamFilter);
+          } else {
+            console.log(`⚠️ Team Lead has no team_name, showing no records`);
+            kamFilter = [];
+          }
         } else if (normalizedRole === 'admin') {
           console.log(`👑 Admin - showing all records`);
           kamFilter = null; // Admin sees all
@@ -103,7 +129,7 @@ export const churnService = {
       console.log(`🔓 No KAM filter applied - showing all records`);
     }
     
-    const { data: allRecords, count } = await query;
+    const { data: allRecords, count } = await query as { data: ChurnRecord[] | null; count: number | null };
     console.log(`📊 Query returned ${allRecords?.length || 0} records`);
     
     // Log first few records to see KAM names
@@ -127,8 +153,8 @@ export const churnService = {
         console.log(`   🔧 Auto-fixing RID ${record.rid}: "${churnReason}" → COMPLETED`);
         
         // Queue the fix (don't await yet for better performance)
-        const fixPromise = getSupabaseAdmin()
-          .from('churn_records')
+        const fixPromise = (getSupabaseAdmin()
+          .from('churn_records') as any)
           .update({
             follow_up_status: "COMPLETED",
             is_follow_up_active: false,
@@ -347,7 +373,7 @@ export const churnService = {
       .from('churn_records')
       .select('*')
       .eq('rid', rid)
-      .single();
+      .single() as { data: ChurnRecord | null; error: any };
     
     if (!record) {
       throw new Error(`Record with RID ${rid} not found`);
@@ -394,8 +420,8 @@ export const churnService = {
       updateData.next_reminder_time = null;
     }
     
-    await getSupabaseAdmin()
-      .from('churn_records')
+    await (getSupabaseAdmin()
+      .from('churn_records') as any)
       .update(updateData)
       .eq('rid', rid);
     
@@ -436,18 +462,20 @@ export const churnService = {
         .from('user_profiles')
         .select('*')
         .eq('email', email)
-        .single();
+        .single() as { data: UserProfile | null; error: any };
       
       if (profile) {
         if (profile.role === 'Agent' || profile.role === 'agent') {
           kamFilter = [profile.full_name];
         } else if (profile.role === 'Team Lead' || profile.role === 'team_lead') {
-          const { data: teamMembers } = await supabase
-            .from('user_profiles')
-            .select('full_name')
-            .eq('team_name', profile.team_name)
-            .eq('is_active', true);
-          kamFilter = teamMembers?.map(m => m.full_name) || [];
+          if (profile.team_name) {
+            const { data: teamMembers } = await supabase
+              .from('user_profiles')
+              .select('full_name')
+              .eq('team_name', profile.team_name)
+              .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
+            kamFilter = teamMembers?.map(m => m.full_name) || [];
+          }
         }
       }
     }
@@ -457,7 +485,7 @@ export const churnService = {
       query = query.in('kam', kamFilter);
     }
     
-    const { data: records } = await query;
+    const { data: records } = await query as { data: ChurnRecord[] | null; error: any };
     const totalRecords = records?.length || 0;
     
     let missingChurnReasons = 0;
@@ -495,7 +523,7 @@ export const churnService = {
       .from('churn_records')
       .select('*')
       .eq('rid', rid)
-      .single();
+      .single() as { data: ChurnRecord | null; error: any };
     
     if (!record) {
       return {
@@ -516,7 +544,7 @@ export const churnService = {
         .from('user_profiles')
         .select('*')
         .eq('email', email)
-        .single();
+        .single() as { data: UserProfile | null; error: any };
       
       if (userProfile) {
         let hasAccess = false;
@@ -524,13 +552,15 @@ export const churnService = {
         if (userProfile.role === 'Admin' || userProfile.role === 'admin') {
           hasAccess = true;
         } else if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
-          const { data: teamMembers } = await supabase
-            .from('user_profiles')
-            .select('full_name')
-            .eq('team_name', userProfile.team_name)
-            .eq('is_active', true);
-          const teamKams = teamMembers?.map(m => m.full_name) || [];
-          hasAccess = teamKams.includes(record.kam);
+          if (userProfile.team_name) {
+            const { data: teamMembers } = await supabase
+              .from('user_profiles')
+              .select('full_name')
+              .eq('team_name', userProfile.team_name)
+              .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
+            const teamKams = teamMembers?.map(m => m.full_name) || [];
+            hasAccess = teamKams.includes(record.kam);
+          }
         } else if (userProfile.role === 'Agent' || userProfile.role === 'agent') {
           hasAccess = record.kam === userProfile.full_name;
         }
@@ -580,7 +610,7 @@ export const churnService = {
       .from('churn_records')
       .select('*')
       .eq('rid', rid)
-      .single();
+      .single() as { data: ChurnRecord | null; error: any };
     
     if (!record) {
       throw new Error(`Churn record with RID ${rid} not found`);
@@ -592,7 +622,7 @@ export const churnService = {
         .from('user_profiles')
         .select('*')
         .eq('email', email)
-        .single();
+        .single() as { data: UserProfile | null; error: any };
       
       if (userProfile) {
         let hasAccess = false;
@@ -600,13 +630,15 @@ export const churnService = {
         if (userProfile.role === 'Admin' || userProfile.role === 'admin') {
           hasAccess = true;
         } else if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
-          const { data: teamMembers } = await supabase
-            .from('user_profiles')
-            .select('full_name')
-            .eq('team_name', userProfile.team_name)
-            .eq('is_active', true);
-          const teamKams = teamMembers?.map(m => m.full_name) || [];
-          hasAccess = teamKams.includes(record.kam);
+          if (userProfile.team_name) {
+            const { data: teamMembers } = await supabase
+              .from('user_profiles')
+              .select('full_name')
+              .eq('team_name', userProfile.team_name)
+              .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
+            const teamKams = teamMembers?.map(m => m.full_name) || [];
+            hasAccess = teamKams.includes(record.kam);
+          }
         } else if (userProfile.role === 'Agent' || userProfile.role === 'agent') {
           hasAccess = record.kam === userProfile.full_name;
         }
@@ -679,8 +711,8 @@ export const churnService = {
     // Determine controlled status for the churn reason
     const controlledStatus = churn_reason ? getControlledStatusHelper(churn_reason) : record.controlled_status;
     
-    await getSupabaseAdmin()
-      .from('churn_records')
+    await (getSupabaseAdmin()
+      .from('churn_records') as any)
       .update({
         call_attempts: updatedAttempts,
         current_call: nextCall,
@@ -711,23 +743,47 @@ export const churnService = {
     let kamFilter: string[] | null = null;
     
     if (email) {
-      const { data: userProfile } = await supabase
+      console.log(`🔍 [getActiveFollowUps] Fetching profile for email: ${email}`);
+      
+      const { data: userProfile, error: profileError } = await getSupabaseAdmin()
         .from('user_profiles')
         .select('*')
         .eq('email', email)
-        .single();
+        .single() as { data: UserProfile | null; error: any };
+      
+      if (profileError) {
+        console.error(`❌ [getActiveFollowUps] Error fetching profile:`, profileError);
+      }
       
       if (userProfile) {
-        if (userProfile.role === 'Agent' || userProfile.role === 'agent') {
+        console.log(`👤 [getActiveFollowUps] User profile found:`, {
+          email: userProfile.email,
+          full_name: userProfile.full_name,
+          role: userProfile.role,
+          team_name: userProfile.team_name
+        });
+        
+        const normalizedRole = userProfile.role.toLowerCase().replace(/[_\s]/g, '');
+        
+        if (normalizedRole === 'agent') {
           kamFilter = [userProfile.full_name];
-        } else if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
-          const { data: teamMembers } = await supabase
-            .from('user_profiles')
-            .select('full_name')
-            .eq('team_name', userProfile.team_name)
-            .eq('is_active', true);
-          kamFilter = teamMembers?.map(m => m.full_name) || [];
+          console.log(`🔒 [getActiveFollowUps] Agent filter applied - showing only records for: ${userProfile.full_name}`);
+        } else if (normalizedRole === 'teamlead') {
+          if (userProfile.team_name) {
+            const { data: teamMembers } = await getSupabaseAdmin()
+              .from('user_profiles')
+              .select('full_name')
+              .eq('team_name', userProfile.team_name)
+              .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
+            kamFilter = teamMembers?.map(m => m.full_name) || [];
+            console.log(`👥 [getActiveFollowUps] Team Lead filter applied - showing records for team members:`, kamFilter);
+          }
+        } else if (normalizedRole === 'admin') {
+          console.log(`👑 [getActiveFollowUps] Admin - showing all records`);
+          kamFilter = null;
         }
+      } else {
+        console.warn(`⚠️ [getActiveFollowUps] No user profile found for email: ${email}`);
       }
     }
     
@@ -737,12 +793,22 @@ export const churnService = {
       .eq('follow_up_status', 'ACTIVE');
     
     if (kamFilter && kamFilter.length > 0) {
+      console.log(`🔒 [getActiveFollowUps] Applying KAM filter:`, kamFilter);
       query = query.in('kam', kamFilter);
     } else if (kam) {
+      console.log(`🔒 [getActiveFollowUps] Applying single KAM filter:`, kam);
       query = query.eq('kam', kam);
+    } else {
+      console.log(`🔓 [getActiveFollowUps] No KAM filter - showing all records`);
     }
     
-    const { data: records } = await query;
+    const { data: records, error: queryError } = await query as { data: ChurnRecord[] | null; error: any };
+    
+    if (queryError) {
+      console.error(`❌ [getActiveFollowUps] Error querying records:`, queryError);
+    }
+    
+    console.log(`📊 [getActiveFollowUps] Found ${records?.length || 0} active records`);
     
     return records?.map(record => ({
       rid: record.rid,
@@ -762,23 +828,47 @@ export const churnService = {
     let kamFilter: string[] | null = null;
     
     if (email) {
-      const { data: userProfile } = await supabase
+      console.log(`🔍 [getOverdueFollowUps] Fetching profile for email: ${email}`);
+      
+      const { data: userProfile, error: profileError } = await getSupabaseAdmin()
         .from('user_profiles')
         .select('*')
         .eq('email', email)
-        .single();
+        .single() as { data: UserProfile | null; error: any };
+      
+      if (profileError) {
+        console.error(`❌ [getOverdueFollowUps] Error fetching profile:`, profileError);
+      }
       
       if (userProfile) {
-        if (userProfile.role === 'Agent' || userProfile.role === 'agent') {
+        console.log(`👤 [getOverdueFollowUps] User profile found:`, {
+          email: userProfile.email,
+          full_name: userProfile.full_name,
+          role: userProfile.role,
+          team_name: userProfile.team_name
+        });
+        
+        const normalizedRole = userProfile.role.toLowerCase().replace(/[_\s]/g, '');
+        
+        if (normalizedRole === 'agent') {
           kamFilter = [userProfile.full_name];
-        } else if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
-          const { data: teamMembers } = await supabase
-            .from('user_profiles')
-            .select('full_name')
-            .eq('team_name', userProfile.team_name)
-            .eq('is_active', true);
-          kamFilter = teamMembers?.map(m => m.full_name) || [];
+          console.log(`🔒 [getOverdueFollowUps] Agent filter applied - showing only records for: ${userProfile.full_name}`);
+        } else if (normalizedRole === 'teamlead') {
+          if (userProfile.team_name) {
+            const { data: teamMembers } = await getSupabaseAdmin()
+              .from('user_profiles')
+              .select('full_name')
+              .eq('team_name', userProfile.team_name)
+              .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
+            kamFilter = teamMembers?.map(m => m.full_name) || [];
+            console.log(`👥 [getOverdueFollowUps] Team Lead filter applied - showing records for team members:`, kamFilter);
+          }
+        } else if (normalizedRole === 'admin') {
+          console.log(`👑 [getOverdueFollowUps] Admin - showing all records`);
+          kamFilter = null;
         }
+      } else {
+        console.warn(`⚠️ [getOverdueFollowUps] No user profile found for email: ${email}`);
       }
     }
     
@@ -790,12 +880,22 @@ export const churnService = {
       .lte('next_reminder_time', currentTime);
     
     if (kamFilter && kamFilter.length > 0) {
+      console.log(`🔒 [getOverdueFollowUps] Applying KAM filter:`, kamFilter);
       query = query.in('kam', kamFilter);
     } else if (kam) {
+      console.log(`🔒 [getOverdueFollowUps] Applying single KAM filter:`, kam);
       query = query.eq('kam', kam);
+    } else {
+      console.log(`🔓 [getOverdueFollowUps] No KAM filter - showing all records`);
     }
     
-    const { data: records } = await query;
+    const { data: records, error: queryError } = await query as { data: ChurnRecord[] | null; error: any };
+    
+    if (queryError) {
+      console.error(`❌ [getOverdueFollowUps] Error querying records:`, queryError);
+    }
+    
+    console.log(`📊 [getOverdueFollowUps] Found ${records?.length || 0} overdue records`);
     
     return records?.map(record => ({
       rid: record.rid,
@@ -815,7 +915,7 @@ export const churnService = {
     const { data: records } = await getSupabaseAdmin()
       .from('churn_records')
       .select('rid')
-      .in('rid', rids);
+      .in('rid', rids) as { data: Array<{ rid: string }> | null; error: any };
     
     return records?.map(r => r.rid) || [];
   },
@@ -836,8 +936,8 @@ export const churnService = {
       const batch = records.slice(i, i + batchSize);
       
       try {
-        const { error } = await getSupabaseAdmin()
-          .from('churn_records')
+        const { error } = await (getSupabaseAdmin()
+          .from('churn_records') as any)
           .insert(batch);
         
         if (error) {

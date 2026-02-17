@@ -174,9 +174,10 @@ export const convexAPI = {
   },
 
   // Get visit statistics
-  getVisitStatistics: async (email: string) => {
+  getVisitStatistics: async (email: string, bustCache = false) => {
     try {
-      const response = await fetch(`/api/data/visits/statistics?email=${encodeURIComponent(email)}`, {
+      const url = `/api/data/visits/statistics?email=${encodeURIComponent(email)}${bustCache ? '&bustCache=true' : ''}`;
+      const response = await fetch(url, {
         credentials: 'include'
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -299,6 +300,26 @@ export const convexAPI = {
     } catch (error) {
       console.error('Error updating MOM open point status:', error);
       return { success: false, error: 'Failed to update open point status' };
+    }
+  },
+
+  // Get master data (supports role-based filtering for Team Leads and Admins)
+  getMasterData: async (email: string, page?: number, limit?: number, search?: string) => {
+    try {
+      const searchParams = new URLSearchParams({
+        page: (page || 1).toString(),
+        limit: (limit || 50).toString()
+      });
+      if (search) searchParams.append('search', search);
+      
+      const response = await fetch(`/api/data/master-data?${searchParams}`, {
+        credentials: 'include' // Ensure cookies are sent for authentication
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error getting master data:', error);
+      return { success: false, error: 'Failed to get master data' };
     }
   },
 
@@ -481,6 +502,208 @@ export const convexAPI = {
     } catch (error) {
       console.error('Error scheduling backdated visit:', error);
       return { success: false, error: 'Failed to schedule backdated visit' };
+    }
+  },
+
+  // Demo operations
+  getDemosForAgent: async (agentId: string, role?: string, teamName?: string) => {
+    try {
+      const response = await fetch(`/api/data/demos`, {
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error getting demos:', error);
+      return { success: false, error: 'Failed to get demos' };
+    }
+  },
+
+  initializeBrandDemos: async (brandEmailOrId: string) => {
+    try {
+      // This method now uses brandId since the service only supports initializeBrandDemosFromMasterData
+      const response = await fetch(`/api/data/demos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ brandId: brandEmailOrId })
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error initializing brand demos:', error);
+      return { success: false, error: 'Failed to initialize brand demos' };
+    }
+  },
+
+  initializeBrandDemosFromMasterData: async (brandId: string) => {
+    try {
+      const response = await fetch(`/api/data/demos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ brandId })
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error initializing demos from master data:', error);
+      return { success: false, error: 'Failed to initialize demos from master data' };
+    }
+  },
+
+  setProductApplicability: async (demoId: string, isApplicable: boolean, nonApplicableReason?: string) => {
+    try {
+      const response = await fetch(`/api/data/demos/${demoId}/applicability`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ isApplicable, nonApplicableReason })
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error setting product applicability:', error);
+      return { success: false, error: 'Failed to set product applicability' };
+    }
+  },
+
+  setUsageStatus: async (demoId: string, usageStatus: string) => {
+    try {
+      const response = await fetch(`/api/data/demos/${demoId}/usage-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ usageStatus })
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error setting usage status:', error);
+      return { success: false, error: 'Failed to set usage status' };
+    }
+  },
+
+  scheduleDemo: async (demoId: string, scheduledDate: string, scheduledTime: string, reason?: string) => {
+    try {
+      const response = await fetch(`/api/data/demos/${demoId}/schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ scheduledDate, scheduledTime, reason, isReschedule: false })
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error scheduling demo:', error);
+      return { success: false, error: 'Failed to schedule demo' };
+    }
+  },
+
+  rescheduleDemo: async (demoId: string, scheduledDate: string, scheduledTime: string, reason: string, userEmail?: string, userRole?: string) => {
+    try {
+      const response = await fetch(`/api/data/demos/${demoId}/schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ scheduledDate, scheduledTime, reason, isReschedule: true })
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error rescheduling demo:', error);
+      return { success: false, error: 'Failed to reschedule demo' };
+    }
+  },
+
+  completeDemo: async (demoId: string, conductedBy: string, completionNotes?: string) => {
+    try {
+      const response = await fetch(`/api/data/demos/${demoId}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ conductedBy, completionNotes })
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error completing demo:', error);
+      return { success: false, error: 'Failed to complete demo' };
+    }
+  },
+
+  setConversionDecision: async (demoId: string, conversionStatus: string, nonConversionReason?: string) => {
+    try {
+      const response = await fetch(`/api/data/demos/${demoId}/conversion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ conversionStatus, nonConversionReason })
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error setting conversion decision:', error);
+      return { success: false, error: 'Failed to set conversion decision' };
+    }
+  },
+
+  getDemoStatistics: async (agentId?: string, teamName?: string, role?: string) => {
+    try {
+      const response = await fetch(`/api/data/demos/statistics`, {
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error getting demo statistics:', error);
+      return { success: false, error: 'Failed to get demo statistics' };
+    }
+  },
+
+  // Authentication
+  authenticateUser: async (email: string, password: string) => {
+    try {
+      const response = await fetch(`/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email, password })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Error authenticating user:', error);
+      return { success: false, error: 'Failed to authenticate' };
+    }
+  },
+
+  // Password reset
+  forgotPassword: async (email: string) => {
+    try {
+      const response = await fetch(`/api/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Error requesting password reset:', error);
+      return { success: false, error: 'Failed to request password reset' };
+    }
+  },
+
+  // Team visit statistics
+  getTeamVisitStatistics: async (email: string) => {
+    try {
+      const response = await fetch(`/api/data/visits/team-statistics`, {
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error getting team visit statistics:', error);
+      return { success: false, error: 'Failed to get team visit statistics' };
     }
   }
 };

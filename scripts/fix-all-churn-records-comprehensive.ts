@@ -42,9 +42,9 @@ async function fixAllChurnRecords() {
     };
     
     for (const record of allRecords) {
-      const churnReason = record.churn_reason?.trim() || "";
-      const callAttempts = record.call_attempts || [];
-      const currentStatus = record.follow_up_status;
+      const churnReason = (record as any).churn_reason?.trim() || "";
+      const callAttempts = (record as any).call_attempts || [];
+      const currentStatus = (record as any).follow_up_status;
       
       // Check if should be completed
       const hasCompletedReason = isCompletedReason(churnReason);
@@ -55,19 +55,19 @@ async function fixAllChurnRecords() {
         recordsToFix.push(record);
         
         if (hasCompletedReason) {
-          fixReasons.completed_reason.push(record.rid);
+          fixReasons.completed_reason.push((record as any).rid);
         }
         if (hasThreeCalls) {
-          fixReasons.three_calls.push(record.rid);
+          fixReasons.three_calls.push((record as any).rid);
         }
       }
       
       // Check for inconsistent active flags
-      if (currentStatus === "COMPLETED" && record.is_follow_up_active) {
-        if (!recordsToFix.find(r => r.rid === record.rid)) {
+      if (currentStatus === "COMPLETED" && (record as any).is_follow_up_active) {
+        if (!recordsToFix.find((r: any) => r.rid === (record as any).rid)) {
           recordsToFix.push(record);
         }
-        fixReasons.inconsistent_status.push(record.rid);
+        fixReasons.inconsistent_status.push((record as any).rid);
       }
     }
     
@@ -85,7 +85,7 @@ async function fixAllChurnRecords() {
     
     // Show sample of records to be fixed
     console.log('📝 Sample records to be fixed (first 10):');
-    recordsToFix.slice(0, 10).forEach(record => {
+    recordsToFix.slice(0, 10).forEach((record: any) => {
       console.log(`   RID ${record.rid}: "${record.churn_reason}" (status: ${record.follow_up_status}, calls: ${record.call_attempts?.length || 0})`);
     });
     console.log('');
@@ -104,10 +104,10 @@ async function fixAllChurnRecords() {
       console.log(`   Processing batch ${batchNumber}/${totalBatches} (${batch.length} records)...`);
       
       // Fix each record in the batch
-      const fixPromises = batch.map(async (record) => {
+      const fixPromises = batch.map(async (record: any) => {
         try {
-          const { error } = await getSupabaseAdmin()
-            .from('churn_records')
+          const { error } = await (getSupabaseAdmin()
+            .from('churn_records') as any)
             .update({
               follow_up_status: "COMPLETED",
               is_follow_up_active: false,
