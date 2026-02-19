@@ -1,135 +1,146 @@
-# Quick Fix Guide - Churn Page Issues
+# Health Check Fix - Quick Reference
 
-## 🚀 IMMEDIATE ACTION REQUIRED
+## 🚀 What Was Fixed
 
-Your churn page has records in the wrong categories. Here's how to fix it:
+The Assessment tab was showing 0 brands despite 49 being pending. This was caused by incorrect filtering logic that excluded brands across all agents when any agent assessed them.
 
-### Step 1: Run the Comprehensive Fix Script
+## ✅ What Changed
 
-Open PowerShell in your project directory and run:
+**File:** `lib/services/healthCheckService.ts`
+- Fixed `getBrandsForAssessment()` to use KAM-specific filtering
+- Each agent now sees only their own pending brands
 
-```powershell
-.\FIX_ALL_CHURN_COMPREHENSIVE.ps1
+**File:** `app/api/data/health-checks/clear-cache/route.ts`
+- Added statistics cache clearing
+
+## 🔧 How to Apply the Fix
+
+### Step 1: Deploy the Changes
+The code changes are already made. Just deploy:
+```bash
+npm run build
+# Restart your application
 ```
 
-This will:
-- ✅ Fix ALL 300+ records at once
-- ✅ Show you what's being fixed
-- ✅ Take about 30-60 seconds
-- ✅ Provide detailed results
+### Step 2: Clear Cache
+1. Open the Health Check-ups page
+2. Click the "Clear Cache" button (🗑️)
+3. Refresh the page
 
-### Step 2: Hard Refresh Your Browser
+### Step 3: Verify
+- Assessment tab should now show 49 brands
+- Progress should show: 50 total, 1 completed, 49 remaining
 
-After the script completes:
-- Press `Ctrl + Shift + R` (Windows)
-- Or `Cmd + Shift + R` (Mac)
+## 🐛 If Brands Still Don't Show
 
-This clears your browser cache and loads fresh data.
+### Quick Checks
+1. **Check browser console** - Look for error messages
+2. **Verify user email** - Make sure it matches `kam_email_id` in database
+3. **Check user role** - Should be "Agent", "Team Lead", or "Admin"
 
-### Step 3: Verify the Fix
-
-Check your churn page:
-- Overdue should show only records with no agent response older than 3 days
-- Completed should show all records with completed reasons
-- Records should NOT appear in multiple categories
-
-## 🔍 What Was Fixed
-
-### 1. Categorization Logic
-Records are now categorized correctly:
-
-**Completed** = Any of these:
-- Has completed churn reason (7 reasons like "Permanently Closed", "Ownership Transferred", etc.)
-- Has 3+ call attempts
-- Has follow_up_status = "COMPLETED"
-
-**Follow-Ups** = Agent has taken action:
-- Has call attempts
-- Has real churn reason (not "I don't know" or "KAM needs to respond")
-- Has active follow-up
-
-**Overdue** = No agent action + older than 3 days
-
-**New Count** = No agent action + within last 3 days
-
-### 2. Auto-Fix System
-Every time you load the churn page, the system now:
-- Automatically detects records with wrong status
-- Fixes them in the database
-- Updates the display
-
-This means future records will be fixed automatically!
-
-### 3. Visit Creation
-Fixed the error when scheduling visits. You can now:
-- Schedule visits from health checks page
-- No more "convexAPI.createVisit is not a function" error
-
-## 📋 Completed Churn Reasons (7 total)
-
-These reasons automatically mark a record as COMPLETED:
-1. "Outlet once out of Sync- now Active"
-2. "Renewal Payment Overdue"
-3. "Temporarily Closed (Renovation / Relocation/Internet issue)"
-4. "Permanently Closed (Outlet/brand)"
-5. "Event Account / Demo Account"
-6. "Switched to Another POS"
-7. "Ownership Transferred"
-
-## 📋 Active Follow-Up Reasons (2 total)
-
-These reasons keep a record in active follow-up:
-1. "I don't know"
-2. "KAM needs to respond"
-
-## ❓ Troubleshooting
-
-### Script won't run?
-```powershell
-# Make sure you have tsx installed
-npm install -g tsx
-
-# Or use npx
-npx tsx scripts/fix-all-churn-records-comprehensive.ts
+### Run Diagnostic Query
+```sql
+-- Replace [USER_EMAIL] with actual email
+SELECT 
+  (SELECT COUNT(*) FROM master_data WHERE kam_email_id = '[USER_EMAIL]') as total_brands,
+  (SELECT COUNT(*) FROM health_checks WHERE kam_email = '[USER_EMAIL]' AND assessment_month = '2026-02') as assessed,
+  (SELECT COUNT(*) FROM master_data md WHERE kam_email_id = '[USER_EMAIL]' 
+   AND NOT EXISTS (
+     SELECT 1 FROM health_checks hc 
+     WHERE LOWER(TRIM(hc.brand_name)) = LOWER(TRIM(md.brand_name))
+     AND hc.kam_email = '[USER_EMAIL]'
+     AND hc.assessment_month = '2026-02'
+   )) as pending;
 ```
 
-### Still seeing wrong counts?
-1. Hard refresh browser (Ctrl+Shift+R)
-2. Clear browser cache completely
-3. Check server logs for "🔧 Auto-fixing" messages
-4. Try logging out and back in
+### Fix Data Issues
+Run this to fix common problems:
+```sql
+-- Trim whitespace from brand names
+UPDATE master_data SET brand_name = TRIM(brand_name) WHERE brand_name != TRIM(brand_name);
+UPDATE health_checks SET brand_name = TRIM(brand_name) WHERE brand_name != TRIM(brand_name);
 
-### Records still in wrong category?
-1. Check the record's churn_reason field
-2. Check if it has call_attempts
-3. Check the follow_up_status field
-4. Contact dev team with the RID
+-- Normalize emails
+UPDATE master_data md SET kam_email_id = up.email 
+FROM user_profiles up 
+WHERE LOWER(md.kam_email_id) = LOWER(up.email) AND md.kam_email_id != up.email;
+```
 
-## 📊 Expected Counts
+## 📊 Expected Results
 
-After the fix, your counts should be:
-- **Overdue**: Only records with no agent response older than 3 days
-- **Completed**: All records with completed reasons + records with 3+ calls
-- **Follow-Ups**: Records where agent has taken action but not completed
-- **New Count**: Records with no agent response within last 3 days
+### Before Fix
+```
+Assessment Progress:
+  Total: 50
+  Completed: 1
+  Remaining: 49
 
-## 🎯 Next Steps
+Brands Pending Assessment: (0)
+  ✓ All brands assessed for this month!
+```
 
-1. ✅ Run the fix script
-2. ✅ Hard refresh browser
-3. ✅ Verify counts are correct
-4. ✅ Test filling a churn reason (should move to correct category immediately)
-5. ✅ Test scheduling a visit (should work without errors)
+### After Fix
+```
+Assessment Progress:
+  Total: 50
+  Completed: 1
+  Remaining: 49
 
-## 📞 Need Help?
+Brands Pending Assessment: (49)
+  [Grid showing 49 brand cards]
+```
 
-If you still see issues:
-1. Check server console for error messages
-2. Check browser console for errors
-3. Take screenshots of the issue
-4. Note the RIDs of affected records
-5. Contact the development team
+## 📝 Testing Checklist
+
+- [ ] Clear cache button works
+- [ ] 49 brands appear in Assessment tab
+- [ ] Can click on a brand to open assessment modal
+- [ ] Can submit an assessment
+- [ ] Brand disappears from pending list after assessment
+- [ ] Counts update correctly (48 remaining)
+- [ ] Assessment appears in History tab
+- [ ] Statistics tab shows correct numbers
+
+## 🆘 Need Help?
+
+### Check These Files
+1. `HEALTH_CHECK_COMPLETE_FIX.md` - Full technical details
+2. `test-health-check-fix.md` - Detailed testing guide
+3. `diagnose-health-check-issue.sql` - Diagnostic queries
+4. `fix-health-check-data-integrity.sql` - Data fixes
+
+### Common Issues
+
+**Issue:** "Authentication required" error
+**Fix:** User needs to log in again
+
+**Issue:** Brands show but can't assess
+**Fix:** Check user permissions and role
+
+**Issue:** Assessment saves but brand doesn't disappear
+**Fix:** Clear cache and refresh page
+
+**Issue:** Wrong brand count
+**Fix:** Run data integrity fixes in `fix-health-check-data-integrity.sql`
+
+## 🎯 Success Indicators
+
+✅ Assessment tab shows correct number of brands
+✅ Each agent sees only their own pending brands
+✅ Assessing a brand updates counts immediately
+✅ No console errors
+✅ History tab shows all assessments
+✅ Statistics are accurate
+
+## 📞 Escalation
+
+If the fix doesn't work:
+1. Collect browser console logs
+2. Run diagnostic SQL queries
+3. Check network tab for API errors
+4. Note user email and role
+5. Document steps to reproduce
 
 ---
 
-**Remember**: The auto-fix runs on every page load, so even if you don't run the script, records will be fixed gradually as you use the system. But running the script fixes everything at once!
+**Quick Start:** Deploy → Clear Cache → Verify 49 brands appear → Test assessment flow → Done! ✨

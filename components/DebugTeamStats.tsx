@@ -4,7 +4,7 @@ import { useTeamStatistics } from '../hooks/useRobustApi';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function DebugTeamStats() {
-  const { user } = useAuth();
+  const { userProfile } = useAuth();
   
   const {
     data: statisticsData,
@@ -12,7 +12,7 @@ export default function DebugTeamStats() {
     error,
     retry,
     refresh
-  } = useTeamStatistics(user?.email, {
+  } = useTeamStatistics(userProfile?.email, {
     autoLoad: true,
     retryOnMount: true,
     onError: (error) => {

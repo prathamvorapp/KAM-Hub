@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authenticateRequest, canAccessResource, unauthorizedResponse } from '@/lib/api-auth';
 import { UpdateFollowUpTimingSchema } from '../../../../lib/models/churn';
-import { getSupabaseAdmin } from '@/lib/supabase-client';
+import { getSupabaseAdmin } from '@/lib/supabase-server';
 import NodeCache from 'node-cache';
 
 // Cache instances for invalidation
@@ -9,11 +10,12 @@ const statisticsCache = new NodeCache({ stdTTL: 180 });
 
 export async function PATCH(request: NextRequest) {
   try {
-    // Get user info from middleware
-    const userEmail = request.headers.get('x-user-email');
-    
-    if (!userEmail) {
+    // Authenticate
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
+    if (!user) {
       return NextResponse.json({
+        success: false,
         error: 'Authentication required'
       }, { status: 401 });
     }
@@ -21,10 +23,32 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json();
     const { rid, next_reminder_time, follow_up_status } = UpdateFollowUpTimingSchema.parse(body);
 
+    // Fetch the record to get its owner and team for authorization
+    const { data: record, error: fetchError } = await getSupabaseAdmin()
+      .from('churn_records')
+      .select('kam, team_name') // Select owner and team fields
+      .eq('rid', rid)
+      .single();
+
+    if (fetchError || !record) {
+      return NextResponse.json({
+        success: false,
+        error: 'Churn record not found',
+        detail: fetchError?.message || 'Record not found'
+      }, { status: 404 });
+    }
+
+    // Authorization check
+    // Assuming 'kam' field in churn_records stores the email of the KAM
+    const authCheck = canAccessResource(user, (record as any).kam, (record as any).team_name); 
+    if (!authCheck) {
+      return unauthorizedResponse('You do not have permission to update this churn record.');
+    }
+
     console.log(`⏰ Updating follow-up timing for RID: ${rid}`);
 
     // Update follow-up timing in Supabase
-    const { error } = await getSupabaseAdmin()
+    const { error: updateError } = await getSupabaseAdmin()
       .from('churn_records')
       // @ts-expect-error - Supabase type inference issue with update
       .update({
@@ -34,7 +58,7 @@ export async function PATCH(request: NextRequest) {
       })
       .eq('rid', rid);
 
-    if (error) throw error;
+    if (updateError) throw updateError;
 
     // Clear relevant caches after update
     churnDataCache.flushAll();
@@ -49,17 +73,17 @@ export async function PATCH(request: NextRequest) {
         rid,
         next_reminder_time,
         follow_up_status,
-        updated_by: userEmail,
+        updated_by: user.email,
         updated_at: new Date().toISOString()
       }
     });
 
   } catch (error) {
-    console.log(`❌ Error updating follow-up timing: ${error}`);
+    console.error(`❌ [Update Follow-up Timing] Error:`, error);
     return NextResponse.json({
       success: false,
       error: 'Failed to update follow-up timing',
-      detail: String(error)
+      detail: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

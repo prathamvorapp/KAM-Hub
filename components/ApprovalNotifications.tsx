@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { convexAPI } from '@/lib/convex-api';
+import { api } from '@/lib/api';
 
 interface ApprovalNotificationsProps {
   userEmail: string;
@@ -53,7 +53,7 @@ export default function ApprovalNotifications({ userEmail, userRole }: ApprovalN
 
   const loadPendingApprovals = async () => {
     try {
-      const visitsResponse = await convexAPI.getVisits({
+      const visitsResponse = await api.getVisits({
         email: userEmail,
         limit: 1000 // Increase limit to get all visits
       });
@@ -74,7 +74,7 @@ export default function ApprovalNotifications({ userEmail, userRole }: ApprovalN
       let totalOpenPoints = 0;
       for (const visit of pendingVisits) {
         try {
-          const momResponse = await convexAPI.getMOM({
+          const momResponse = await api.getMOM({
             email: userEmail,
             search: visit.visit_id // Search by visit_id to find related MOM
           });

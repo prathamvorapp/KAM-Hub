@@ -18,10 +18,11 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface User {
+  id: string;
   email: string;
-  full_name: string;
+  fullName: string;
   role: string;
-  team_name?: string;
+  teamName?: string;
   permissions: string[];
 }
 
@@ -46,7 +47,11 @@ export default function Sidebar({ userProfile }: SidebarProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   const visibleModules = useMemo(() => {
-    if (!userProfile) return [];
+
+    if (!userProfile) {
+
+      return [];
+    }
     
     // Map database roles to lowercase for comparison
     const roleMapping: { [key: string]: string } = {
@@ -56,7 +61,12 @@ export default function Sidebar({ userProfile }: SidebarProps) {
     };
     
     const normalizedRole = roleMapping[userProfile.role] || userProfile.role?.toLowerCase();
-    return allModules.filter(module => module.roles.includes(normalizedRole));
+
+    
+    const filteredModules = allModules.filter(module => module.roles.includes(normalizedRole));
+
+    
+    return filteredModules;
   }, [userProfile]);
 
   // Handle scroll events to show/hide scroll-to-top button

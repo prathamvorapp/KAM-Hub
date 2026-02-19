@@ -7,10 +7,11 @@ import ApprovalNotifications from '../ApprovalNotifications'
 import { motion } from 'framer-motion'
 
 interface User {
+  id: string;
   email: string;
-  full_name: string;
+  fullName: string;
   role: string;
-  team_name?: string;
+  teamName?: string;
   permissions: string[];
 }
 

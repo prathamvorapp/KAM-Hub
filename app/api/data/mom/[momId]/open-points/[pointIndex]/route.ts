@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUser } from '../../../../../../../lib/auth-helpers';
+import { authenticateRequest } from '@/lib/api-auth';
 import { momService } from '@/lib/services';
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ momId: string; pointIndex: string }> }) {
   try {
     const { momId, pointIndex } = await params;
-    const user = await getAuthenticatedUser(request);
-    
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
     if (!user) {
       return NextResponse.json({
         success: false,
@@ -23,7 +23,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       ticketId: momId,
       pointIndex: parseInt(pointIndex),
       status
-    });
+    }, user); // Pass the userProfile here
 
     return NextResponse.json({
       success: true,
@@ -31,11 +31,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     });
 
   } catch (error) {
-    console.error('❌ Error updating open point:', error);
+    console.error('[MOM Open Point] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to update open point',
-      detail: String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

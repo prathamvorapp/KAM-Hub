@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, Calendar, AlertTriangle, User } from 'lucide-react';
-import { convexAPI } from '@/lib/convex-api';
+import { api } from '@/lib/api';
 
 interface BackdatedVisitModalProps {
   isOpen: boolean;
@@ -89,7 +89,7 @@ export default function BackdatedVisitModal({
       console.log('🔍 Fetching brands for agent:', agentEmail);
       
       // Fetch all brands for the selected agent (no limit)
-      const response = await convexAPI.getBrandsByAgentEmail(agentEmail, 1, 1000); // High limit to get all brands
+      const response = await api.getBrandsByAgentEmail(agentEmail, 1, 1000); // High limit to get all brands
       
       if (response.success && response.data && response.data.data) {
         const brands = response.data.data;

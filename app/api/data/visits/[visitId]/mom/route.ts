@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authenticateRequest } from '@/lib/api-auth';
 import { visitService } from '@/lib/services';
 
 export async function POST(
@@ -7,38 +8,23 @@ export async function POST(
 ) {
   try {
     const { visitId } = await params;
-    const userEmail = request.headers.get('x-user-email');
-    
-    console.log('🔵 [MOM API] Received MOM submission request:', {
-      visitId,
-      userEmail,
-      hasAuth: !!userEmail
-    });
-    
-    if (!userEmail) {
-      console.error('❌ [MOM API] No user email in headers');
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
+    if (!user) {
       return NextResponse.json({
+        success: false,
         error: 'Authentication required'
       }, { status: 401 });
     }
 
     const body = await request.json();
     
-    console.log('📦 [MOM API] Request body:', {
-      visit_id: body.visit_id,
-      has_open_points: !!body.open_points,
-      open_points_count: body.open_points?.length || 0,
-      mom_shared: body.mom_shared,
-      created_by: body.created_by,
-      brand_name: body.brand_name
-    });
 
     await visitService.submitMoM({
       visit_id: visitId,
       ...body
-    });
+    }, user);
 
-    console.log('✅ [MOM API] MOM submitted successfully');
 
     return NextResponse.json({
       success: true,
@@ -46,11 +32,10 @@ export async function POST(
     });
 
   } catch (error) {
-    console.error('❌ [MOM API] Error submitting MOM:', error);
+    console.error('[Visit MOM Submit] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to submit MOM',
-      detail: String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

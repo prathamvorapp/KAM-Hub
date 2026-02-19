@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUser, canAccessAllData, canAccessTeamData } from '../../../../../../lib/auth-helpers';
+import { authenticateRequest } from '@/lib/api-auth';
 import { masterDataService } from '@/lib/services';
 import NodeCache from 'node-cache';
 
@@ -10,9 +10,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { email } = await params;
     
-    // Get authenticated user
-    const user = await getAuthenticatedUser(request);
-    
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
     if (!user) {
       return NextResponse.json({
         success: false,
@@ -22,11 +21,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const limit = parseInt(searchParams.get('limit') || '10000'); // High default to get all brands
     const search = searchParams.get('search') || '';
 
     // Check if user can access this agent's data
-    if (!canAccessAllData(user) && !canAccessTeamData(user) && user.email !== email) {
+    const canAccessAll = user.role === 'Admin';
+    const canAccessTeam = user.role === 'Team Lead';
+    
+    if (!canAccessAll && !canAccessTeam && user.email !== email) {
       return NextResponse.json({
         success: false,
         error: 'Access denied'
@@ -45,7 +47,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     console.log(`📊 Getting brands for agent: ${email}`);
 
     // Get brands for specific agent from Supabase
-    const brands = await masterDataService.getBrandsByAgentEmail(email);
+    const brands = await masterDataService.getBrandsByAgentEmail(user as any, email);
     
     // Apply search filter
     let filteredBrands = brands;
@@ -81,11 +83,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json(response);
 
   } catch (error) {
-    console.error('❌ Error getting agent brands:', error);
+    console.error('[Master Data Brands] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to load agent brands',
-      detail: String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

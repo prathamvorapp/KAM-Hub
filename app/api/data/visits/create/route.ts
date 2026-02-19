@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authenticateRequest } from '@/lib/api-auth';
 import { visitService } from '@/lib/services';
 
 export async function POST(request: NextRequest) {
   try {
-    const userEmail = request.headers.get('x-user-email');
-    
-    if (!userEmail) {
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
+    if (!user) {
       return NextResponse.json({
+        success: false,
         error: 'Authentication required'
       }, { status: 401 });
     }
@@ -17,7 +19,7 @@ export async function POST(request: NextRequest) {
     console.log(`📋 Visit data:`, JSON.stringify(body, null, 2));
 
     // Don't add created_by - the visits table doesn't have this column
-    const result = await visitService.createVisit(body);
+    const result = await visitService.createVisit(body, user); // Pass the userProfile here
 
     console.log(`✅ Visit created successfully`);
 
@@ -27,14 +29,11 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('❌ Error creating visit:', error);
-    console.error('❌ Error details:', error.message);
-    console.error('❌ Error stack:', error.stack);
+    console.error('[Visit Create] Error:', error);
     
     return NextResponse.json({
       success: false,
-      error: 'Failed to create visit',
-      detail: error.message || String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

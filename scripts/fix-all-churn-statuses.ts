@@ -7,7 +7,7 @@
  * Run this ONCE to fix all 300+ records at once.
  */
 
-import { getSupabaseAdmin } from '../lib/supabase-client';
+import { getSupabaseAdmin } from '../lib/supabase-server';
 import { isCompletedReason, isNoAgentResponse } from '../lib/constants/churnReasons';
 
 async function fixAllChurnStatuses() {

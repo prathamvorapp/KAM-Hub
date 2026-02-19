@@ -5,7 +5,7 @@
  * by analyzing all records and showing which category each would fall into.
  */
 
-import { getSupabaseAdmin } from '../lib/supabase-client';
+import { getSupabaseAdmin } from '../lib/supabase-server';
 import { isCompletedReason, isNoAgentResponse } from '../lib/constants/churnReasons';
 
 function safeParseDate(dateStr: string): Date | null {

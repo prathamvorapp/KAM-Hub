@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUser } from '../../../../../lib/auth-helpers';
+import { authenticateRequest } from '@/lib/api-auth';
 import { momService } from '@/lib/services';
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthenticatedUser(request);
-    
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
     if (!user) {
       return NextResponse.json({
         success: false,
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     console.log(`📤 Exporting MOMs for: ${user.email}`);
 
     const result = await momService.getMOMs({
-      email: user.email,
+      userProfile: user as any,
       page: 1,
       limit: 10000 // Get all for export
     });
@@ -51,11 +51,10 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('❌ Error exporting MOMs:', error);
+    console.error('[MOM Export] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to export MOMs',
-      detail: String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

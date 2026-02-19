@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUser } from '../../../../../lib/auth-helpers';
+import { authenticateRequest } from '@/lib/api-auth';
 import { momService } from '@/lib/services';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ momId: string }> }) {
   try {
     const { momId } = await params;
-    const user = await getAuthenticatedUser(request);
-    
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
     if (!user) {
       return NextResponse.json({
         success: false,
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     console.log(`📊 Getting MOM: ${momId}`);
 
-    const mom = await momService.getMOMByTicketId(momId);
+    const mom = await momService.getMOMByTicketId(momId, user);
 
     if (!mom) {
       return NextResponse.json({
@@ -31,11 +31,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     });
 
   } catch (error) {
-    console.error('❌ Error getting MOM:', error);
+    console.error('[MOM GET] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to load MOM',
-      detail: String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }
@@ -43,8 +42,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ momId: string }> }) {
   try {
     const { momId } = await params;
-    const user = await getAuthenticatedUser(request);
-    
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
     if (!user) {
       return NextResponse.json({
         success: false,
@@ -56,7 +55,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     
     console.log(`📝 Updating MOM: ${momId}`);
 
-    const result = await momService.updateMOM(momId, body);
+    const result = await momService.updateMOM(momId, body, user);
 
     return NextResponse.json({
       success: true,
@@ -64,11 +63,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     });
 
   } catch (error) {
-    console.error('❌ Error updating MOM:', error);
+    console.error('[MOM PUT] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to update MOM',
-      detail: String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

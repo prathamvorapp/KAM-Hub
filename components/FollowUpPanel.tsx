@@ -42,7 +42,7 @@ export const FollowUpPanel: React.FC<FollowUpPanelProps> = ({
   churnReason,
   onClose
 }) => {
-  const { user } = useAuth();
+  const { userProfile } = useAuth();
   const [followUpStatus, setFollowUpStatus] = useState<FollowUpStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [addingAttempt, setAddingAttempt] = useState(false);
@@ -54,13 +54,13 @@ export const FollowUpPanel: React.FC<FollowUpPanelProps> = ({
       setLoading(true);
       
       // Only fetch if user is authenticated
-      if (!user?.email) {
+      if (!userProfile?.email) {
         setError('User not authenticated');
         return;
       }
       
       // Get follow-up status from Convex with user email for role-based filtering
-      const result = await convexAPI.getFollowUpStatus(rid, churnReason, user.email);
+      const result = await convexAPI.getFollowUpStatus(rid, churnReason, userProfile.email);
       
       if (result.success && result.data) {
         // Transform Convex data to match the expected format
@@ -109,7 +109,7 @@ export const FollowUpPanel: React.FC<FollowUpPanelProps> = ({
       setAddingAttempt(true);
       
       // Only proceed if user is authenticated
-      if (!user?.email) {
+      if (!userProfile?.email) {
         setError('User not authenticated');
         return;
       }
@@ -120,7 +120,7 @@ export const FollowUpPanel: React.FC<FollowUpPanelProps> = ({
         call_response: 'No Response', // Default call response
         notes: notes.trim() || undefined,
         churn_reason: churnReason || '',
-        email: user.email
+        email: userProfile.email
       });
       
       if (result.success) {

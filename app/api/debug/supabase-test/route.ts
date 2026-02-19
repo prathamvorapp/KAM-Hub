@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase-client';
+import { getSupabaseAdmin } from '@/lib/supabase-server';
+import { requireDebugMode } from '@/lib/debug-protection';
 
 export async function GET(request: NextRequest) {
+  // Protect in production
+  const debugCheck = requireDebugMode();
+  if (debugCheck) return debugCheck;
+  
   try {
     console.log('🔍 [SUPABASE TEST] Testing Supabase connection...');
     

@@ -42,9 +42,18 @@ export function useRobustApi<T = any>(
   
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const mountedRef = useRef(true);
+  const executingRef = useRef(false); // Prevent concurrent requests
 
   const executeApiCall = useCallback(async (isRetry = false) => {
     if (!mountedRef.current) return;
+    
+    // Prevent concurrent requests
+    if (executingRef.current) {
+      console.log('⏳ [useRobustApi] Request already in progress, skipping...')
+      return
+    }
+
+    executingRef.current = true
 
     try {
       setLoading(true);
@@ -52,31 +61,23 @@ export function useRobustApi<T = any>(
         setError(null);
       }
 
-      console.log(`🔄 Executing API call (attempt ${retryCount + 1})`);
+      console.log(`🔄 [useRobustApi] Executing API call (attempt ${retryCount + 1})`);
       
       const response = await apiCall();
-      console.log('🔍 API Response received:', response);
 
       if (!mountedRef.current) return;
 
       if (response.success && response.data) {
-        console.log('✅ Setting data in hook:', response.data);
+        console.log('✅ [useRobustApi] API call successful');
         setData(response.data);
         setError(null);
         setRetryCount(0);
         onSuccess?.(response.data);
-        console.log('✅ API call successful');
       } else {
-        console.log('❌ API response validation failed:', {
-          success: response.success,
-          hasData: !!response.data,
-          dataKeys: response.data ? Object.keys(response.data) : [],
-          fullResponse: response
-        });
         const errorMessage = response.error || 'Unknown error occurred';
         setError(errorMessage);
         onError?.(errorMessage);
-        console.error('❌ API call failed:', errorMessage);
+        console.error('❌ [useRobustApi] API call failed:', errorMessage);
       }
     } catch (err: any) {
       if (!mountedRef.current) return;
@@ -84,13 +85,14 @@ export function useRobustApi<T = any>(
       const errorMessage = err.message || 'Network error occurred';
       setError(errorMessage);
       onError?.(errorMessage);
-      console.error('❌ API call exception:', err);
+      console.error('❌ [useRobustApi] API call exception:', err);
     } finally {
       if (mountedRef.current) {
         setLoading(false);
       }
+      executingRef.current = false
     }
-  }, [retryCount, onError, onSuccess]); // FIXED: Removed apiCall from dependencies to prevent infinite re-renders
+  }, [apiCall, retryCount, onError, onSuccess]); // Include apiCall in dependencies
 
   const retry = useCallback(async () => {
     setRetryCount(prev => prev + 1);
@@ -109,16 +111,17 @@ export function useRobustApi<T = any>(
     setRetryCount(0);
   }, []);
 
-  // Auto-load on mount
+  // Auto-load on mount - ONLY ONCE
   useEffect(() => {
     if (autoLoad) {
+      console.log('🚀 [useRobustApi] Auto-loading data...')
       executeApiCall(false);
     }
 
     return () => {
       mountedRef.current = false;
     };
-  }, [autoLoad, executeApiCall]);
+  }, [autoLoad]); // Only depend on autoLoad, not executeApiCall
 
   // Set up refresh interval
   useEffect(() => {

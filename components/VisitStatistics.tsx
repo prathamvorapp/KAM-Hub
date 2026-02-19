@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
-import { convexAPI } from '@/lib/convex-api'
 import { 
   Building2, 
   CheckCircle, 
@@ -50,109 +49,48 @@ export default function VisitStatistics({ userEmail, refreshKey }: VisitStatisti
 
   const loadStatistics = async (bustCache = false) => {
     try {
-      setLoading(true)
-      setError(null)
+      setLoading(true);
+      setError(null);
       
-      console.log('📊 Loading visit statistics for:', userEmail, 'Attempt:', retryCount + 1)
+      console.log('📊 Loading visit statistics, bustCache:', bustCache, 'Attempt:', retryCount + 1);
       
       // Get user profile to determine role
-      try {
-        const userProfileResponse = await convexAPI.getUserProfile(userEmail);
-        if (userProfileResponse?.data) {
-          setUserRole(userProfileResponse.data.role || '');
-        }
-      } catch (profileError) {
-        console.log('Could not fetch user profile for role detection:', profileError);
-      }
-      
-      // Try multiple approaches for loading statistics
-      let response;
-      
-      try {
-        // First try: Direct Convex API with shorter timeout
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Statistics loading timeout')), 10000)
-        );
-        
-        const statisticsPromise = convexAPI.getVisitStatistics(userEmail, bustCache);
-        response = await Promise.race([statisticsPromise, timeoutPromise]);
-        
-        console.log('📊 Convex visit statistics response:', response)
-        console.log('📊 [CLIENT DEBUG] Scheduled visits:', response.scheduled, 'Total scheduled:', response.total_scheduled_visits)
-        console.log('📊 [CLIENT DEBUG] All stats:', JSON.stringify(response, null, 2))
-      } catch (convexError) {
-        console.log('⚠️ Convex API failed, trying backend API...', convexError);
-        
-        // Fallback: Try backend API
-        try {
-          const apiUrl = '';  // Use relative paths for same-origin requests
-          const backendResponse = await fetch(`${apiUrl}/api/data/visits/statistics`, {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            credentials: 'include' // Include cookies for session
-          });
-          
-          if (backendResponse.ok) {
-            const backendData = await backendResponse.json();
-            response = backendData.statistics;
-            console.log('📊 Backend API statistics response:', response);
-          } else {
-            throw new Error('Backend API failed');
-          }
-        } catch (backendError) {
-          console.log('⚠️ Backend API also failed:', backendError);
-          throw convexError; // Throw original error
-        }
-      }
-      
-      if (response && typeof response === 'object') {
-        // Check if it's the new comprehensive format
-        if ('total_brands' in response) {
-          setStatistics(response)
-          setRetryCount(0)
-          console.log('✅ Comprehensive statistics loaded:', response)
-        } else {
-          // Handle old format or error
-          console.log('⚠️ Received old format, using fallback')
-          setStatistics({
-            total_brands: 0,
-            total_visits_done: 0,
-            total_visits_pending: 0,
-            total_scheduled_visits: 0,
-            total_cancelled_visits: 0,
-            last_month_visits: 0,
-            current_month_scheduled: 0,
-            current_month_completed: 0,
-            current_month_total: 0,
-            current_month_total_visits: 0,
-            mom_pending: 0,
-            monthly_target: 10,
-            current_month_progress: 0,
-            overall_progress: 0
-          })
-        }
+      const userProfileResponse = await api.getUserProfile(userEmail);
+      if (userProfileResponse?.user) {
+        setUserRole(userProfileResponse.user.role || '');
+        console.log('✅ User role loaded:', userProfileResponse.user.role);
       } else {
-        throw new Error('Invalid response format')
+        console.warn('Could not fetch user profile for role detection. Using default role.');
+        setUserRole('agent'); // Default to agent if profile not found
+      }
+      
+      const response = await api.getVisitStatistics(bustCache);
+      
+      console.log('📊 Visit statistics API response:', response);
+      
+      if (response && response.success && response.data) {
+        setStatistics(response.data);
+        setRetryCount(0);
+        console.log('✅ Visit statistics loaded successfully:', response.data);
+      } else {
+        console.error('❌ Invalid response format:', response);
+        throw new Error(response?.error || 'Invalid response format or data missing from API');
       }
     } catch (err: any) {
-      console.error('❌ Error loading visit statistics:', err)
+      console.error('❌ Error loading visit statistics:', err);
       
       if (err.message?.includes('timeout')) {
-        setError('Statistics loading timed out. The system may be processing large amounts of data.')
+        setError('Statistics loading timed out. The system may be processing large amounts of data.');
         if (retryCount < 2) {
-          console.log('⏱️ Retrying statistics load in 3 seconds...')
+          console.log('⏱️ Retrying statistics load in 3 seconds...');
           setTimeout(() => {
-            setRetryCount(prev => prev + 1)
-            loadStatistics()
-          }, 3000)
-          return
+            setRetryCount(prev => prev + 1);
+            loadStatistics();
+          }, 3000);
+          return;
         }
-      } else if (err.code === 'ECONNABORTED') {
-        setError('Connection timeout. Please check your internet connection.')
       } else {
-        setError(`Failed to load statistics: ${err.message}. Please try refreshing the page.`)
+        setError(`Failed to load statistics: ${err.message}. Please try refreshing the page.`);
       }
       
       // Set fallback statistics on error
@@ -171,12 +109,11 @@ export default function VisitStatistics({ userEmail, refreshKey }: VisitStatisti
         monthly_target: 10,
         current_month_progress: 0,
         overall_progress: 0
-      })
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
-
+  };
   useEffect(() => {
     if (userEmail) {
       loadStatistics(true) // Bust cache on mount and when refreshKey changes

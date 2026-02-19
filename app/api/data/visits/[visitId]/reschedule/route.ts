@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authenticateRequest } from '@/lib/api-auth';
 import { visitService } from '@/lib/services';
 
 export async function POST(
@@ -7,10 +8,11 @@ export async function POST(
 ) {
   try {
     const { visitId } = await params;
-    const userEmail = request.headers.get('x-user-email');
-    
-    if (!userEmail) {
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
+    if (!user) {
       return NextResponse.json({
+        success: false,
         error: 'Authentication required'
       }, { status: 401 });
     }
@@ -18,9 +20,9 @@ export async function POST(
     const body = await request.json();
     const { new_scheduled_date, reason, rescheduled_by } = body;
 
-    if (!new_scheduled_date || !reason || !rescheduled_by) {
+    if (!new_scheduled_date || !reason) { // rescheduled_by is now derived internally
       return NextResponse.json({
-        error: 'new_scheduled_date, reason, and rescheduled_by are required'
+        error: 'new_scheduled_date and reason are required'
       }, { status: 400 });
     }
 
@@ -28,8 +30,8 @@ export async function POST(
       visit_id: visitId,
       new_scheduled_date,
       reason,
-      rescheduled_by
-    });
+      // rescheduled_by // Removed, now derived internally from userProfile
+    }, user); // Pass the userProfile here
 
     return NextResponse.json({
       success: true,
@@ -37,11 +39,10 @@ export async function POST(
     });
 
   } catch (error) {
-    console.error('❌ Error rescheduling visit:', error);
+    console.error('[Visit Reschedule] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to reschedule visit',
-      detail: String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

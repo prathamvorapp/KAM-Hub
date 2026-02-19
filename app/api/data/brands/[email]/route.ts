@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authenticateRequest } from '@/lib/api-auth';
 import { BrandsQuerySchema } from '../../../../../lib/models/visits';
 import { masterDataService } from '../../../../../lib/services';
 import { UserRole } from '../../../../../lib/models/user';
@@ -10,16 +11,12 @@ export async function GET(
   try {
     const { email } = await params;
     
-    // Get user info from middleware
-    const currentUserEmail = request.headers.get('x-user-email');
-    const currentUserRole = request.headers.get('x-user-role');
-    const currentUserTeam = request.headers.get('x-user-team');
-    
-    if (!currentUserEmail) {
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
+    if (!user) {
       return NextResponse.json({
         success: false,
-        error: 'Authentication required',
-        detail: 'User not authenticated'
+        error: 'Authentication required'
       }, { status: 401 });
     }
     
@@ -31,33 +28,22 @@ export async function GET(
 
     const queryData = BrandsQuerySchema.parse({ page, limit, search });
 
-    // Check if user can access this email's data
-    // Normalize role comparison to handle both formats
-    const normalizedRole = currentUserRole?.toLowerCase().replace(/[_\s]/g, '');
-    if (currentUserEmail !== email && 
-        normalizedRole !== 'admin' && 
-        normalizedRole !== 'teamlead') {
-      return NextResponse.json({
-        success: false,
-        error: 'Access denied',
-        detail: 'Insufficient permissions to access this data'
-      }, { status: 403 });
-    }
-
+    // Authorization is now handled within masterDataService.getBrandsByAgentEmail,
+    // which ensures the authenticated user (userProfile: user) has permission
+    // to view brands for the requested agentEmail.
     console.log('📦 Getting brands for:', email, 'page:', page, 'limit:', limit, 'search:', search);
-    console.log('🔐 Current user:', currentUserEmail, 'role:', currentUserRole, 'team:', currentUserTeam);
-
-    const brands = await masterDataService.getBrandsByAgentEmail(email);
-
+        console.log('🔐 Current user:', user.email, 'role:', user.role, 'team:', user.team_name);
+        
+        const brands = await masterDataService.getBrandsByAgentEmail(user as any, email);
     // Enhanced response with proper structure
     const response = {
       success: true,
       data: brands,
       message: 'Brands loaded successfully',
       user_context: {
-        email: currentUserEmail,
-        role: currentUserRole,
-        team: currentUserTeam,
+        email: user.email,
+        role: user.role,
+        team: user.team_name,
         requested_email: email
       }
     };
@@ -65,11 +51,10 @@ export async function GET(
     return NextResponse.json(response);
     
   } catch (error) {
-    console.error('❌ Error getting brands:', error);
+    console.error('[Brands GET] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to load brands',
-      detail: String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

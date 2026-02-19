@@ -3,8 +3,8 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
+
 import { api } from '@/lib/api'
-import { convexAPI } from '@/lib/convex-api'
 import DashboardLayout from '@/components/Layout/DashboardLayout'
 import Pagination from '@/components/Pagination'
 import SimpleChurnReasonModal from '@/components/SimpleChurnReasonModal'
@@ -77,7 +77,7 @@ interface PaginationInfo {
 }
 
 function ChurnDataPageContent() {
-  const { user, userProfile, loading: authLoading } = useAuth()
+  const { userProfile, session } = useAuth()
   const [records, setRecords] = useState<ChurnRecord[]>([])
   const [allRecords, setAllRecords] = useState<ChurnRecord[]>([]) // Store all records for filtering
   const [activeFilter, setActiveFilter] = useState<string>('overdue') // Track active filter
@@ -98,7 +98,7 @@ function ChurnDataPageContent() {
   })
   const [completedFollowUpsCount, setCompletedFollowUpsCount] = useState(0)
   const [activeFollowUpsCount, setActiveFollowUpsCount] = useState(0)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false) // Changed from true to false
   const [searchTerm, setSearchTerm] = useState('')
   const [allCategoryStats, setAllCategoryStats] = useState<Categorization | null>(null) // Stats across all categories for search
   const [selectedRecord, setSelectedRecord] = useState<ChurnRecord | null>(null)
@@ -107,6 +107,18 @@ function ChurnDataPageContent() {
   const [showAnalytics, setShowAnalytics] = useState(false) // DISABLED: Keep analytics hidden for now
   const router = useRouter()
   const searchParams = useSearchParams()
+
+  // Safety mechanism: Force clear loading state after 20 seconds
+  useEffect(() => {
+    if (loading) {
+      const safetyTimeout = setTimeout(() => {
+        console.error('⚠️ Safety timeout triggered - forcing loading to false')
+        setLoading(false)
+      }, 20000) // 20 seconds safety net
+      
+      return () => clearTimeout(safetyTimeout)
+    }
+  }, [loading])
 
   // Handle filter change - now passes filter to backend
   const handleFilterChange = (filterType: string) => {
@@ -121,47 +133,47 @@ function ChurnDataPageContent() {
     const trimmedSearch = searchTerm.trim()
     
     // If there's a search term, fetch stats for each category separately
-    if (trimmedSearch !== '' && user && userProfile) {
+    if (trimmedSearch !== '' && userProfile) {
       try {
         console.log('🔍 Fetching stats for search:', trimmedSearch);
         
         // Fetch counts for each category in parallel
         const [newResponse, overdueResponse, followUpsResponse, completedResponse] = await Promise.all([
-          convexAPI.getChurnData({
+          api.getChurnData({
             page: 1,
             limit: 1,
-            email: user.email,
+            email: userProfile.email,
             filter: 'newCount',
             search: trimmedSearch
           }),
-          convexAPI.getChurnData({
+          api.getChurnData({
             page: 1,
             limit: 1,
-            email: user.email,
+            email: userProfile.email,
             filter: 'overdue',
             search: trimmedSearch
           }),
-          convexAPI.getChurnData({
+          api.getChurnData({
             page: 1,
             limit: 1,
-            email: user.email,
+            email: userProfile.email,
             filter: 'followUps',
             search: trimmedSearch
           }),
-          convexAPI.getChurnData({
+          api.getChurnData({
             page: 1,
             limit: 1,
-            email: user.email,
+            email: userProfile.email,
             filter: 'completed',
             search: trimmedSearch
           })
         ]);
         
         const calculatedStats = {
-          newCount: newResponse.data.total || 0,
-          overdue: overdueResponse.data.total || 0,
-          followUps: followUpsResponse.data.total || 0,
-          completed: completedResponse.data.total || 0
+          newCount: newResponse.pagination?.total || 0,
+          overdue: overdueResponse.pagination?.total || 0,
+          followUps: followUpsResponse.pagination?.total || 0,
+          completed: completedResponse.pagination?.total || 0
         };
         
         console.log('📊 Calculated Stats from separate calls:', calculatedStats);
@@ -233,11 +245,15 @@ function ChurnDataPageContent() {
   }
 
   const loadData = async (page: number = 1, searchQuery?: string, filterType: string = 'all') => {
-    if (!user || !userProfile) {
-      console.log('❌ No user or userProfile, cannot load data')
+    console.log('🔄 [loadData] Called with:', { page, searchQuery, filterType, hasUser: !!userProfile, hasUserProfile: !!userProfile })
+    
+    if (!userProfile) {
+      console.log('❌ [loadData] No user or userProfile, cannot load data')
+      setLoading(false) // Clear loading state
       return
     }
 
+    console.log('🔄 [loadData] Setting loading to true')
     setLoading(true)
     
     // Add timeout to prevent infinite loading
@@ -245,7 +261,7 @@ function ChurnDataPageContent() {
       console.error('❌ Loading timeout - forcing completion')
       setLoading(false)
       alert('Loading is taking too long. Please refresh the page or check your connection.')
-    }, 10000) // Reduced to 10 seconds
+    }, 15000) // Increased to 15 seconds for slower connections
     
     try {
       // Use the provided searchQuery if available, otherwise don't search
@@ -254,7 +270,7 @@ function ChurnDataPageContent() {
       const convexParams: any = {
         page, 
         limit: 1000, // Increased to show all records
-        email: user.email,
+        email: userProfile.email,
         filter: filterType // Pass filter to backend
       }
       
@@ -263,10 +279,10 @@ function ChurnDataPageContent() {
         convexParams.search = finalSearchParam.trim()
       }
       
-      console.log('🔄 Loading churn data from Convex for:', user.email, 'with filter:', filterType)
+      console.log('🔄 Loading churn data from Convex for:', userProfile.email, 'with filter:', filterType)
       
       // Load data from Convex instead of Google Sheets API
-      const churnResponse = await convexAPI.getChurnData(convexParams).catch(err => {
+      const churnResponse = await api.getChurnData(convexParams).catch(err => {
         console.error('❌ Convex Churn failed:', err)
         throw err
       })
@@ -282,7 +298,7 @@ function ChurnDataPageContent() {
       // Load completed follow-ups count (calculate from records)
       try {
         // Calculate completed count from current records using centralized helper
-        const completedCount = (churnResponse.data.data || []).filter((record: any) => {
+        const completedCount = (churnResponse.data || []).filter((record: any) => {
           return isCompletedReason(record.churn_reason);
         }).length;
         
@@ -295,7 +311,7 @@ function ChurnDataPageContent() {
       // Load active follow-ups count (calculate from records since API might not be updated)
       try {
         // Calculate active count from current records using centralized helpers
-        const activeCount = (churnResponse.data.data || []).filter((record: any) => {
+        const activeCount = (churnResponse.data || []).filter((record: any) => {
           const churnReason = record.churn_reason || '';
           
           // If it's a completed reason, it's not active
@@ -335,25 +351,23 @@ function ChurnDataPageContent() {
       }
       
       // Use backend categorization directly - don't recalculate on frontend
-      console.log('📊 Using backend categorization:', churnResponse.data.categorization);
+      console.log('📊 Using backend categorization:', churnResponse.categorization);
       
       // Backend now returns pre-filtered data, so just use it directly
-      setRecords(churnResponse.data.data || [])
-      setAllRecords(churnResponse.data.data || []) // Store all records for filtering
+      setRecords(churnResponse.data || [])
+      setAllRecords(churnResponse.data || []) // Store all records for filtering
       
-      // The Convex response is wrapped in { data: result }, so we need to access the actual result
-      const actualResult = churnResponse.data;
-      
+      // The response structure is { success, data, pagination, categorization }
       setPagination({
-        page: actualResult.page || 1,
-        limit: actualResult.limit || 1000, // Increased to show all records
-        total: actualResult.total || 0,
-        total_pages: actualResult.total_pages || 0,
-        has_next: actualResult.has_next || false,
-        has_prev: actualResult.has_prev || false,
-        missing_churn_reasons: actualResult.missing_churn_reasons || 0,
+        page: churnResponse.pagination?.page || 1,
+        limit: churnResponse.pagination?.limit || 1000,
+        total: churnResponse.pagination?.total || 0,
+        total_pages: churnResponse.pagination?.total_pages || 0,
+        has_next: churnResponse.pagination?.has_next || false,
+        has_prev: churnResponse.pagination?.has_prev || false,
+        missing_churn_reasons: churnResponse.missing_churn_reasons || 0,
         // Use backend categorization directly
-        categorization: actualResult.categorization || {
+        categorization: churnResponse.categorization || {
           newCount: 0,
           overdue: 0,
           followUps: 0,
@@ -368,29 +382,42 @@ function ChurnDataPageContent() {
     } finally {
       clearTimeout(timeoutId) // Clear the timeout
       console.log('✅ Setting loading to false')
-      setLoading(false)
+      // Use setTimeout to ensure state update happens after any pending updates
+      setTimeout(() => {
+        setLoading(false)
+      }, 0)
     }
   }
 
   useEffect(() => {
+    console.log('🔄 [Churn Page] useEffect triggered', {
+      hasUser: !!userProfile, // Corrected check
+      hasUserProfile: !!userProfile,
+      userEmail: userProfile?.email, // Corrected access
+      activeFilter
+    })
+    
     const checkAuth = async () => {
       try {
-        console.log('🔍 Checking authentication...')
+        console.log('🔍 [Churn Page] Checking authentication...')
         
-        if (authLoading) {
-          console.log('⏳ Auth still loading...')
-          return
-        }
-
-        if (!user || !userProfile) {
-          console.log('❌ No user found, redirecting to login')
+        // No authLoading state anymore, rely on userProfile presence
+        if (!userProfile) {
+          console.log('❌ [Churn Page] No user profile found, redirecting to login')
           router.push('/login')
           return
         }
 
-        console.log('✅ User found:', user.email)
+        console.log('✅ [Churn Page] User profile found:', userProfile.email, 'Starting data load...')
         
-        await loadData(1, undefined, activeFilter)
+        // Load data and ensure loading state is cleared even on error
+        try {
+          await loadData(1, undefined, activeFilter)
+          console.log('✅ [Churn Page] Data load completed')
+        } catch (error) {
+          console.error('❌ [Churn Page] Failed to load data:', error)
+          setLoading(false) // Ensure loading is cleared
+        }
         
         // Check if there's a RID parameter to open specific modal
         const ridParam = searchParams.get('rid')
@@ -406,13 +433,13 @@ function ChurnDataPageContent() {
           }
         }
       } catch (error) {
-        console.error('❌ Auth check failed:', error)
+        console.error('❌ [Churn Page] Auth check failed:', error)
         setLoading(false)
       }
     }
 
     checkAuth()
-  }, [user, userProfile, authLoading, router])
+  }, [userProfile, router])
 
   // Handle RID parameter from notifications - simplified
   useEffect(() => {
@@ -453,11 +480,11 @@ function ChurnDataPageContent() {
   }
 
   const handleChurnReasonSelect = async (reason: string, remarks: string, mailSentConfirmation?: boolean) => {
-    if (!selectedRecord || !user) return
+    if (!selectedRecord || !userProfile) return
 
     try {
       // Update via Convex instead of API
-      await convexAPI.updateChurnReason(selectedRecord.rid, reason, remarks, mailSentConfirmation, user.email)
+      await api.updateChurnReason(selectedRecord.rid, reason, remarks, mailSentConfirmation, userProfile.email)
       
       // Show success message (you can add a toast notification here)
       console.log(`✅ Updated churn reason for RID ${selectedRecord.rid} via Convex`)
@@ -592,16 +619,7 @@ function ChurnDataPageContent() {
                       userProfile?.team_name?.toLowerCase() === 'bo' ||
                       userProfile?.team_name?.toLowerCase() === 'bo team'
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-          <p className="mt-4 text-secondary-600">Checking authentication...</p>
-        </div>
-      </div>
-    )
-  }
+
 
   if (loading) {
     return (

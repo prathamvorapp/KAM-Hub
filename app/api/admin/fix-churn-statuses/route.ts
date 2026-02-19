@@ -8,36 +8,41 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase-client';
+import { authenticateRequest, hasRole, unauthorizedResponse } from '@/lib/api-auth';
+import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { isCompletedReason, isNoAgentResponse } from '@/lib/constants/churnReasons';
 
 export async function POST(request: NextRequest) {
   try {
-    // Get user info from middleware
-    const userEmail = request.headers.get('x-user-email');
-    const userRole = request.headers.get('x-user-role');
-    
-    // Only allow admins to run this
-    if (userRole?.toLowerCase() !== 'admin') {
+    // Authenticate
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
+    if (!user) {
       return NextResponse.json({
-        error: 'Unauthorized - Admin access required'
-      }, { status: 403 });
+        success: false,
+        error: 'Authentication required'
+      }, { status: 401 });
+    }
+
+    // Only allow admins to run this
+    if (!hasRole(user, ['admin'])) {
+      return unauthorizedResponse('Admin access required');
     }
 
     console.log('🔧 Starting migration to fix all churn record statuses...');
-    console.log(`👤 Initiated by: ${userEmail}`);
+    console.log(`👤 Initiated by: ${user.email}`);
     
     // Get ALL churn records
-    const { data: allRecords, error } = await getSupabaseAdmin()
+    const { data: allRecords, error: dbError } = await getSupabaseAdmin()
       .from('churn_records')
       .select('*');
     
-    if (error) {
-      console.error('❌ Error fetching records:', error);
+    if (dbError) {
+      console.error('❌ Error fetching records:', dbError);
       return NextResponse.json({
         success: false,
         error: 'Failed to fetch records',
-        detail: error.message
+        detail: dbError.message
       }, { status: 500 });
     }
     
@@ -153,7 +158,7 @@ export async function POST(request: NextRequest) {
       fixed: fixedCount,
       already_correct: alreadyCorrectCount,
       errors: errors,
-      initiated_by: userEmail,
+      initiated_by: user.email,
       timestamp: new Date().toISOString()
     };
     

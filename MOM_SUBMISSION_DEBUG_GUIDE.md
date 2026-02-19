@@ -28,7 +28,7 @@
 3. **API Route**
    - Location: `app/api/data/visits/[visitId]/mom/route.ts`
    - Receives the request
-   - Extracts user email from headers (set by middleware)
+   - Authenticates user via `requireAuth()`
    - Calls: `visitService.submitMoM()`
 
 4. **Service Layer**

@@ -21,7 +21,7 @@ export function verifyCSRFToken(token: string): boolean {
 }
 
 /**
- * Middleware to check CSRF token for state-changing operations
+ * Check CSRF token for state-changing operations
  */
 export function checkCSRF(request: NextRequest): NextResponse | null {
   // Skip CSRF check for GET, HEAD, OPTIONS

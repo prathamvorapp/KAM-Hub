@@ -11,8 +11,10 @@ export const UserRoleSchema = z.nativeEnum(UserRole);
 export const UserProfileSchema = z.object({
   email: z.string().email(),
   full_name: z.string(),
+  fullName: z.string().optional(), // Add for compatibility
   role: UserRoleSchema,
   team_name: z.string().optional(),
+  teamName: z.string().optional(), // Add for compatibility
   contact_number: z.string().optional(),
   employee_code: z.string().optional(),
   permissions: z.array(z.string()).default([]),

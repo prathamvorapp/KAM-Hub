@@ -1,76 +1,75 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { visitService } from '@/lib/services';
+import { authenticateRequest } from '@/lib/api-auth';
+import { visitService, userService } from '@/lib/services';
 import NodeCache from 'node-cache';
+import { UserProfile } from '@/lib/models/user';
 
 const statisticsCache = new NodeCache({ stdTTL: 180 });
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('🔍 [VISITS STATS] Headers:', {
-      'x-user-email': request.headers.get('x-user-email'),
-      'x-user-role': request.headers.get('x-user-role'),
-      'cookie': request.headers.get('cookie')
-    });
+    const isDev = process.env.NODE_ENV === 'development';
     
-    const loggedInUserEmail = request.headers.get('x-user-email');
-    const userRole = request.headers.get('x-user-role');
-    
-    if (!loggedInUserEmail) {
-      console.log('❌ [VISITS STATS] No user email found in headers');
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
+    if (!user) {
       return NextResponse.json({
+        success: false,
         error: 'Authentication required'
       }, { status: 401 });
     }
 
-    // Check if a specific email is requested via query parameter
     const { searchParams } = new URL(request.url);
     const requestedEmail = searchParams.get('email');
     const bustCache = searchParams.get('bustCache') === 'true';
     
-    // Determine which email to use for statistics
-    let targetEmail = loggedInUserEmail;
-    
-    if (requestedEmail && requestedEmail !== loggedInUserEmail) {
-      // Normalize role for comparison
-      const normalizedRole = userRole?.toLowerCase().replace(/[_\s]/g, '');
+    let statsUserProfile: UserProfile = user;
+
+    if (requestedEmail && requestedEmail !== user.email) {
+      const normalizedRole = user.role.toLowerCase().replace(/\s+/g, '_');
+      if (isDev) console.log(`🔍 [VISITS STATS] Role check: user.role="${user.role}", normalized="${normalizedRole}"`);
       
-      // Only Team Leads and Admins can view other users' statistics
-      if (normalizedRole !== 'teamlead' && normalizedRole !== 'admin') {
-        console.log(`❌ [VISITS STATS] User ${loggedInUserEmail} (${userRole}) not authorized to view stats for ${requestedEmail}`);
+      if (normalizedRole !== 'team_lead' && normalizedRole !== 'admin') {
+        if (isDev) console.log(`❌ [VISITS STATS] User ${user.email} (${user.role}) not authorized to view stats for ${requestedEmail}`);
         return NextResponse.json({
+          success: false,
           error: 'Access denied - insufficient permissions'
         }, { status: 403 });
       }
       
-      targetEmail = requestedEmail;
-      console.log(`📊 [VISITS STATS] Team Lead/Admin ${loggedInUserEmail} requesting stats for: ${targetEmail}`);
+      if (isDev) console.log(`✅ [VISITS STATS] User ${user.email} (${user.role}) authorized to view stats for ${requestedEmail}`);
+      
+      const targetUserProfile = await userService.getUserProfileByEmail(requestedEmail);
+      if (!targetUserProfile) {
+        return NextResponse.json({
+          success: false,
+          error: 'Target user profile not found'
+        }, { status: 404 });
+      }
+      statsUserProfile = targetUserProfile;
     }
 
-    const cacheKey = `visit_stats_${targetEmail}`;
+    const cacheKey = `visit_stats_${statsUserProfile.email}`;
     
-    // Check cache only if not busting
     if (!bustCache) {
       const cachedData = statisticsCache.get(cacheKey);
-      
       if (cachedData) {
-        console.log(`📈 Visit statistics served from cache for: ${targetEmail}`);
         return NextResponse.json(cachedData);
       }
     } else {
-      console.log(`🔄 Cache busted for: ${targetEmail}`);
       statisticsCache.del(cacheKey);
     }
 
-    console.log(`📊 Getting visit statistics for: ${targetEmail}`);
-    console.log(`📊 [VISITS STATS] Fetching from Supabase tables: user_profiles, master_data, visits`);
+    let statistics: any;
+    const normalizedStatsRole = statsUserProfile.role.toLowerCase().replace(/\s+/g, '_');
 
-    const statistics = await visitService.getVisitStatistics(targetEmail);
-
-    console.log(`✅ [VISITS STATS] Successfully fetched statistics:`, {
-      total_brands: statistics.total_brands,
-      visit_done: statistics.visit_done,
-      pending: statistics.pending
-    });
+    if (normalizedStatsRole === 'agent') {
+      statistics = await visitService._getIndividualAgentStatistics(statsUserProfile);
+    } else if (normalizedStatsRole === 'team_lead' || normalizedStatsRole === 'teamlead' || normalizedStatsRole === 'admin') {
+      statistics = await visitService.getComprehensiveTeamVisitStatistics(statsUserProfile);
+    } else {
+      throw new Error(`Unsupported role for statistics: ${statsUserProfile.role}`);
+    }
 
     const response = {
       success: true,
@@ -82,19 +81,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(response);
 
   } catch (error: any) {
-    console.error('❌ [VISITS STATS] Error getting visit statistics:', error);
-    console.error('❌ [VISITS STATS] Error details:', {
-      message: error.message,
-      code: error.code,
-      details: error.details,
-      hint: error.hint,
-      stack: error.stack
-    });
+    console.error('[Visit Statistics] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to load visit statistics',
-      detail: error.message || String(error),
-      errorCode: error.code
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

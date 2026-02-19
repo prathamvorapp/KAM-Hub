@@ -1,11 +1,21 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Performance optimizations
+  reactStrictMode: true,
+  
+  // Disable experimental features that might cause compilation issues
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '2mb',
+    },
+  },
+  
   // Configure for production with strict CSP
   async headers() {
     const isDevelopment = process.env.NODE_ENV === 'development';
     
     // Development CSP - more permissive for hot reload and debugging
-    const devCSP = "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https: http:; connect-src 'self' https: http: wss: ws: https://*.convex.cloud wss://*.convex.cloud http://localhost:* http://127.0.0.1:* http://192.168.4.210:*; img-src 'self' data: blob: https:; media-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval';";
+    const devCSP = "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https: http:; connect-src 'self' https: http: wss: ws: http://localhost:* http://127.0.0.1:* http://192.168.4.210:*; img-src 'self' data: blob: https:; media-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval';";
     
     // Production CSP - strict security
     const prodCSP = [
@@ -14,7 +24,7 @@ const nextConfig = {
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
-      "connect-src 'self' https://*.convex.cloud wss://*.convex.cloud https://*.vercel.app",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.vercel.app",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",

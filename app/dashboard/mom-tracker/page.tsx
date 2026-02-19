@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import DashboardLayout from '@/components/Layout/DashboardLayout'
 import MOMOpenPointsTable from '@/components/MOMOpenPointsTable'
-import { convexAPI } from '@/lib/convex-api'
+import { api } from '@/lib/api'
 import { Ticket, MessageSquare, Clock, CheckCircle, Calendar, User, Building, Filter, ArrowLeft, Eye, AlertTriangle, Download } from 'lucide-react'
 
 interface OpenPoint {
@@ -47,7 +47,7 @@ function TicketsPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const visitId = searchParams.get('visit_id')
-  const { user, userProfile, loading: authLoading } = useAuth()
+  const { userProfile, session } = useAuth() // Removed 'user' and 'loading: authLoading'
   const [momRecords, setMomRecords] = useState<MOMRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>('')
@@ -58,27 +58,26 @@ function TicketsPageContent() {
 
   // Redirect to login if not authenticated
   useEffect(() => {
-    if (!authLoading && !user) {
+    if (!userProfile) { // Changed from '!authLoading && !user'
       router.push('/login')
     }
-  }, [user, authLoading, router])
+  }, [userProfile, router]) // Dependency array updated
 
   // Load MOM records
   const loadMOMRecords = async () => {
-    if (!user?.email) return
+    if (!userProfile?.email) return // Changed from !user?.email
     
     try {
       setLoading(true)
       
-      console.log('🔍 Loading MOM records for user:', user.email);
+      console.log('🔍 Loading MOM records for user:', userProfile.email); // Changed from user.email
       console.log('🎯 Looking for visit_id:', visitId);
       
       // If we have a specific visit_id, try multiple search strategies
       if (visitId) {
         // Strategy 1: Search by visit_id directly
         console.log('📋 Strategy 1: Searching by visit_id directly');
-        let response = await convexAPI.getMOM({
-          email: user.email,
+        let response = await api.getMOM({
           search: visitId,
         });
         
@@ -88,8 +87,7 @@ function TicketsPageContent() {
         // Strategy 2: If no results, get all MOMs and filter client-side
         if (records.length === 0) {
           console.log('📋 Strategy 2: Getting all MOMs and filtering client-side');
-          response = await convexAPI.getMOM({
-            email: user.email,
+          response = await api.getMOM({
           });
           
           const allRecords = response.data?.data || [];
@@ -113,8 +111,7 @@ function TicketsPageContent() {
         if (records.length === 0) {
           console.log('📋 Strategy 3: Loading visit details for context');
           try {
-            const visitResponse = await convexAPI.getVisits({ 
-              email: user.email, 
+            const visitResponse = await api.getVisits({ 
               search: visitId 
             });
             const visits = visitResponse.data?.page || [];
@@ -127,8 +124,7 @@ function TicketsPageContent() {
               // Try searching by brand name as fallback
               if (visit.brand_name) {
                 console.log('📋 Strategy 3b: Searching by brand name:', visit.brand_name);
-                const brandResponse = await convexAPI.getMOM({
-                  email: user.email,
+                const brandResponse = await api.getMOM({
                   search: visit.brand_name,
                 });
                 
@@ -171,8 +167,7 @@ function TicketsPageContent() {
       } else {
         // Normal search without visit_id
         const searchQuery = searchTerm || undefined;
-        const response = await convexAPI.getMOM({
-          email: user.email,
+        const response = await api.getMOM({
           search: searchQuery,
         });
         
@@ -208,8 +203,7 @@ function TicketsPageContent() {
       console.log('🔍 Loading visit details for:', visitId);
       
       // Try multiple strategies to find the visit
-      const response = await convexAPI.getVisits({ 
-        email: user?.email || '', 
+      const response = await api.getVisits({ 
         search: visitId 
       });
       
@@ -242,15 +236,15 @@ function TicketsPageContent() {
   }
 
   useEffect(() => {
-    if (user?.email) {
+    if (userProfile?.email) { // Changed from user?.email
       loadMOMRecords()
     }
-  }, [user?.email, statusFilter, approvalStatusFilter, searchTerm, visitId])
+  }, [userProfile?.email, statusFilter, approvalStatusFilter, searchTerm, visitId]) // Dependency array updated
 
   // Handle closing an open point
   const handleCloseOpenPoint = async (momId: string, pointIndex: number) => {
     try {
-      await convexAPI.updateMOMOpenPointStatus(momId, pointIndex, 'Closed')
+      await api.updateMOMOpenPointStatus(momId, pointIndex, 'Closed')
       await loadMOMRecords() // Refresh the data
     } catch (error) {
       console.error('Failed to close open point:', error)
@@ -261,7 +255,7 @@ function TicketsPageContent() {
   // Handle reopening an open point
   const handleReopenOpenPoint = async (momId: string, pointIndex: number) => {
     try {
-      await convexAPI.updateMOMOpenPointStatus(momId, pointIndex, 'Open')
+      await api.updateMOMOpenPointStatus(momId, pointIndex, 'Open')
       await loadMOMRecords() // Refresh the data
     } catch (error) {
       console.error('Failed to reopen open point:', error)
@@ -377,16 +371,8 @@ function TicketsPageContent() {
     URL.revokeObjectURL(url)
   }
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!user || !userProfile) {
-    return null // Will redirect to login
+  if (!userProfile) { // Removed if (authLoading) block and changed from '!user || !userProfile'
+    return null
   }
 
   const getStatusBadge = (status: string) => {
@@ -563,11 +549,13 @@ function TicketsPageContent() {
           </div>
         ) : (
           <div className="space-y-4">
-            {momRecords.map((mom) => {
+            {momRecords.map((mom, momIndex) => {
               const isSelectedMOM = visitId && mom.visit_id === visitId
+              // Create a safe key that handles undefined _id
+              const safeKey = mom._id || `mom-${momIndex}-${mom.ticket_id || 'no-ticket'}-${mom.created_at || Date.now()}`;
               return (
                 <div 
-                  key={mom._id} 
+                  key={safeKey}
                   className={`backdrop-blur-md rounded-xl border p-6 ${
                     isSelectedMOM 
                       ? 'bg-blue-500/20 border-blue-400/50 ring-2 ring-blue-400/30' 
@@ -673,8 +661,11 @@ function TicketsPageContent() {
                         </span>
                       </h4>
                       <div className="space-y-3">
-                        {mom.open_points.map((point, index) => (
-                          <div key={index} className="bg-white/5 rounded-lg p-4 border border-white/10">
+                        {mom.open_points.map((point, index) => {
+                          // Create a safe, unique key that handles undefined/null values
+                          const safeKey = `${mom._id}-point-${index}-${point.topic || 'no-topic'}-${point.owner_name || 'no-owner'}-${point.status || 'no-status'}`;
+                          return (
+                          <div key={safeKey} className="bg-white/5 rounded-lg p-4 border border-white/10">
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-2">
@@ -719,7 +710,8 @@ function TicketsPageContent() {
                               </div>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}

@@ -183,11 +183,10 @@ Tracks customer health assessments.
 ## Authentication Flow
 
 1. User logs in via `/api/auth/login`
-2. Login sets `user-session` cookie with user data
-3. Middleware intercepts API requests
-4. Middleware extracts user data from cookie
-5. Middleware injects headers: `x-user-email`, `x-user-role`, `x-user-team`
-6. API routes use headers to fetch user-specific data from Supabase
+2. Login creates Supabase session (HTTP-only cookies)
+3. API requests automatically include session cookies
+4. API routes validate session using `requireAuth()`
+5. API routes fetch user-specific data from Supabase with role-based filtering
 
 ## Environment Variables Required
 

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUser } from '../../../../../../lib/auth-helpers';
+import { authenticateRequest } from '@/lib/api-auth';
 import { visitService } from '@/lib/services';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ visitId: string }> }) {
   try {
     const { visitId } = await params;
-    const user = await getAuthenticatedUser(request);
-    
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
     if (!user) {
       return NextResponse.json({
         success: false,
@@ -18,8 +18,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const result = await visitService.resubmitMoM({
       visit_id: visitId,
-      agent_email: user.email
-    });
+      // agent_email: user.email // Removed, now derived from userProfile
+    }, user); // Pass the userProfile here
 
     return NextResponse.json({
       success: true,
@@ -27,11 +27,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
 
   } catch (error) {
-    console.error('❌ Error resubmitting MOM:', error);
+    console.error('[Visit Resubmit] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to resubmit MOM',
-      detail: String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

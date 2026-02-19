@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authenticateRequest } from '@/lib/api-auth';
 import { visitService } from '@/lib/services';
 
 export async function PATCH(
@@ -7,10 +8,11 @@ export async function PATCH(
 ) {
   try {
     const { visitId } = await params;
-    const userEmail = request.headers.get('x-user-email');
-    
-    if (!userEmail) {
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
+    if (!user) {
       return NextResponse.json({
+        success: false,
         error: 'Authentication required'
       }, { status: 401 });
     }
@@ -28,7 +30,7 @@ export async function PATCH(
       visit_id: visitId,
       mom_shared,
       mom_shared_date: new Date().toISOString()
-    });
+    }, user);
 
     return NextResponse.json({
       success: true,
@@ -36,11 +38,10 @@ export async function PATCH(
     });
 
   } catch (error) {
-    console.error('❌ Error updating MOM status:', error);
+    console.error('[Visit MOM Status] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to update MOM status',
-      detail: String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

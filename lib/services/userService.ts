@@ -1,93 +1,20 @@
 import { UserProfile, UserRole } from '../models/user';
+import { createServiceRoleClient } from '../supabase-server';
 
 export class UserService {
   private enabled: boolean;
 
   constructor() {
-    // Service is always enabled but uses Supabase instead of Convex
+    // Service is always enabled but uses Supabase Auth
     this.enabled = true;
   }
 
-  async authenticateUser(email: string, password: string): Promise<{ success: boolean; user?: UserProfile; error?: string }> {
-    try {
-      console.log(`🔍 [AUTH] Authenticating user: ${email}`);
 
-      // Use Supabase SERVICE ROLE key to bypass RLS for authentication
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-        process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-      );
-
-      console.log(`🔍 [AUTH] Querying database for: ${email}`);
-
-      // Query user_profiles table
-      const { data: profile, error } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('email', email)
-        .eq('is_active', true)
-        .single();
-
-      if (error) {
-        console.log(`❌ [AUTH] Database error:`, error);
-        return { success: false, error: 'Invalid email or password' };
-      }
-
-      if (!profile) {
-        console.log(`❌ [AUTH] User not found or inactive: ${email}`);
-        return { success: false, error: 'Invalid email or password' };
-      }
-
-      console.log(`✅ [AUTH] User found: ${email} (${profile.role})`);
-      console.log(`🔍 [AUTH] Has password: ${!!profile.password}`);
-
-      // Verify password using bcrypt
-      const bcrypt = await import('bcryptjs');
-      // Use 'password' column (password_hash column doesn't exist in schema)
-      const passwordHash = profile.password;
-      
-      if (!passwordHash) {
-        console.log(`❌ [AUTH] No password set for user: ${email}`);
-        return { success: false, error: 'Invalid email or password' };
-      }
-      
-      console.log(`🔍 [AUTH] Verifying password for: ${email}`);
-      console.log(`🔍 [AUTH] Password hash starts with: ${passwordHash.substring(0, 7)}`);
-      
-      const isValidPassword = await bcrypt.compare(password, passwordHash);
-
-      console.log(`🔍 [AUTH] Password valid: ${isValidPassword}`);
-
-      if (!isValidPassword) {
-        console.log(`❌ [AUTH] Invalid password for: ${email}`);
-        return { success: false, error: 'Invalid email or password' };
-      }
-
-      console.log(`✅ [AUTH] Authentication successful for: ${email}`);
-      
-      // Return user profile without password
-      const { password: _, ...userProfile } = profile;
-      return { 
-        success: true, 
-        user: userProfile as UserProfile 
-      };
-
-    } catch (error) {
-      console.log(`❌ [AUTH] Authentication error:`, error);
-      return { success: false, error: 'Authentication failed' };
-    }
-  }
 
   async getUserProfileByEmail(email: string): Promise<UserProfile | null> {
     try {
-      console.log(`🔍 Getting user profile for email: ${email}`);
 
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-        process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-      );
+      const supabase = createServiceRoleClient();
 
       const { data: profile, error } = await supabase
         .from('user_profiles')
@@ -96,64 +23,79 @@ export class UserService {
         .single();
 
       if (error || !profile) {
-        console.log(`❌ No profile found for email: ${email}`);
         return null;
       }
-
-      console.log(`✅ Profile found for: ${email}`);
       
-      // Remove password from response
-      const { password, ...userProfile } = profile;
-      return userProfile as UserProfile;
+      // Type assertion for profile
+      return profile as UserProfile;
 
     } catch (error) {
-      console.log(`❌ Error getting user profile: ${error}`);
+      return null;
+    }
+  }
+
+  async getUserProfileByAuthId(authId: string): Promise<UserProfile | null> {
+    try {
+
+      const supabase = createServiceRoleClient();
+
+      const { data: profile, error } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('auth_id', authId)
+        .single();
+
+      if (error || !profile) {
+        return null;
+      }
+      
+      // Type assertion for profile
+      return profile as UserProfile;
+
+    } catch (error) {
       return null;
     }
   }
 
   async setUserPassword(email: string, password: string): Promise<{ success: boolean; error?: string }> {
     try {
-      console.log(`🔍 Setting password for user: ${email}`);
 
-      const bcrypt = await import('bcryptjs');
-      const passwordHash = await bcrypt.hash(password, 10);
+      const supabase = createServiceRoleClient();
 
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-        process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-      );
-
-      // Update password column
-      const { error } = await supabase
+      // Get user profile to find auth_id
+      const { data: profile } = await supabase
         .from('user_profiles')
-        .update({ password: passwordHash })
-        .eq('email', email);
+        .select('auth_id')
+        .eq('email', email)
+        .single();
 
-      if (error) {
-        console.log(`❌ Error setting password: ${error.message}`);
-        return { success: false, error: error.message };
+      // Type assertion for profile
+      const userProfile = profile as { auth_id: string } | null;
+
+      if (!userProfile?.auth_id) {
+        return { success: false, error: 'User not found or not migrated to Supabase Auth' };
       }
 
-      console.log(`✅ Password set successfully for: ${email}`);
+      // Update password in Supabase Auth
+      const { error } = await supabase.auth.admin.updateUserById(
+        userProfile.auth_id,
+        { password: password }
+      );
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
       return { success: true };
 
     } catch (error) {
-      console.log(`❌ Error setting password: ${error}`);
       return { success: false, error: String(error) };
     }
   }
 
   async getTeamMembers(teamName: string): Promise<UserProfile[]> {
     try {
-      console.log(`👥 Getting team members for team: ${teamName}`);
 
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-        process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-      );
+      const supabase = createServiceRoleClient();
 
       const { data: members, error } = await supabase
         .from('user_profiles')
@@ -162,27 +104,21 @@ export class UserService {
         .eq('is_active', true);
 
       if (error) {
-        console.log(`❌ Error getting team members: ${error.message}`);
         return [];
       }
 
-      // Remove passwords
-      const profiles = (members || []).map(({ password, ...profile }) => profile as UserProfile);
+      // Type assertion for profiles
+      const profiles = (members || []).map(member => member as UserProfile);
       return profiles;
 
     } catch (error) {
-      console.log(`❌ Error getting team members: ${error}`);
       return [];
     }
   }
 
   async getAllActiveAgents(): Promise<UserProfile[]> {
     try {
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-        process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-      );
+      const supabase = createServiceRoleClient();
 
       const { data: agents, error } = await supabase
         .from('user_profiles')
@@ -191,16 +127,14 @@ export class UserService {
         .in('role', ['Agent', 'Team Lead']);
 
       if (error) {
-        console.error('Error getting all active agents:', error.message);
         return [];
       }
 
-      // Remove passwords
-      const profiles = (agents || []).map(({ password, ...profile }) => profile as UserProfile);
+      // Type assertion for profiles
+      const profiles = (agents || []).map(agent => agent as UserProfile);
       return profiles;
 
     } catch (error) {
-      console.error('Error getting all active agents:', error);
       return [];
     }
   }

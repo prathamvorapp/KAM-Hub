@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authenticateRequest } from '@/lib/api-auth';
 import { visitService } from '@/lib/services';
 import NodeCache from 'node-cache';
 
@@ -6,34 +7,35 @@ const teamStatsCache = new NodeCache({ stdTTL: 300 });
 
 async function handleRequest(request: NextRequest) {
   try {
-    const userEmail = request.headers.get('x-user-email');
-    const userRole = request.headers.get('x-user-role');
-    
-    if (!userEmail) {
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
+    if (!user) {
       return NextResponse.json({
+        success: false,
         error: 'Authentication required'
       }, { status: 401 });
     }
 
-    // Normalize role comparison to handle both formats
-    const normalizedRole = userRole?.toLowerCase().replace(/[_\s]/g, '');
-    if (normalizedRole !== 'teamlead' && normalizedRole !== 'admin') {
+    // Check if user is Team Lead or Admin (case-insensitive)
+    const normalizedRole = user.role.toLowerCase().replace(/\s+/g, '_');
+    if (normalizedRole !== 'team_lead' && normalizedRole !== 'admin') {
       return NextResponse.json({
+        success: false,
         error: 'Access denied - Team Lead or Admin only'
       }, { status: 403 });
     }
 
-    const cacheKey = `team_visit_stats_${userEmail}`;
+    const cacheKey = `team_visit_stats_${user.email}_${user.role}`;
     const cachedData = teamStatsCache.get(cacheKey);
     
     if (cachedData) {
-      console.log(`📈 Team visit statistics served from cache`);
+      console.log(`📈 Team visit statistics served from cache for ${user.role}`);
       return NextResponse.json(cachedData);
     }
 
-    console.log(`📊 Getting team visit statistics for: ${userEmail}`);
+    console.log(`📊 Getting team visit statistics for: ${user.email} (${user.role})`);
 
-    const statistics = await visitService.getVisitStatistics(userEmail);
+    const statistics = await visitService.getComprehensiveTeamVisitStatistics(user);
 
     const response = {
       success: true,
@@ -45,11 +47,10 @@ async function handleRequest(request: NextRequest) {
     return NextResponse.json(response);
 
   } catch (error) {
-    console.error('❌ Error getting team visit statistics:', error);
+    console.error('[Team Visit Statistics] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to load statistics',
-      detail: String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

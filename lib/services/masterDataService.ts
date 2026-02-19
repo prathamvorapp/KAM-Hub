@@ -2,7 +2,7 @@
  * Master Data Service - Supabase Implementation
  */
 
-import { supabase, getSupabaseAdmin } from '../supabase-client';
+import { supabase, getSupabaseAdmin } from '../supabase-server';
 
 // Type definitions
 interface UserProfile {
@@ -14,57 +14,67 @@ interface UserProfile {
 }
 
 interface MasterData {
-  brand_name: string;
+  _id: string; // Added _id for consistency
+  brandName: string;
   kam_name: string;
   zone: string;
   brand_email_id?: string;
   kam_email_id: string;
+  brand_state?: string; // Added for statistics
+  outlet_counts?: number; // Added for statistics
   [key: string]: any;
 }
 
 export const masterDataService = {
   // Get all master data with role-based filtering
   async getMasterData(params: {
-    email?: string;
+    userProfile: UserProfile; // Changed from email?: string
     search?: string;
     page?: number;
     limit?: number;
   }) {
-    const { email, search, page = 1, limit = 100 } = params;
+    const { userProfile, search, page = 1, limit = 999999 } = params;
     
     let query = getSupabaseAdmin().from('master_data').select('*', { count: 'exact' });
     
-    if (email) {
-      const { data: userProfile } = await getSupabaseAdmin()
-        .from('user_profiles')
-        .select('*')
-        .eq('email', email)
-        .single() as { data: UserProfile | null; error: any };
-      
-      console.log(`🔍 Master Data - User Profile for ${email}:`, userProfile);
-      
-      if (userProfile) {
-        if (userProfile.role === 'Agent' || userProfile.role === 'agent') {
-          query = query.eq('kam_email_id', email);
-          console.log(`👤 Agent filter - showing brands for email: ${email}`);
-        } else if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
-          if (userProfile.team_name) {
-            const { data: teamMembers } = await getSupabaseAdmin()
-              .from('user_profiles')
-              .select('email')
-              .eq('team_name', userProfile.team_name)
-              .in('role', ['agent', 'Agent']) as { data: Array<{ email: string }> | null; error: any };
-            
-            const agentEmails = teamMembers?.map(m => m.email) || [];
-            console.log(`👥 Team Lead filter - showing brands for team ${userProfile.team_name}:`, agentEmails);
-            if (agentEmails.length > 0) {
-              query = query.in('kam_email_id', agentEmails);
-            }
-          }
-        } else if (userProfile.role === 'Admin' || userProfile.role === 'admin') {
-          console.log(`👑 Admin - showing all brands`);
+    if (!userProfile) { // Ensure user profile is provided
+      console.error(`❌ No user profile provided to getMasterData. Denying access.`);
+      return { data: [], total: 0, page: 0, limit: 0, total_pages: 0 };
+    }
+
+    console.log(`🔍 Master Data - User Profile for ${userProfile.email}:`, userProfile);
+    
+    const normalizedRole = userProfile.role?.toLowerCase().replace(/\s+/g, '');
+    
+    if (normalizedRole === 'agent') {
+      query = query.eq('kam_email_id', userProfile.email); // Filter by agent's email
+      console.log(`👤 Agent filter - showing brands for email: ${userProfile.email}`);
+    } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
+      if (userProfile.team_name) {
+        const { data: teamMembers } = await getSupabaseAdmin()
+          .from('user_profiles')
+          .select('email')
+          .eq('team_name', userProfile.team_name)
+          .in('role', ['agent', 'Agent']) as { data: Array<{ email: string }> | null; error: any };
+        
+        const agentEmails = teamMembers?.map(m => m.email) || [];
+        console.log(`👥 Team Lead filter - showing brands for team ${userProfile.team_name}:`, agentEmails);
+        if (agentEmails.length > 0) {
+          query = query.in('kam_email_id', agentEmails);
+        } else {
+          // If no agents in team, return no records
+          query = query.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
         }
+      } else {
+        // Team Lead with no team_name, return no records
+        query = query.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
       }
+    } else if (normalizedRole === 'admin') {
+      console.log(`👑 Admin - showing all brands`);
+      // No filter for admin
+    } else {
+      console.log(`⚠️ Unknown role: ${userProfile.role}, denying access to master data`);
+      query = query.eq('kam_email_id', 'NON_EXISTENT_EMAIL'); // Deny for unknown roles
     }
     
     const { data: allRecords, count } = await query as { data: MasterData[] | null; count: number | null };
@@ -77,6 +87,7 @@ export const masterDataService = {
       records = records.filter(record => 
         record.brand_name.toLowerCase().includes(searchTerm) ||
         record.kam_name.toLowerCase().includes(searchTerm) ||
+        record.kam_email_id.toLowerCase().includes(searchTerm) ||
         record.zone.toLowerCase().includes(searchTerm) ||
         (record.brand_email_id && record.brand_email_id.toLowerCase().includes(searchTerm))
       );
@@ -95,13 +106,65 @@ export const masterDataService = {
     };
   },
 
-  // Get brands by agent email
-  async getBrandsByAgentEmail(email: string) {
-    const { data: brands } = await getSupabaseAdmin()
-      .from('master_data')
-      .select('*')
-      .eq('kam_email_id', email);
+  // Get brands by agent email (with role-based filtering)
+  async getBrandsByAgentEmail(userProfile: UserProfile, agentEmail: string) { // userProfile required, agentEmail is target
+    if (!userProfile) {
+      console.error(`❌ No user profile provided to getBrandsByAgentEmail. Denying access.`);
+      return [];
+    }
+
+    const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
     
+    // Authorization logic
+    let canAccess = false;
+    let query = getSupabaseAdmin().from('master_data').select('*');
+
+    if (normalizedRole === 'admin') {
+      canAccess = true;
+      console.log(`👑 Admin ${userProfile.email} - fetching brands for agent: ${agentEmail}`);
+      query = query.eq('kam_email_id', agentEmail); // Admin can specify any agentEmail
+    } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
+      // Team Lead can only fetch brands for agents within their team
+      if (userProfile.team_name) {
+        const { data: teamMembers } = await getSupabaseAdmin()
+          .from('user_profiles')
+          .select('email')
+          .eq('team_name', userProfile.team_name)
+          .in('role', ['agent', 'Agent']) as { data: Array<{ email: string }> | null; error: any };
+        
+        const agentEmails = teamMembers?.map(m => m.email) || [];
+        if (agentEmails.includes(agentEmail)) {
+          canAccess = true;
+          console.log(`👥 Team Lead ${userProfile.email} - fetching brands for team member: ${agentEmail}`);
+          query = query.eq('kam_email_id', agentEmail);
+        } else {
+          console.log(`❌ Team Lead ${userProfile.email} attempted to fetch brands for unauthorized agent: ${agentEmail}`);
+        }
+      }
+    } else if (normalizedRole === 'agent') {
+      // Agent can only fetch their own brands
+      if (userProfile.email === agentEmail) {
+        canAccess = true;
+        console.log(`👤 Agent ${userProfile.email} - fetching their own brands`);
+        query = query.eq('kam_email_id', agentEmail);
+      } else {
+        console.log(`❌ Agent ${userProfile.email} attempted to fetch brands for another agent: ${agentEmail}`);
+      }
+    }
+    
+    if (!canAccess) {
+      console.warn(`⚠️ Access denied for ${userProfile.email} to get brands for ${agentEmail}`);
+      return [];
+    }
+
+    const { data: brands, error } = await query;
+    
+    if (error) {
+      console.error(`❌ Error fetching brands for ${agentEmail}:`, error);
+      return [];
+    }
+    
+    console.log(`✅ Found ${brands?.length || 0} brands for ${agentEmail}`);
     return brands || [];
   },
 
@@ -147,34 +210,42 @@ export const masterDataService = {
   },
 
   // Get master data statistics
-  async getMasterDataStatistics(email?: string) {
+  async getMasterDataStatistics(userProfile: UserProfile) { // Changed from email?: string
     let query = getSupabaseAdmin().from('master_data').select('*');
     
-    if (email) {
-      const { data: userProfile } = await getSupabaseAdmin()
-        .from('user_profiles')
-        .select('*')
-        .eq('email', email)
-        .single() as { data: UserProfile | null; error: any };
-      
-      if (userProfile) {
-        if (userProfile.role === 'Agent' || userProfile.role === 'agent') {
-          query = query.eq('kam_email_id', email);
-        } else if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
-          if (userProfile.team_name) {
-            const { data: teamMembers } = await getSupabaseAdmin()
-              .from('user_profiles')
-              .select('email')
-              .eq('team_name', userProfile.team_name)
-              .in('role', ['agent', 'Agent']) as { data: Array<{ email: string }> | null; error: any };
-            
-            const agentEmails = teamMembers?.map(m => m.email) || [];
-            if (agentEmails.length > 0) {
-              query = query.in('kam_email_id', agentEmails);
-            }
-          }
+    if (!userProfile) { // Deny if no userProfile
+      console.error(`❌ No user profile provided to getMasterDataStatistics. Denying access.`);
+      return {
+        total_brands: 0, byZone: {}, byState: {}, byKAM: {}, totalOutlets: 0,
+      };
+    }
+
+    const normalizedRole = userProfile.role?.toLowerCase().replace(/\s+/g, '');
+    
+    if (normalizedRole === 'agent') {
+      query = query.eq('kam_email_id', userProfile.email);
+    } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
+      if (userProfile.team_name) {
+        const { data: teamMembers } = await getSupabaseAdmin()
+          .from('user_profiles')
+          .select('email')
+          .eq('team_name', userProfile.team_name)
+          .in('role', ['agent', 'Agent']) as { data: Array<{ email: string }> | null; error: any };
+        
+        const agentEmails = teamMembers?.map(m => m.email) || [];
+        if (agentEmails.length > 0) {
+          query = query.in('kam_email_id', agentEmails);
+        } else {
+          query = query.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
         }
+      } else {
+        query = query.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
       }
+    } else if (normalizedRole === 'admin') {
+      // Admin sees all
+    } else {
+      console.warn(`⚠️ Unknown role: ${userProfile.role}, denying access to master data statistics`);
+      query = query.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
     }
     
     const { data: records } = await query as { data: MasterData[] | null; error: any };

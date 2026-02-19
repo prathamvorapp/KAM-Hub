@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUser } from '../../../../../lib/auth-helpers';
+import { authenticateRequest } from '@/lib/api-auth';
 import { healthCheckService } from '@/lib/services';
 import NodeCache from 'node-cache';
 
-const progressCache = new NodeCache({ stdTTL: 60 });
+export const progressCache = new NodeCache({ stdTTL: 300 }); // Increased from 30 to 300 seconds (5 min)
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthenticatedUser(request);
-    
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
     if (!user) {
       return NextResponse.json({
         success: false,
@@ -18,19 +18,25 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const month = searchParams.get('month') || new Date().toISOString().slice(0, 7);
+    const bustCache = searchParams.get('_t'); // Cache buster from frontend
 
     const cacheKey = `assessment_progress_${user.email}_${month}`;
-    const cachedData = progressCache.get(cacheKey);
     
-    if (cachedData) {
-      console.log(`📈 Assessment progress served from cache`);
-      return NextResponse.json(cachedData);
+    // Skip cache if cache buster is present (frontend always sends it)
+    if (!bustCache) {
+      const cachedData = progressCache.get(cacheKey);
+      if (cachedData) {
+        console.log(`📈 Assessment progress served from cache`);
+        return NextResponse.json(cachedData);
+      }
+    } else {
+      console.log(`🔄 Progress cache bypassed due to cache buster`);
     }
 
     console.log(`📊 Getting assessment progress for: ${user.email}`);
 
     const progress = await healthCheckService.getAssessmentProgress({
-      email: user.email,
+      userProfile: user, // Pass the entire user object as userProfile
       month
     });
 
@@ -41,14 +47,19 @@ export async function GET(request: NextRequest) {
 
     progressCache.set(cacheKey, response);
 
-    return NextResponse.json(response);
+    return NextResponse.json(response, {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
 
   } catch (error) {
-    console.error('❌ Error getting assessment progress:', error);
+    console.error('[Health Check Progress] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to load progress',
-      detail: String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

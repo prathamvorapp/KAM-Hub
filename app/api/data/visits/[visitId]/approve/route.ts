@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authenticateRequest } from '@/lib/api-auth';
 import { visitService } from '@/lib/services';
 
 export async function POST(
@@ -7,19 +8,20 @@ export async function POST(
 ) {
   try {
     const { visitId } = await params;
-    const userEmail = request.headers.get('x-user-email');
-    const userRole = request.headers.get('x-user-role');
-    
-    if (!userEmail) {
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
+    if (!user) {
       return NextResponse.json({
+        success: false,
         error: 'Authentication required'
       }, { status: 401 });
     }
 
-    // Normalize role comparison to handle both formats
-    const normalizedRole = userRole?.toLowerCase().replace(/[_\s]/g, '');
-    if (normalizedRole !== 'teamlead' && normalizedRole !== 'admin') {
+    // Check if user is Team Lead or Admin (case-insensitive)
+    const normalizedRole = user.role.toLowerCase().replace(/\s+/g, '_');
+    if (normalizedRole !== 'team_lead' && normalizedRole !== 'admin') {
       return NextResponse.json({
+        success: false,
         error: 'Access denied - Team Lead or Admin only'
       }, { status: 403 });
     }
@@ -29,16 +31,17 @@ export async function POST(
 
     if (!approval_status) {
       return NextResponse.json({
+        success: false,
         error: 'approval_status is required'
       }, { status: 400 });
     }
 
     await visitService.approveVisit({
       visit_id: visitId,
-      approver_email: approver_email || userEmail,
+      // approver_email: approver_email || user.email, // Removed, now derived from userProfile
       approval_status,
       rejection_remarks
-    });
+    }, user); // Pass the userProfile here
 
     return NextResponse.json({
       success: true,
@@ -46,11 +49,10 @@ export async function POST(
     });
 
   } catch (error) {
-    console.error('❌ Error approving visit:', error);
+    console.error('[Visit Approve] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to approve visit',
-      detail: String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

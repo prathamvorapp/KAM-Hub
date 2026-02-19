@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
+
 import { LogIn, Mail, Lock, Eye, EyeOff } from 'lucide-react'
 import { motion } from 'framer-motion'
 
@@ -12,8 +13,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
   const router = useRouter()
-  const { signIn, loading } = useAuth()
+  const { signIn } = useAuth()
 
   // Clean any corrupted input data on component mount
   useEffect(() => {
@@ -65,21 +67,40 @@ export default function LoginPage() {
     }
 
     try {
-      console.log('Attempting login with:', { email: cleanEmail })
+      setLoading(true)
+      console.log('🔐 [Login] Starting login process...')
       
       const result = await signIn(cleanEmail, cleanPassword)
 
       if (result.error) {
-        console.error('Login error:', result.error)
+        console.error('❌ [Login] Sign in failed:', result.error)
         setError(result.error)
+        setLoading(false)
         return
       }
-
-      console.log('✅ Login successful, redirecting to dashboard')
-      router.push('/dashboard')
+      
+      if (!result.success) {
+        console.error('❌ [Login] Sign in unsuccessful')
+        setError('Login failed. Please try again.')
+        setLoading(false)
+        return
+      }
+      
+      console.log('✅ [Login] Sign in successful, redirecting...')
+      
+      // Get redirect path from URL or default to churn page (not empty dashboard)
+      const searchParams = new URLSearchParams(window.location.search)
+      const redirectPath = searchParams.get('redirect') || '/dashboard/churn'
+      
+      // Small delay to ensure session is fully established
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Use replace instead of push to prevent back button issues
+      router.replace(redirectPath)
     } catch (error) {
-      console.error('Unexpected login error:', error)
+      console.error('❌ [Login] Unexpected error:', error)
       setError('An unexpected error occurred. Please try again.')
+      setLoading(false)
     }
   }
 
@@ -308,6 +329,6 @@ export default function LoginPage() {
           </div>
         </motion.div>
       </div>
-    </div>
+      </div>
   )
 }

@@ -1,157 +1,98 @@
 /**
  * Visit Service - Supabase Implementation
- * Replaces Convex visit functions
  */
 
-import { supabase, getSupabaseAdmin } from '../supabase-client';
+import { supabase, getSupabaseAdmin } from '../supabase-server';
+import { normalizeUserProfile } from '../../utils/authUtils';
+
+// Type definitions
+interface UserProfile {
+  email: string;
+  fullName: string;
+  role: string;
+  team_name?: string;
+  teamName?: string; // Add camelCase for compatibility
+  [key: string]: any;
+}
+
+interface Visit {
+  visit_id: string;
+  agent_id: string;
+  team_name?: string;
+  [key: string]: any;
+}
 
 export const visitService = {
-  // Get visit statistics for a user
-  async getVisitStatistics(email: string) {
-    if (!email) {
-      throw new Error("Email is required");
+  // Authorization Helper for Visit access
+  _authorizeVisitAccess: async (visit: Visit, rawProfile: UserProfile): Promise<boolean> => {
+    const userProfile = normalizeUserProfile(rawProfile);
+    const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
+    
+    if (normalizedRole === 'admin') {
+      return true;
     }
+    if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
+      // Team Lead can access visits in their team
+      return (userProfile.team_name || userProfile.teamName) === visit.team_name;
+    }
+    if (normalizedRole === 'agent') {
+      // Agent can access their own visits
+      return userProfile.email === visit.agent_id;
+    }
+    return false;
+  },
 
-    const { data: userProfile, error: profileError } = await getSupabaseAdmin()
-      .from('user_profiles')
-      .select('*')
-      .eq('email', email)
-      .single();
+  // Authorization Helper for Admin/Team Lead actions
+  _authorizeVisitAdminAction: (rawProfile: UserProfile): boolean => {
+    const userProfile = normalizeUserProfile(rawProfile);
+    const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
+    return normalizedRole === 'admin' || normalizedRole === 'team_lead' || normalizedRole === 'teamlead';
+  },
 
-    if (profileError || !userProfile) {
-      console.error('❌ Error fetching user profile:', profileError);
-      throw new Error("User profile not found");
+  _getIndividualAgentStatistics: async (agentProfile: UserProfile) => {
+    if (!agentProfile || !agentProfile.email) {
+      throw new Error("Agent profile with email is required for individual statistics");
     }
 
     let brandFilter: string[] = [];
     let visitQuery = getSupabaseAdmin().from('visits').select('*');
 
     const currentYearStr = new Date().getFullYear().toString();
-    console.log('📊 [STATS DEBUG] Current year filter:', currentYearStr);
     visitQuery = visitQuery.eq('visit_year', currentYearStr);
+    visitQuery = visitQuery.eq('agent_id', agentProfile.email);
 
-    // Role-based filtering
-    if ((userProfile as any).role === 'agent' || (userProfile as any).role === 'Agent') {
-      visitQuery = visitQuery.eq('agent_id', email);
-      
-      // Fetch brands directly with email filter
-      const { data: agentBrands } = await getSupabaseAdmin()
-        .from('master_data')
-        .select('*')
-        .eq('kam_email_id', email)
-        .limit(10000);
-      
-      brandFilter = agentBrands?.map((brand: any) => brand.brand_name) || [];
-      console.log('📊 [STATS DEBUG] Agent brands count:', brandFilter.length);
-      console.log('📊 [STATS DEBUG] First 10 brands:', brandFilter.slice(0, 10));
-      console.log('📊 [STATS DEBUG] All brands:', brandFilter);
-      console.log('📊 [STATS DEBUG] Brand filter includes "Kritunga"?', brandFilter.includes('Kritunga'));
-      console.log('📊 [STATS DEBUG] Brands containing "Krit":', brandFilter.filter((b: string) => b.toLowerCase().includes('krit')));
-      
-    } else if ((userProfile as any).role === 'team_lead' || (userProfile as any).role === 'Team Lead') {
-      if (!(userProfile as any).team_name) {
-        throw new Error("Team lead must have a team assigned");
-      }
-      
-      visitQuery = visitQuery.eq('team_name', (userProfile as any).team_name);
-      
-      const { data: teamAgents } = await getSupabaseAdmin()
-        .from('user_profiles')
-        .select('email')
-        .eq('team_name', (userProfile as any).team_name)
-        .in('role', ['agent', 'Agent']);
-      
-      const agentEmails = teamAgents?.map((agent: any) => agent.email) || [];
-      
-      // Fetch brands directly with IN filter
-      const { data: teamBrands } = await getSupabaseAdmin()
-        .from('master_data')
-        .select('*')
-        .in('kam_email_id', agentEmails)
-        .limit(10000);
-      
-      brandFilter = teamBrands?.map((brand: any) => brand.brand_name) || [];
-      
-    } else if ((userProfile as any).role === 'admin' || (userProfile as any).role === 'Admin') {
-      // Fetch ALL brands with explicit limit
-      const { data: allBrands } = await getSupabaseAdmin()
-        .from('master_data')
-        .select('*')
-        .limit(10000);  // High limit to ensure all records are fetched
-      brandFilter = allBrands?.map((brand: any) => brand.brand_name) || [];
-    }
-
+    // Fetch brands directly with email filter
+    const { data: agentBrands } = await getSupabaseAdmin()
+      .from('master_data')
+      .select('*')
+      .eq('kam_email_id', agentProfile.email)
+      .limit(10000);
+    
+    brandFilter = agentBrands?.map((brand: any) => brand.brand_name) || [];
+    
     const { data: allVisits } = await visitQuery;
-    console.log('📊 [STATS DEBUG] All visits from query:', allVisits?.length || 0);
-    console.log('📊 [STATS DEBUG] Sample visits:', allVisits?.slice(0, 3).map((v: any) => ({ 
-      brand: v.brand_name, 
-      status: v.visit_status, 
-      year: v.visit_year,
-      date: v.scheduled_date 
-    })));
     
-    // Don't filter visits by brand assignment - count all visits for the agent
-    // This is because visits can be created for brands not in master_data
     const visits = allVisits || [];
-      
-    console.log('📊 [STATS DEBUG] Total visits (no brand filter):', visits.length);
-    console.log('📊 [STATS DEBUG] All visits:', visits.map((v: any) => ({ brand: v.brand_name, status: v.visit_status })));
-
     const total_brands = brandFilter.length;
-    const nonCancelledVisits = visits.filter((v: any) => v.visit_status !== 'Cancelled');
+    const nonCancelledVisits = visits.filter((v: any) => v.visit_status !== 'Cancelled'); 
     
-    console.log('📊 [STATS DEBUG] Total visits:', visits.length);
-    console.log('📊 [STATS DEBUG] Non-cancelled visits:', nonCancelledVisits.length);
-    console.log('📊 [STATS DEBUG] Visit statuses:', nonCancelledVisits.map((v: any) => ({ 
-      brand: v.brand_name, 
-      status: v.visit_status, 
-      approval: v.approval_status,
-      date: v.scheduled_date 
-    })));
-    
-    // Visit Done should count visits that are Completed AND have Approved MOM
-    // A visit is considered "done" when:
-    // 1. visit_status = 'Completed' (the visit happened)
-    // 2. approval_status = 'Approved' (the MOM was approved by team lead)
     const approvedVisits = nonCancelledVisits.filter((v: any) => 
       v.visit_status === 'Completed' && v.approval_status === 'Approved'
     );
     
-    console.log('📊 [STATS DEBUG] Approved visits:', approvedVisits.map((v: any) => ({
-      brand: v.brand_name,
-      visit_id: v.visit_id,
-      status: v.visit_status,
-      approval: v.approval_status
-    })));
-    
-    // Count unique brands with at least one approved visit
     const brandsWithApprovedMOM = new Set(
       approvedVisits.map((visit: any) => visit.brand_name)
     );
     const visit_done = brandsWithApprovedMOM.size;
     const pending_visits = total_brands - visit_done;
     
-    console.log('📊 [STATS DEBUG] Brands with approved MOMs:', Array.from(brandsWithApprovedMOM));
-    console.log('📊 [STATS DEBUG] Visit done count:', visit_done);
-    
     const brandsWithVisits = new Set(nonCancelledVisits.map((visit: any) => visit.brand_name));
     const brands_with_visits = brandsWithVisits.size;
-    const brands_pending = total_brands - visit_done;
 
     const completed = nonCancelledVisits.filter((v: any) => v.visit_status === 'Completed').length;
     const cancelled = visits.filter((v: any) => v.visit_status === 'Cancelled').length;
     const scheduled = nonCancelledVisits.filter((v: any) => v.visit_status === 'Scheduled').length;
-    
-    console.log('📊 [STATS DEBUG] Completed:', completed, 'Cancelled:', cancelled, 'Scheduled:', scheduled);
-    console.log('📊 [STATS DEBUG] Scheduled visits:', nonCancelledVisits.filter((v: any) => v.visit_status === 'Scheduled'));
 
-    const mom_shared_yes = nonCancelledVisits.filter((v: any) => v.mom_shared === 'Yes').length;
-    const mom_shared_no = nonCancelledVisits.filter((v: any) => v.mom_shared === 'No').length;
-    const mom_shared_pending = nonCancelledVisits.filter((v: any) => v.mom_shared === 'Pending' || !v.mom_shared).length;
-    
-    // MOM Pending should count:
-    // 1. Visits that are completed but MOM not yet submitted
-    // 2. Visits where MOM was rejected (agent needs to resubmit)
     const mom_pending = nonCancelledVisits.filter((v: any) => 
       (v.visit_status === 'Completed' && (!v.mom_shared || v.mom_shared === 'No' || v.mom_shared === 'Pending')) ||
       (v.approval_status === 'Rejected')
@@ -177,25 +118,20 @@ export const visitService = {
       return visitDate.getMonth() === lastMonth && visitDate.getFullYear() === lastMonthYear;
     });
 
-    const monthly_target = 10;
+    const monthly_target = 10; // Assuming a default monthly target
     const current_month_scheduled = currentMonthVisits.filter((v: any) => v.visit_status === 'Scheduled').length;
     const current_month_completed = currentMonthVisits.filter((v: any) => v.visit_status === 'Completed').length;
-    const current_month_pending = currentMonthVisits.filter((v: any) => v.visit_status === 'Pending').length;
-    const current_month_total_visits = current_month_scheduled + current_month_completed + current_month_pending;
+    const current_month_total_visits = current_month_scheduled + current_month_completed; // Completed + Scheduled
     const current_month_progress = monthly_target > 0 ? Math.round((current_month_total_visits / monthly_target) * 100) : 0;
     const overall_progress = total_brands > 0 ? Math.round((brands_with_visits / total_brands) * 100) : 0;
 
     return {
+      agent_name: agentProfile.fullName,
+      agent_email: agentProfile.email,
+      team_name: agentProfile.team_name || agentProfile.teamName,
       total_brands,
-      visit_done,
-      pending: pending_visits,
-      completed,
-      cancelled,
-      scheduled,
-      brands_with_visits,
-      brands_pending,
-      total_visits_done: visit_done,
-      total_visits_pending: pending_visits,
+      total_visits_done: visit_done, // Brands with approved MOMs
+      total_visits_pending: pending_visits, // Brands assigned but no approved MOM
       total_scheduled_visits: scheduled,
       total_cancelled_visits: cancelled,
       last_month_visits: lastMonthVisits.length,
@@ -203,104 +139,299 @@ export const visitService = {
       current_month_completed,
       current_month_total: currentMonthVisits.length,
       current_month_total_visits,
-      mom_shared_yes,
-      mom_shared_no,
-      mom_shared_pending,
       mom_pending,
-      approved,
-      rejected,
-      pending_approval,
       monthly_target,
       current_month_progress,
-      overall_progress
+      overall_progress,
+      approved_moms: approved,
+      rejected_moms: rejected,
+      pending_approval_moms: pending_approval,
+      error: false // Indicate no error for this agent
+    };
+  },
+
+  // Get visit statistics for a user
+  async getComprehensiveTeamVisitStatistics(rawProfile: UserProfile) { // New name
+    const userProfile = normalizeUserProfile(rawProfile);
+    if (!userProfile) {
+      throw new Error("User profile is required");
+    }
+
+    const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
+    let agentprofiles: UserProfile[] = [];
+
+    if (normalizedRole === 'agent') {
+      agentprofiles.push(userProfile);
+    } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
+      const teamName = userProfile.team_name || userProfile.teamName;
+      if (!teamName) {
+        throw new Error("Team lead must have a team assigned");
+      }
+      // Include the team lead themselves if they also act as an agent or have assigned brands
+      agentprofiles.push(userProfile);
+      
+      const { data: teamMembers, error } = await getSupabaseAdmin()
+        .from('user_profiles')
+        .select('email, full_name, role, team_name')
+        .eq('team_name', teamName)
+        .in('role', ['agent', 'Agent']); // Only get agents
+      
+      if (error) throw error;
+
+      teamMembers?.forEach((member: any) => {
+        const memberProfile = normalizeUserProfile(member);
+        if (memberProfile.email !== userProfile.email) { // Avoid adding TL twice if also an agent
+          agentprofiles.push(memberProfile);
+        }
+      });
+    } else if (normalizedRole === 'admin') {
+      const { data: allAgents, error } = await getSupabaseAdmin()
+        .from('user_profiles')
+        .select('email, full_name, role, team_name')
+        .in('role', ['agent', 'Agent', 'team_lead', 'Team Lead', 'teamlead']); // Include TLs if they have stats
+
+      if (error) throw error;
+
+      allAgents?.forEach((agent: any) => agentprofiles.push(normalizeUserProfile(agent)));
+    } else {
+      throw new Error(`Access denied: Unknown role ${userProfile.role}`);
+    }
+
+    // Filter out duplicates in case TL is also listed as agent, etc.
+    const uniqueAgentProfilesMap = new Map<string, UserProfile>();
+    agentprofiles.forEach(profile => uniqueAgentProfilesMap.set(profile.email, profile));
+    const uniqueAgentProfiles = Array.from(uniqueAgentProfilesMap.values());
+
+    const teamStatistics = await Promise.all(
+      uniqueAgentProfiles.map(async (agentProfile) => {
+        try {
+          // Use the new helper to get individual stats
+          const stats = await visitService._getIndividualAgentStatistics(agentProfile);
+          return {
+            ...stats,
+            agent_email: agentProfile.email,
+            agent_name: agentProfile.fullName,
+            team_name: agentProfile.team_name || agentProfile.teamName,
+          };
+        } catch (err: any) {
+          console.error(`Error getting individual stats for ${agentProfile.email}:`, err);
+          return {
+            agent_email: agentProfile.email,
+            agent_name: agentProfile.fullName,
+            team_name: agentProfile.team_name || agentProfile.teamName,
+            error: true,
+            // Provide default/zero values for other stats
+            total_brands: 0,
+            total_visits_done: 0,
+            total_visits_pending: 0,
+            total_scheduled_visits: 0,
+            total_cancelled_visits: 0,
+            last_month_visits: 0,
+            current_month_scheduled: 0,
+            current_month_completed: 0,
+            current_month_total: 0,
+            current_month_total_visits: 0,
+            mom_pending: 0,
+            monthly_target: 0,
+            current_month_progress: 0,
+            overall_progress: 0,
+            approved_moms: 0,
+            rejected_moms: 0,
+            pending_approval_moms: 0,
+          };
+        }
+      })
+    );
+
+    // Calculate team summary from individual agent statistics
+    const teamSummary = teamStatistics.reduce((summary: any, agentStats: any) => {
+      if (!agentStats.error) {
+        summary.total_brands += agentStats.total_brands;
+        summary.total_visits_done += agentStats.total_visits_done;
+        summary.total_visits_pending += agentStats.total_visits_pending;
+        summary.total_scheduled_visits += agentStats.total_scheduled_visits;
+        summary.total_cancelled_visits += agentStats.total_cancelled_visits;
+        summary.mom_pending += agentStats.mom_pending;
+        summary.current_month_completed += agentStats.current_month_completed;
+        summary.current_month_scheduled += agentStats.current_month_scheduled;
+        summary.current_month_total_visits += agentStats.current_month_total_visits;
+        summary.approved_moms += agentStats.approved_moms;
+        summary.rejected_moms += agentStats.rejected_moms;
+        summary.pending_approval_moms += agentStats.pending_approval_moms;
+        // Sum up targets to get a team target
+        summary.monthly_target += agentStats.monthly_target;
+      }
+      return summary;
+    }, {
+      total_brands: 0,
+      total_visits_done: 0,
+      total_visits_pending: 0,
+      total_scheduled_visits: 0,
+      total_cancelled_visits: 0,
+      mom_pending: 0,
+      current_month_completed: 0,
+      current_month_scheduled: 0,
+      current_month_total_visits: 0,
+      approved_moms: 0,
+      rejected_moms: 0,
+      pending_approval_moms: 0,
+      monthly_target: 0,
+    });
+
+    // Calculate team progress based on aggregated values
+    teamSummary.current_month_progress = teamSummary.monthly_target > 0 
+      ? Math.round((teamSummary.current_month_total_visits / teamSummary.monthly_target) * 100) 
+      : 0;
+    
+    // Determine the team's overall progress based on brands done vs total brands
+    teamSummary.overall_progress = teamSummary.total_brands > 0 
+      ? Math.round((teamSummary.total_visits_done / teamSummary.total_brands) * 100) 
+      : 0;
+
+    return {
+      team_summary: teamSummary,
+      team_statistics: teamStatistics, // Individual agent stats
+      team_wise_breakdown: teamStatistics, // Can be the same for now, or refined later
+      team_name: userProfile.team_name || userProfile.teamName || 'Organization',
+      team_lead: userProfile.fullName, // Or actual team lead if different from current user
     };
   },
 
   // Get visits for a user with pagination
   async getVisits(params: {
-    email: string;
+    userProfile: UserProfile; // email removed, userProfile required
     search?: string;
     page?: number;
     limit?: number;
   }) {
-    const { email, search, page = 1, limit = 100 } = params;
-    
-    console.log('🔍 [GET VISITS] Called with:', { email, search, page, limit });
-    
-    const { data: userProfile } = await getSupabaseAdmin()
-      .from('user_profiles')
-      .select('*')
-      .eq('email', email)
-      .single();
-
-    if (!userProfile) {
-      throw new Error("User profile not found");
-    }
-
-    console.log('👤 [GET VISITS] User profile:', {
-      email: (userProfile as any).email,
-      role: (userProfile as any).role,
-      team_name: (userProfile as any).team_name
-    });
-
-    let query = getSupabaseAdmin().from('visits').select('*', { count: 'exact' });
-
-    if ((userProfile as any).role === 'agent' || (userProfile as any).role === 'Agent') {
-      query = query.eq('agent_id', email);
-      console.log('👤 [GET VISITS] Agent filter applied');
-    } else if (((userProfile as any).role === 'team_lead' || (userProfile as any).role === 'Team Lead') && (userProfile as any).team_name) {
-      query = query.eq('team_name', (userProfile as any).team_name);
-      console.log('👥 [GET VISITS] Team Lead filter applied for team:', (userProfile as any).team_name);
-    }
-
-    const { data: visits, count } = await query;
-    let filteredVisits = visits || [];
-
-    console.log('📊 [GET VISITS] Total visits from DB:', filteredVisits.length);
-    console.log('📊 [GET VISITS] Sample visits:', filteredVisits.slice(0, 3).map((v: any) => ({
-      brand: v.brand_name,
-      status: v.visit_status,
-      approval: v.approval_status,
-      team: v.team_name,
-      agent: v.agent_name
-    })));
-
-    if (search && search.trim()) {
-      const searchLower = search.toLowerCase().trim();
-      console.log('🔍 [GET VISITS] Applying search filter:', searchLower);
+    try {
+      const { userProfile: rawProfile, search, page = 1, limit = 999999 } = params;
+      const userProfile = normalizeUserProfile(rawProfile);
       
-      filteredVisits = filteredVisits.filter((visit: any) => 
-        visit.brand_name?.toLowerCase().includes(searchLower) ||
-        visit.agent_name?.toLowerCase().includes(searchLower) ||
-        visit.visit_status?.toLowerCase().includes(searchLower) ||
-        visit.purpose?.toLowerCase().includes(searchLower) ||
-        visit.notes?.toLowerCase().includes(searchLower)
-      );
+      let query = getSupabaseAdmin().from('visits').select('*', { count: 'exact' });
+
+      const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
+
+      if (normalizedRole === 'agent') {
+        query = query.eq('agent_id', userProfile.email);
+      } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
+        const teamName = userProfile.team_name || userProfile.teamName;
+        if (teamName) {
+          query = query.eq('team_name', teamName); // Removed approval_status filter
+        } else {
+          // Deny if no team name for team lead
+          query = query.eq('agent_id', 'NON_EXISTENT_EMAIL');
+        }
+      } else if (normalizedRole === 'admin') {
+        // Admin sees all
+      } else {
+        // Unknown role, deny access
+        query = query.eq('agent_id', 'NON_EXISTENT_EMAIL');
+      }
+
+      const { data: visits, count, error: visitsError } = await query;
       
-      console.log('📊 [GET VISITS] After search filter:', filteredVisits.length);
+      if (visitsError) {
+        throw new Error(`Failed to fetch visits: ${visitsError.message}`);
+      }
+
+      // Enrich visits with correct agent names
+      const agentIds = [...new Set(visits?.map(v => v.agent_id).filter(Boolean) || [])];
+      let agentNameMap = new Map<string, string>();
+
+      if (agentIds.length > 0) {
+        const { data: profiles } = await getSupabaseAdmin()
+          .from('user_profiles')
+          .select('email, full_name')
+          .in('email', agentIds);
+        
+        agentNameMap = new Map(profiles?.map(p => [p.email, p.full_name]) || []);
+      }
+
+      const enrichedVisits = visits?.map(visit => ({
+        ...visit,
+        agent_name: agentNameMap.get(visit.agent_id) || visit.agent_name || 'Unknown Agent',
+      })) || [];
+      
+      let filteredVisits = enrichedVisits;
+
+      if (search && search.trim()) {
+        const searchLower = search.toLowerCase().trim();
+        
+        filteredVisits = filteredVisits.filter((visit: any) => 
+          visit.brand_name?.toLowerCase().includes(searchLower) ||
+          visit.agent_name?.toLowerCase().includes(searchLower) ||
+          visit.visit_status?.toLowerCase().includes(searchLower) ||
+          visit.purpose?.toLowerCase().includes(searchLower) ||
+          visit.notes?.toLowerCase().includes(searchLower)
+        );
+      }
+
+      const total = filteredVisits.length;
+      const startIndex = (page - 1) * limit;
+      const paginatedVisits = filteredVisits.slice(startIndex, startIndex + limit);
+
+      return {
+        page: paginatedVisits,
+        isDone: startIndex + limit >= total,
+        continueCursor: null,
+        total,
+        totalPages: Math.ceil(total / limit)
+      };
+    } catch (error: any) {
+      throw error;
     }
-
-    const total = filteredVisits.length;
-    const startIndex = (page - 1) * limit;
-    const paginatedVisits = filteredVisits.slice(startIndex, startIndex + limit);
-
-    console.log('📄 [GET VISITS] Returning page', page, ':', paginatedVisits.length, 'visits');
-
-    return {
-      page: paginatedVisits,
-      isDone: startIndex + limit >= total,
-      continueCursor: null,
-      total,
-      totalPages: Math.ceil(total / limit)
-    };
   },
 
   // Create a new visit
-  async createVisit(data: any) {
+  async createVisit(data: any, rawProfile: UserProfile) { // userProfile required
+    const userProfile = normalizeUserProfile(rawProfile);
     const now = new Date().toISOString();
     
+    // Authorization
+    const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
+
+    // Fetch agent's team_name and potentially team_lead_id
+    const { data: agentProfile, error: agentProfileError } = await getSupabaseAdmin()
+      .from('user_profiles')
+      .select('team_name')
+      .eq('email', data.agent_id)
+      .single();
+
+    if (agentProfileError) {
+      console.error(`Error fetching agent profile for ${data.agent_id}:`, agentProfileError);
+      // Optionally, throw an error or handle gracefully if agent profile is critical
+    }
+    
+    // Authorization
+    if (normalizedRole === 'agent') {
+      // Agent can only create visits for themselves
+      if (data.agent_id !== userProfile.email) {
+        throw new Error(`Access denied: Agent ${userProfile.email} cannot create visit for another agent ${data.agent_id}`);
+      }
+    } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
+      // Team Lead can create visits for themselves or their team members
+      const teamName = userProfile.team_name || userProfile.teamName;
+      if (data.agent_id !== userProfile.email) {
+        const { data: teamMembers } = await getSupabaseAdmin()
+          .from('user_profiles')
+          .select('email')
+          .eq('team_name', teamName)
+          .in('role', ['agent', 'Agent']);
+        const teamMemberEmails = teamMembers?.map(m => m.email) || [];
+        if (!teamMemberEmails.includes(data.agent_id)) {
+          throw new Error(`Access denied: Team Lead ${userProfile.email} cannot create visit for agent ${data.agent_id} outside their team`);
+        }
+      }
+    } else if (normalizedRole === 'admin') {
+      // Admin can create visits for anyone
+    } else {
+      throw new Error(`Access denied: Role ${userProfile.role} is not authorized to create visits`);
+    }
+
     const visitData = {
       ...data,
+      team_name: agentProfile?.team_name || null, // Populate team_name
       visit_status: data.visit_status || "Scheduled",
       created_at: now,
       updated_at: now,
@@ -322,17 +453,24 @@ export const visitService = {
     outcome?: string;
     next_steps?: string;
     notes?: string;
-  }) {
+  }, rawProfile: UserProfile) { // userProfile required
+    const userProfile = normalizeUserProfile(rawProfile);
     const { visit_id, ...updateData } = params;
     
     const { data: visit } = await getSupabaseAdmin()
       .from('visits')
-      .select('*')
+      .select('agent_id, team_name') // Select for authorization
       .eq('visit_id', visit_id)
-      .single();
+      .single() as { data: Visit | null; error: any };
 
     if (!visit) {
       throw new Error("Visit not found");
+    }
+
+    // Authorization check
+    const isAuthorized = await visitService._authorizeVisitAccess(visit, userProfile);
+    if (!isAuthorized) {
+        throw new Error(`Access denied: User ${userProfile.email} is not authorized to update visit ${visit_id}`);
     }
 
     await (getSupabaseAdmin()
@@ -351,17 +489,24 @@ export const visitService = {
     visit_id: string;
     mom_shared: string;
     mom_shared_date?: string;
-  }) {
+  }, rawProfile: UserProfile) { // userProfile required
+    const userProfile = normalizeUserProfile(rawProfile);
     const { visit_id, ...updateData } = params;
     
     const { data: visit } = await getSupabaseAdmin()
       .from('visits')
-      .select('*')
+      .select('agent_id, team_name') // Select for authorization
       .eq('visit_id', visit_id)
-      .single();
+      .single() as { data: Visit | null; error: any };
 
     if (!visit) {
       throw new Error("Visit not found");
+    }
+
+    // Authorization check
+    const isAuthorized = await visitService._authorizeVisitAccess(visit, userProfile);
+    if (!isAuthorized) {
+        throw new Error(`Access denied: User ${userProfile.email} is not authorized to update MOM status for visit ${visit_id}`);
     }
 
     await (getSupabaseAdmin()
@@ -376,40 +521,27 @@ export const visitService = {
   },
 
   // Submit MOM
-  async submitMoM(params: any) {
+  async submitMoM(params: any, rawProfile: UserProfile) { // userProfile required
+    const userProfile = normalizeUserProfile(rawProfile);
     const now = new Date().toISOString();
-    
-    console.log('🔵 [SUBMIT MOM] Starting MOM submission with params:', {
-      visit_id: params.visit_id,
-      has_open_points: !!params.open_points,
-      open_points_count: params.open_points?.length || 0,
-      mom_shared: params.mom_shared,
-      created_by: params.created_by,
-      brand_name: params.brand_name,
-      agent_name: params.agent_name
-    });
     
     const { data: visit } = await getSupabaseAdmin()
       .from('visits')
-      .select('*')
+      .select('agent_id, team_name, brand_name, agent_name') // Select for authorization and MOM data
       .eq('visit_id', params.visit_id)
-      .single();
+      .single() as { data: Visit | null; error: any };
 
     if (!visit) {
-      console.error('❌ [SUBMIT MOM] Visit not found:', params.visit_id);
       throw new Error("Visit not found");
     }
-    
-    console.log('✅ [SUBMIT MOM] Visit found:', {
-      visit_id: (visit as any).visit_id,
-      brand_name: (visit as any).brand_name,
-      agent_name: (visit as any).agent_name,
-      team_name: (visit as any).team_name,
-      agent_id: (visit as any).agent_id
-    });
+
+    // Authorization check
+    const isAuthorized = await visitService._authorizeVisitAccess(visit, userProfile);
+    if (!isAuthorized) {
+        throw new Error(`Access denied: User ${userProfile.email} is not authorized to submit MOM for visit ${params.visit_id}`);
+    }
 
     if (!params.open_points || params.open_points.length === 0) {
-      console.log('⚠️ [SUBMIT MOM] No open points provided, updating visit status only');
       if (params.mom_shared) {
         const updateData: any = {
           mom_shared: params.mom_shared,
@@ -426,38 +558,21 @@ export const visitService = {
           .from('visits') as any)
           .update(updateData)
           .eq('visit_id', params.visit_id);
-        
-        console.log('✅ [SUBMIT MOM] Visit updated (no MOM record created)');
         return { success: true };
       } else {
-        console.error('❌ [SUBMIT MOM] No MOM data or status update provided');
         throw new Error("No MOM data or status update provided");
       }
     }
 
     const brand_name = params.brand_name || (visit as any).brand_name;
     const agent_name = params.agent_name || (visit as any).agent_name;
-    const created_by = params.created_by || (visit as any).agent_id;
-
-    console.log('🔍 [SUBMIT MOM] Resolved values:', {
-      brand_name,
-      agent_name,
-      created_by,
-      team_name: (visit as any).team_name
-    });
+    const created_by = userProfile.email; // Use authenticated user's email
 
     if (!brand_name || !agent_name || !created_by) {
-      console.error('❌ [SUBMIT MOM] Missing required information:', {
-        brand_name,
-        agent_name,
-        created_by
-      });
       throw new Error("Missing required information: brand_name, agent_name, or created_by");
     }
 
     const ticketId = `MOM-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
-    console.log('🎫 [SUBMIT MOM] Generated ticket ID:', ticketId);
     
     const processedOpenPoints = params.open_points.map((point: any) => ({
       topic: point.topic,
@@ -471,8 +586,6 @@ export const visitService = {
       updated_at: point.updated_at || now,
     }));
     
-    console.log('📋 [SUBMIT MOM] Processed open points:', processedOpenPoints.length);
-    
     const momData = {
       ticket_id: ticketId,
       title: `Visit MOM - ${brand_name}${params.is_resubmission ? ' (Resubmitted)' : ''}`,
@@ -481,7 +594,7 @@ export const visitService = {
       priority: 'Medium',
       category: 'Visit MOM', // Proper category for visit MOMs
       created_by: created_by,
-      team: (visit as any).team_name,
+      team: userProfile.team_name || userProfile.teamName || (visit as any).team_name,
       brand_name: brand_name,
       customer_name: brand_name,
       visit_id: params.visit_id,
@@ -492,26 +605,13 @@ export const visitService = {
       updated_at: now,
     };
     
-    console.log('💾 [SUBMIT MOM] Inserting MOM record into database:', {
-      ticket_id: momData.ticket_id,
-      created_by: momData.created_by,
-      team: momData.team,
-      brand_name: momData.brand_name,
-      visit_id: momData.visit_id,
-      open_points_count: momData.open_points.length
-    });
-    
     try {
       const { error: insertError } = await (getSupabaseAdmin().from('mom') as any).insert(momData);
       
       if (insertError) {
-        console.error('❌ [SUBMIT MOM] Database insert error:', insertError);
         throw insertError;
       }
-      
-      console.log('✅ [SUBMIT MOM] MOM record inserted successfully');
     } catch (error) {
-      console.error('❌ [SUBMIT MOM] Failed to insert MOM:', error);
       throw error;
     }
     
@@ -527,11 +627,6 @@ export const visitService = {
       }
     }
     
-    console.log('🔄 [SUBMIT MOM] Updating visit record:', {
-      visit_id: params.visit_id,
-      updateData
-    });
-    
     try {
       const { error: updateError } = await (getSupabaseAdmin()
         .from('visits') as any)
@@ -539,59 +634,56 @@ export const visitService = {
         .eq('visit_id', params.visit_id);
       
       if (updateError) {
-        console.error('❌ [SUBMIT MOM] Visit update error:', updateError);
         throw updateError;
       }
-      
-      console.log('✅ [SUBMIT MOM] Visit updated successfully');
     } catch (error) {
-      console.error('❌ [SUBMIT MOM] Failed to update visit:', error);
       throw error;
     }
-    
-    console.log('🎉 [SUBMIT MOM] MOM submission completed successfully');
     return { success: true };
   },
 
   // Approve or reject a visit
   async approveVisit(params: {
     visit_id: string;
-    approver_email: string;
+    // approver_email: string; // Removed, now derived from userProfile
     approval_status: string;
     rejection_remarks?: string;
-  }) {
-    console.log('🔍 [APPROVE VISIT] Starting approval process:', {
-      visit_id: params.visit_id,
-      approval_status: params.approval_status,
-      approver_email: params.approver_email
-    });
+  }, rawProfile: UserProfile) { // userProfile required
+    const userProfile = normalizeUserProfile(rawProfile);
+
+    // Authorization: Only Admin and Team Lead can approve/reject
+    const isAuthorized = await visitService._authorizeVisitAdminAction(userProfile);
+    if (!isAuthorized) {
+      throw new Error(`Access denied: User ${userProfile.email} is not authorized to approve/reject visits`);
+    }
 
     const { data: visit, error: fetchError } = await getSupabaseAdmin()
       .from('visits')
       .select('*')
       .eq('visit_id', params.visit_id)
-      .single();
+      .single() as { data: Visit | null; error: any };
 
     if (fetchError) {
-      console.error('❌ [APPROVE VISIT] Error fetching visit:', fetchError);
       throw new Error(`Failed to fetch visit: ${fetchError.message}`);
     }
 
     if (!visit) {
-      console.error('❌ [APPROVE VISIT] Visit not found:', params.visit_id);
       throw new Error("Visit not found");
     }
 
-    console.log('📋 [APPROVE VISIT] Current visit state:', {
-      visit_id: (visit as any).visit_id,
-      visit_status: (visit as any).visit_status,
-      approval_status: (visit as any).approval_status
-    });
+    // Team Lead specific authorization
+    const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
+    if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
+      const teamName = userProfile.team_name || userProfile.teamName;
+      if (teamName !== visit.team_name) {
+        throw new Error(`Access denied: Team Lead ${userProfile.email} can only approve/reject visits from their team`);
+      }
+    }
 
     const now = new Date().toISOString();
     const updateData: any = {
       approval_status: params.approval_status,
-      approved_by: params.approver_email,
+      approved_by: userProfile.email, // Use authenticated user's email
       approved_at: now,
       updated_at: now,
     };
@@ -599,18 +691,14 @@ export const visitService = {
     // When MOM is approved, ensure visit is marked as Completed
     if (params.approval_status === "Approved") {
       updateData.visit_status = "Completed";
-      console.log('✅ [APPROVE VISIT] Marking visit as Completed since MOM is approved');
     } else if (params.approval_status === "Rejected") {
       // When rejected, keep the visit status but add rejection details
       if (params.rejection_remarks) {
         updateData.rejection_remarks = params.rejection_remarks;
-        updateData.rejected_by = params.approver_email;
+        updateData.rejected_by = userProfile.email; // Use authenticated user's email
         updateData.rejected_at = now;
       }
-      console.log('❌ [APPROVE VISIT] MOM rejected, visit remains in current status');
     }
-
-    console.log('📝 [APPROVE VISIT] Update data:', updateData);
 
     const { data, error } = await (getSupabaseAdmin()
       .from('visits') as any)
@@ -619,21 +707,12 @@ export const visitService = {
       .select();
 
     if (error) {
-      console.error('❌ [APPROVE VISIT] Error updating visit approval:', error);
       throw new Error(`Failed to update visit: ${error.message}`);
     }
 
     if (!data || data.length === 0) {
-      console.error('❌ [APPROVE VISIT] No data returned from update');
       throw new Error('Visit not found or update failed');
     }
-
-    console.log('✅ [APPROVE VISIT] Visit approval updated successfully:', {
-      visit_id: params.visit_id,
-      approval_status: params.approval_status,
-      visit_status: updateData.visit_status,
-      updated_record: data[0]
-    });
 
     return { success: true };
   },
@@ -641,28 +720,31 @@ export const visitService = {
   // Resubmit MOM after rejection
   async resubmitMoM(params: {
     visit_id: string;
-    agent_email: string;
-  }) {
+    // agent_email: string; // Removed, comes from userProfile
+  }, rawProfile: UserProfile) { // userProfile required
+    const userProfile = normalizeUserProfile(rawProfile);
     const { data: visit } = await getSupabaseAdmin()
       .from('visits')
-      .select('*')
+      .select('agent_id, team_name, approval_status, resubmission_count') // Select for authorization
       .eq('visit_id', params.visit_id)
-      .single();
+      .single() as { data: Visit | null; error: any };
 
     if (!visit) {
       throw new Error("Visit not found");
     }
 
-    if ((visit as any).agent_id !== params.agent_email) {
-      throw new Error("Unauthorized: Visit does not belong to this agent");
+    // Authorization check: Only owner, Team Lead, or Admin
+    const isAuthorized = await visitService._authorizeVisitAccess(visit, userProfile);
+    if (!isAuthorized) {
+      throw new Error(`Access denied: User ${userProfile.email} is not authorized to resubmit MOM for visit ${params.visit_id}`);
     }
 
-    if ((visit as any).approval_status !== "Rejected") {
+    if (visit.approval_status !== "Rejected") {
       throw new Error("Visit is not in rejected status");
     }
 
     const now = new Date().toISOString();
-    const resubmissionCount = ((visit as any).resubmission_count || 0) + 1;
+    const resubmissionCount = (visit.resubmission_count || 0) + 1;
 
     await (getSupabaseAdmin()
       .from('visits') as any)
@@ -683,27 +765,34 @@ export const visitService = {
     visit_id: string;
     new_scheduled_date: string;
     reason: string;
-    rescheduled_by: string;
-  }) {
+    // rescheduled_by: string; // Removed, comes from userProfile
+  }, rawProfile: UserProfile) { // userProfile required
+    const userProfile = normalizeUserProfile(rawProfile);
     const { data: visit } = await getSupabaseAdmin()
       .from('visits')
-      .select('*')
+      .select('agent_id, team_name, scheduled_date, reschedule_count, reschedule_history') // Select for authorization
       .eq('visit_id', params.visit_id)
-      .single();
+      .single() as { data: Visit | null; error: any };
 
     if (!visit) {
       throw new Error("Visit not found");
     }
 
-    const now = new Date().toISOString();
-    const rescheduleCount = ((visit as any).reschedule_count || 0) + 1;
+    // Authorization check: Only owner, Team Lead, or Admin
+    const isAuthorized = await visitService._authorizeVisitAccess(visit, userProfile);
+    if (!isAuthorized) {
+      throw new Error(`Access denied: User ${userProfile.email} is not authorized to reschedule visit ${params.visit_id}`);
+    }
 
-    const rescheduleHistory = (visit as any).reschedule_history || [];
+    const now = new Date().toISOString();
+    const rescheduleCount = (visit.reschedule_count || 0) + 1;
+
+    const rescheduleHistory = visit.reschedule_history || [];
     rescheduleHistory.push({
-      old_date: (visit as any).scheduled_date,
+      old_date: visit.scheduled_date,
       new_date: params.new_scheduled_date,
       reason: params.reason,
-      rescheduled_by: params.rescheduled_by,
+      rescheduled_by: userProfile.email, // Use authenticated user's email
       rescheduled_at: now,
     });
 
@@ -713,7 +802,7 @@ export const visitService = {
         scheduled_date: params.new_scheduled_date,
         reschedule_count: rescheduleCount,
         reschedule_history: rescheduleHistory,
-        last_rescheduled_by: params.rescheduled_by,
+        last_rescheduled_by: userProfile.email, // Use authenticated user's email
         last_rescheduled_at: now,
         updated_at: now,
       })
@@ -723,35 +812,65 @@ export const visitService = {
   },
 
   // Get visit reschedule history
-  async getVisitRescheduleHistory(visit_id: string) {
+  async getVisitRescheduleHistory(visit_id: string, rawProfile: UserProfile) { // userProfile required
+    const userProfile = normalizeUserProfile(rawProfile);
     const { data: visit } = await getSupabaseAdmin()
       .from('visits')
-      .select('*')
+      .select('agent_id, team_name, scheduled_date, reschedule_count, reschedule_history') // Select for authorization
       .eq('visit_id', visit_id)
-      .single();
+      .single() as { data: Visit | null; error: any };
 
     if (!visit) {
       throw new Error("Visit not found");
     }
 
+    // Authorization check: Only owner, Team Lead, or Admin
+    const isAuthorized = await visitService._authorizeVisitAccess(visit, userProfile);
+    if (!isAuthorized) {
+      throw new Error(`Access denied: User ${userProfile.email} is not authorized to view reschedule history for visit ${visit_id}`);
+    }
+
     return {
-      visit_id: (visit as any).visit_id,
-      current_date: (visit as any).scheduled_date,
-      reschedule_count: (visit as any).reschedule_count || 0,
-      reschedule_history: (visit as any).reschedule_history || [],
+      visit_id: visit.visit_id,
+      current_date: visit.scheduled_date,
+      reschedule_count: visit.reschedule_count || 0,
+      reschedule_history: visit.reschedule_history || [],
     };
   },
 
   // Schedule a backdated visit
-  async scheduleBackdatedVisit(data: any) {
+  async scheduleBackdatedVisit(data: any, rawProfile: UserProfile) { // userProfile required
+    const userProfile = normalizeUserProfile(rawProfile);
     const now = new Date().toISOString();
-    const { created_by, ...visitArgs } = data;
+    
+    // Authorization: Only Admin and Team Lead can schedule backdated visits
+    const isAuthorized = await visitService._authorizeVisitAdminAction(userProfile);
+    if (!isAuthorized) {
+      throw new Error(`Access denied: User ${userProfile.email} (Role: ${userProfile.role}) is not authorized to schedule backdated visits`);
+    }
+
+    // If Team Lead, ensure it's for their team members
+    const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
+    if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
+      const teamName = userProfile.team_name || userProfile.teamName;
+      if (data.agent_id !== userProfile.email) { // If creating for someone else
+        const { data: teamMembers } = await getSupabaseAdmin()
+          .from('user_profiles')
+          .select('email')
+          .eq('team_name', teamName)
+          .in('role', ['agent', 'Agent']);
+        const teamMemberEmails = teamMembers?.map(m => m.email) || [];
+        if (!teamMemberEmails.includes(data.agent_id)) {
+          throw new Error(`Access denied: Team Lead ${userProfile.email} cannot schedule backdated visit for agent ${data.agent_id} outside their team`);
+        }
+      }
+    }
     
     const visitData = {
-      ...visitArgs,
-      visit_date: visitArgs.visit_date || visitArgs.scheduled_date,
+      ...data,
+      visit_date: data.visit_date || data.scheduled_date,
       is_backdated: true,
-      backdated_by: created_by,
+      backdated_by: userProfile.email, // Use authenticated user's email
       backdated_at: now,
       created_at: now,
       updated_at: now,

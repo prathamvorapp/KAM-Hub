@@ -1,32 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authenticateRequest } from '@/lib/api-auth';
 import { visitService } from '@/lib/services';
 
 export async function POST(request: NextRequest) {
   try {
-    const userEmail = request.headers.get('x-user-email');
-    const userRole = request.headers.get('x-user-role');
-    
-    if (!userEmail) {
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
+    if (!user) {
       return NextResponse.json({
+        success: false,
         error: 'Authentication required'
       }, { status: 401 });
     }
 
-    // Only Team Leads and Admins can schedule backdated visits
-    // Normalize role comparison to handle both formats
-    const normalizedRole = userRole?.toLowerCase().replace(/[_\s]/g, '');
-    if (normalizedRole !== 'teamlead' && normalizedRole !== 'admin') {
+    // Only Team Leads and Admins can schedule backdated visits (case-insensitive)
+    const normalizedRole = user.role.toLowerCase().replace(/\s+/g, '_');
+    if (normalizedRole !== 'team_lead' && normalizedRole !== 'admin') {
       return NextResponse.json({
+        success: false,
         error: 'Access denied - Team Lead or Admin only'
       }, { status: 403 });
     }
 
     const body = await request.json();
 
-    await visitService.scheduleBackdatedVisit({
-      ...body,
-      created_by: userEmail
-    });
+    await visitService.scheduleBackdatedVisit(body, user); // Pass the userProfile here
 
     return NextResponse.json({
       success: true,
@@ -34,11 +32,10 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('❌ Error scheduling backdated visit:', error);
+    console.error('[Visit Backdated] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to schedule backdated visit',
-      detail: String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

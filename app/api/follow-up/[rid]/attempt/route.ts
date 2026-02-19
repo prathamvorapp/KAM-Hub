@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUser } from '../../../../../lib/auth-helpers';
+import { authenticateRequest } from '@/lib/api-auth';
 import { churnService } from '@/lib/services';
 import NodeCache from 'node-cache';
 
@@ -10,8 +10,10 @@ const statisticsCache = new NodeCache({ stdTTL: 180 });
 export async function POST(request: NextRequest, { params }: { params: Promise<{ rid: string }> }) {
   try {
     const { rid } = await params;
-    const user = await getAuthenticatedUser(request);
     
+    // Authenticate
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
     if (!user) {
       return NextResponse.json({
         success: false,
@@ -31,7 +33,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       call_response,
       notes,
       churn_reason,
-      email: user.email
+      userProfile: user // Pass the entire user object as userProfile
     });
 
     console.log(`✅ Call attempt recorded successfully`);
@@ -51,11 +53,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
 
   } catch (error) {
-    console.error('❌ Error recording call attempt:', error);
+    console.error('❌ [Record Call Attempt] Error:', error);
     return NextResponse.json({
       success: false,
       error: 'Failed to record call attempt',
-      detail: String(error)
+      detail: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

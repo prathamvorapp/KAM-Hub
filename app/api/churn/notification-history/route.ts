@@ -1,24 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase-client';
-import { UserRole } from '../../../../lib/models/user';
+import { authenticateRequest, hasRole } from '@/lib/api-auth';
+import { getSupabaseAdmin } from '@/lib/supabase-server';
+import { UserRole } from '@/lib/models/user';
 
 export async function GET(request: NextRequest) {
   try {
-    // Get user info from middleware
-    const userEmail = request.headers.get('x-user-email');
-    const userRole = request.headers.get('x-user-role');
-    
-    if (!userEmail) {
+    // Authenticate
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
+    if (!user) {
       return NextResponse.json({
-        error: 'Authentication required',
-        detail: 'User not authenticated'
+        success: false,
+        error: 'Authentication required'
       }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '50');
 
-    console.log(`📜 Getting notification history for: ${userEmail}, role: ${userRole}`);
+    console.log(`📜 Getting notification history for: ${user.email}, role: ${user.role}`);
 
     // Get notification history from Supabase
     let query = getSupabaseAdmin()
@@ -28,26 +28,27 @@ export async function GET(request: NextRequest) {
       .limit(limit);
 
     // Filter by email if not admin
-    if (userRole !== UserRole.ADMIN) {
-      query = query.eq('email', userEmail);
+    if (!hasRole(user, [UserRole.ADMIN])) {
+      query = query.eq('email', user.email);
     }
 
-    const { data: notifications, error } = await query;
+    const { data: notifications, error: queryError } = await query;
 
-    if (error) throw error;
+    if (queryError) throw queryError;
 
     return NextResponse.json({
       success: true,
       data: notifications || [],
       user_info: {
-        role: userRole,
-        email: userEmail
+        role: user.role,
+        email: user.email
       }
     });
 
   } catch (error) {
-    console.error('❌ Error getting notification history:', error);
+    console.error('❌ [Notification History] Error:', error);
     return NextResponse.json({
+      success: false,
       error: 'Failed to get notification history',
       detail: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });

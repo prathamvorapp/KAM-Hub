@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUser } from '../../../../../lib/auth-helpers';
+import { authenticateRequest } from '@/lib/api-auth';
 import { visitService } from '@/lib/services';
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthenticatedUser(request);
-    
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
     if (!user) {
       return NextResponse.json({
         success: false,
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     const result = await visitService.submitMoM({
       ...body,
       created_by: user.email
-    });
+    }, user as any);
 
     return NextResponse.json({
       success: true,
@@ -28,11 +28,10 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('❌ Error submitting MOM:', error);
+    console.error('[MOM Visit Submit] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to submit MOM',
-      detail: String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

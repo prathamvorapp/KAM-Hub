@@ -1,35 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase-client';
+import { authenticateRequest, hasRole, unauthorizedResponse } from '@/lib/api-auth';
+import { getSupabaseAdmin } from '@/lib/supabase-server';
 
 export async function GET(request: NextRequest) {
   try {
-    const userEmail = request.headers.get('x-user-email');
-    const userRole = request.headers.get('x-user-role');
-    
-    if (!userEmail) {
+    // Authenticate
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
+    if (!user) {
       return NextResponse.json({
+        success: false,
         error: 'Authentication required'
       }, { status: 401 });
     }
 
-    // Only admins can get all agents
-    if (userRole !== 'Admin') {
-      return NextResponse.json({
-        error: 'Access denied - Admin only'
-      }, { status: 403 });
+    // Check admin role
+    if (!hasRole(user, ['admin'])) {
+      return unauthorizedResponse('Access denied - Admin only');
     }
 
     const supabase = getSupabaseAdmin();
 
-    const { data: agents, error } = await supabase
+    const { data: agents, error: dbError } = await supabase
       .from('user_profiles')
       .select('*')
       .in('role', ['agent', 'Agent'])
       .eq('is_active', true)
       .order('full_name');
 
-    if (error) {
-      throw error;
+    if (dbError) {
+      throw dbError;
     }
 
     return NextResponse.json({

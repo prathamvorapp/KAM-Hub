@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Bell, Clock, Phone, AlertCircle, X } from 'lucide-react';
-import { convexAPI } from '../lib/convex-api';
+import { api } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 
 interface FollowUpReminder {
@@ -23,7 +23,7 @@ interface FollowUpNotificationsProps {
 export const FollowUpNotifications: React.FC<FollowUpNotificationsProps> = ({
   onReminderClick
 }) => {
-  const { user } = useAuth();
+  const { userProfile } = useAuth();
   const [reminders, setReminders] = useState<FollowUpReminder[]>([]);
   const [showPanel, setShowPanel] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -33,14 +33,14 @@ export const FollowUpNotifications: React.FC<FollowUpNotificationsProps> = ({
       setLoading(true);
       
       // Only load reminders if user is authenticated
-      if (!user?.email) {
+      if (!userProfile?.email) {
         setReminders([]);
         return;
       }
       
       // Get overdue and active follow-ups from Convex with user email for role-based filtering
-      const overdueResult = await convexAPI.getOverdueFollowUps(undefined, user.email);
-      const activeResult = await convexAPI.getActiveFollowUps(undefined, user.email);
+      const overdueResult = await api.getOverdueFollowUps(undefined, userProfile.email);
+      const activeResult = await api.getActiveFollowUps(undefined, userProfile.email);
       
       // Combine and format the data
       const overdueReminders = (overdueResult.data || []).map((record: any) => ({
@@ -88,7 +88,7 @@ export const FollowUpNotifications: React.FC<FollowUpNotificationsProps> = ({
 
   useEffect(() => {
     // Only load reminders if user is authenticated
-    if (user?.email) {
+    if (userProfile?.email) {
       loadReminders();
       
       // Refresh reminders every 5 minutes
@@ -97,7 +97,7 @@ export const FollowUpNotifications: React.FC<FollowUpNotificationsProps> = ({
     } else {
       setReminders([]);
     }
-  }, [user?.email]);
+  }, [userProfile?.email]);
 
   const overdueCount = reminders.filter(r => r.is_overdue).length;
   const totalCount = reminders.length;

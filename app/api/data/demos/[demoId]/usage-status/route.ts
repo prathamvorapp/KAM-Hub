@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUser } from '../../../../../../lib/auth-helpers';
+import { authenticateRequest } from '@/lib/api-auth';
 import { demoService } from '@/lib/services';
+import { clearDemoStatsCache } from '@/lib/cache/demoCache';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ demoId: string }> }) {
   try {
     const { demoId } = await params;
-    const user = await getAuthenticatedUser(request);
-    
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
     if (!user) {
       return NextResponse.json({
         success: false,
@@ -22,7 +23,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const result = await demoService.setUsageStatus({
       demoId,
       usageStatus
-    });
+    }, user); // Pass the userProfile here
+
+    // Clear the demo statistics cache
+    clearDemoStatsCache(user.email);
 
     return NextResponse.json({
       success: true,
@@ -30,11 +34,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
 
   } catch (error) {
-    console.error('❌ Error setting usage status:', error);
+    console.error('[Demo Usage Status] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to set usage status',
-      detail: String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

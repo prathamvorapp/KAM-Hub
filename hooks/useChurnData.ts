@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface ChurnRecord {
@@ -46,8 +46,8 @@ interface UseChurnDataOptions {
 }
 
 export function useChurnData(options: UseChurnDataOptions = {}) {
-  const { page = 1, limit = 100, search, autoFetch = true } = options
-  const { user, userProfile } = useAuth()
+  const { page = 1, limit = 50, search, autoFetch = true } = options
+  const { userProfile: authUserProfile, session } = useAuth()
   const [data, setData] = useState<ChurnRecord[]>([])
   const [pagination, setPagination] = useState({
     page: 1,
@@ -61,27 +61,40 @@ export function useChurnData(options: UseChurnDataOptions = {}) {
   const [missingChurnReasons, setMissingChurnReasons] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  // Use refs to prevent infinite loops
+  const fetchingRef = useRef(false)
+  const mountedRef = useRef(true)
+  
+  // Stable user identifier
+  const userId = useMemo(() => authUserProfile?.id, [authUserProfile?.id])
+  const userEmail = useMemo(() => authUserProfile?.email, [authUserProfile?.email])
 
   // PERFORMANCE OPTIMIZATION: Memoize API URL
   const apiUrl = useMemo(() => '', [])  // Use relative paths for same-origin requests
 
   // PERFORMANCE OPTIMIZATION: Debounced fetch function
   const fetchChurnData = useCallback(async (fetchPage = page, fetchLimit = limit, fetchSearch = search) => {
-    if (!user || !userProfile) {
+    // Prevent concurrent fetches
+    if (fetchingRef.current) {
+      console.log('⏳ [useChurnData] Fetch already in progress, skipping...')
+      return
+    }
+    
+    if (!userId || !session) {
+      console.log('❌ [useChurnData] User not authenticated', { userId: !!userId, session: !!session });
       setError('User not authenticated')
+      setLoading(false)
       return
     }
 
+    fetchingRef.current = true
+
     try {
+      if (!mountedRef.current) return
+      
       setLoading(true)
       setError(null)
-
-      // Get access token from localStorage
-      const token = localStorage.getItem('auth_token')
-      if (!token) {
-        setError('No access token available')
-        return
-      }
 
       // Build query parameters
       const params = new URLSearchParams({
@@ -93,56 +106,73 @@ export function useChurnData(options: UseChurnDataOptions = {}) {
         params.append('search', fetchSearch)
       }
 
-      console.log(`🔍 Fetching churn data: page=${fetchPage}, limit=${fetchLimit}, search=${fetchSearch}`)
+      console.log(`🔍 [useChurnData] Fetching: page=${fetchPage}, limit=${fetchLimit}, search=${fetchSearch}`)
 
-      const response = await fetch(`${apiUrl}/api/churn?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+      // Add timeout to prevent infinite loading
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+      try {
+        // Cookies are sent automatically, no need for Authorization header
+        const response = await fetch(`${apiUrl}/api/churn?${params}`, {
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include', // Ensure cookies are sent
+          signal: controller.signal
+        })
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || `HTTP ${response.status}`)
         }
-      })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || `HTTP ${response.status}`)
+        const result: ChurnDataResponse = await response.json()
+        
+        if (!mountedRef.current) return
+        
+        console.log(`✅ [useChurnData] Fetched: ${result.data.length} records, total: ${result.pagination.total}`)
+
+        setData(result.data)
+        setPagination(result.pagination)
+        setUserInfo(result.user_info)
+        setMissingChurnReasons(result.missing_churn_reasons)
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+          throw new Error('Request timeout - server took too long to respond')
+        }
+        throw fetchError;
       }
-
-      const result: ChurnDataResponse = await response.json()
-      
-      console.log(`📊 Churn data fetched: ${result.data.length} records, total: ${result.pagination.total}`)
-
-      setData(result.data)
-      setPagination(result.pagination)
-      setUserInfo(result.user_info)
-      setMissingChurnReasons(result.missing_churn_reasons)
     } catch (err) {
-      console.error('Error fetching churn data:', err)
+      if (!mountedRef.current) return
+      console.error('❌ [useChurnData] Error:', err)
       setError(err instanceof Error ? err.message : 'Failed to fetch churn data')
     } finally {
-      setLoading(false)
+      if (mountedRef.current) {
+        setLoading(false)
+      }
+      fetchingRef.current = false
     }
-  }, [user, userProfile, apiUrl, page, limit, search])
+  }, [userId, session, apiUrl]) // Stable dependencies only
 
   const updateChurnReason = useCallback(async (rid: string, churnReason: string, remarks?: string) => {
-    if (!user) {
+    if (!userId || !session) {
       throw new Error('User not authenticated')
     }
 
     try {
-      // Get access token from localStorage
-      const token = localStorage.getItem('auth_token')
-      if (!token) {
-        throw new Error('No access token available')
-      }
+      console.log(`📝 [useChurnData] Updating churn reason for RID: ${rid}`)
 
-      console.log(`📝 Updating churn reason for RID: ${rid}`)
-
+      // Cookies are sent automatically, no need for Authorization header
       const response = await fetch(`${apiUrl}/api/churn/update-reason`, {
         method: 'PATCH',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
+        credentials: 'include', // Ensure cookies are sent
         body: JSON.stringify({
           rid,
           churn_reason: churnReason,
@@ -156,27 +186,45 @@ export function useChurnData(options: UseChurnDataOptions = {}) {
       }
 
       const result = await response.json()
-      console.log(`✅ Churn reason updated successfully for RID: ${rid}`)
+      console.log(`✅ [useChurnData] Churn reason updated for RID: ${rid}`)
 
       // Refresh data after update
       await fetchChurnData()
       
       return result
     } catch (err) {
-      console.error('Error updating churn reason:', err)
+      console.error('❌ [useChurnData] Error updating churn reason:', err)
       throw err
     }
-  }, [user, apiUrl, fetchChurnData])
+  }, [userId, session, apiUrl, fetchChurnData])
 
   // PERFORMANCE OPTIMIZATION: Memoize refetch function
   const refetch = useCallback(() => fetchChurnData(), [fetchChurnData])
 
-  // Auto-fetch on mount and when dependencies change
+  // Auto-fetch on mount and when dependencies change - ONLY ONCE
   useEffect(() => {
-    if (autoFetch && user && userProfile) {
-      fetchChurnData()
+    mountedRef.current = true
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 [useChurnData] useEffect triggered', {
+        autoFetch,
+        hasUserId: !!userId,
+        hasSession: !!session,
+        userEmail
+      });
     }
-  }, [autoFetch, fetchChurnData])
+    
+    if (userId && session) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ [useChurnData] Conditions met, fetching data');
+      }
+      fetchChurnData(page, limit, search)
+    }
+    
+    return () => {
+      mountedRef.current = false
+    }
+  }, [autoFetch, userId, session, page, limit, search, fetchChurnData]) // Stable dependencies
 
   return {
     data,

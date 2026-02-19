@@ -86,7 +86,6 @@ if (module === 'visits') {
 
 ### Development Server
 - **Next.js:** http://localhost:3022
-- **Caddy Proxy (HTTPS):** https://localhost:3020
 
 ### How to Access
 1. Open browser and navigate to: https://localhost:3020

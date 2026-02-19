@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUser } from '../../../../../lib/auth-helpers';
+import { authenticateRequest } from '@/lib/api-auth';
 import { churnService } from '@/lib/services';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ rid: string }> }) {
   try {
     const { rid } = await params;
-    const user = await getAuthenticatedUser(request);
     
+    // Authenticate
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
     if (!user) {
       return NextResponse.json({
         success: false,
@@ -16,7 +18,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     console.log(`📊 Getting follow-up status for RID: ${rid}`);
 
-    const result = await churnService.getFollowUpStatus(rid, user.email);
+    const result = await churnService.getFollowUpStatus(rid, user);
 
     return NextResponse.json({
       success: true,
@@ -24,11 +26,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     });
 
   } catch (error) {
-    console.error('❌ Error getting follow-up status:', error);
+    console.error('❌ [Follow-up Status] Error:', error);
     return NextResponse.json({
       success: false,
       error: 'Failed to get follow-up status',
-      detail: String(error)
+      detail: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

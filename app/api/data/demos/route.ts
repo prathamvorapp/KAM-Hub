@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUser, getDataFilter } from '../../../../lib/auth-helpers';
+import { authenticateRequest } from '@/lib/api-auth';
 import { demoService } from '@/lib/services';
+import { clearDemoStatsCache } from '@/lib/cache/demoCache';
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthenticatedUser(request);
-    
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
     if (!user) {
       return NextResponse.json({
         success: false,
@@ -15,11 +16,7 @@ export async function GET(request: NextRequest) {
 
     console.log(`📊 Getting demos for user: ${user.email} (${user.role})`);
 
-    const result = await demoService.getDemosForAgent({
-      agentId: user.email,
-      role: user.role,
-      teamName: user.team_name
-    });
+    const result = await demoService.getDemosForAgent(user); // Pass the entire user object as userProfile
 
     return NextResponse.json({
       success: true,
@@ -27,19 +24,18 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('❌ Error getting demos:', error);
+    console.error('[Demos GET] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to load demos',
-      detail: String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthenticatedUser(request);
-    
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
     if (!user) {
       return NextResponse.json({
         success: false,
@@ -59,7 +55,10 @@ export async function POST(request: NextRequest) {
 
     console.log(`🚀 Initializing demos for brand: ${brandId}`);
 
-    const result = await demoService.initializeBrandDemosFromMasterData(brandId);
+    const result = await demoService.initializeBrandDemosFromMasterData(brandId, user); // Pass userProfile
+
+    // Clear the demo statistics cache for the user
+    clearDemoStatsCache(user.email);
 
     return NextResponse.json({
       success: true,
@@ -67,11 +66,10 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('❌ Error initializing demos:', error);
+    console.error('[Demos POST] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to initialize demos',
-      detail: String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

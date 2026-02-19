@@ -5,8 +5,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { token } = body;
 
-    // Since we removed token-based auth and use localStorage only,
-    // this endpoint just returns invalid to force re-login
+    // With server-first, cookie-based authentication using @supabase/ssr,
+    // client-side token verification is typically handled implicitly by the presence
+    // of auth cookies. This endpoint is retained as a stub and always returns invalid
+    // to prompt re-login if explicit client-side token validation is attempted
+    // outside of the standard Supabase flow.
     return NextResponse.json({
       valid: false,
       message: 'Token verification not supported. Please login again.'

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-// Churn Record Schema - Updated to match Convex schema
+// Churn Record Schema
 export const ChurnRecordSchema = z.object({
   _id: z.string().optional(),
   date: z.string(),
@@ -20,7 +20,7 @@ export const ChurnRecordSchema = z.object({
   uploaded_at: z.string().optional(),
   created_at: z.string().optional(),
   updated_at: z.string().optional(),
-  // Additional fields from Convex schema
+  // Call attempt tracking
   call_attempts: z.array(z.object({
     call_number: z.number(),
     call_response: z.string(),

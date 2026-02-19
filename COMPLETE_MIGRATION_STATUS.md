@@ -190,9 +190,10 @@ import { visitService } from '@/lib/services';
 
 ### Step 2: Get User Info
 ```typescript
-// Get from middleware headers or cookies
-let userEmail = request.headers.get('x-user-email');
-let userRole = request.headers.get('x-user-role');
+// Get from API authentication
+const authResult = await requireAuth(request);
+if (authResult instanceof NextResponse) return authResult;
+const { user } = authResult;
 
 if (!userEmail) {
   const userSession = request.cookies.get('user-session');

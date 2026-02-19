@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUser, getDataFilter } from '../../../../lib/auth-helpers';
+import { authenticateRequest } from '@/lib/api-auth';
 import { masterDataService } from '@/lib/services';
 import NodeCache from 'node-cache';
 
@@ -8,9 +8,9 @@ const masterDataCache = new NodeCache({ stdTTL: 600 }); // 10 minutes TTL
 
 export async function GET(request: NextRequest) {
   try {
-    // Get authenticated user
-    const user = await getAuthenticatedUser(request);
-    
+    // Authenticate
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
     if (!user) {
       return NextResponse.json({
         success: false,
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 
     // Get master data from Supabase with role-based filtering
     const result = await masterDataService.getMasterData({
-      email: user.email,
+      userProfile: user, // Pass the entire user object as userProfile
       search,
       page,
       limit
@@ -53,11 +53,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(response);
 
   } catch (error) {
-    console.error('❌ Error getting master data:', error);
+    console.error('❌ [Master Data] Error:', error);
     return NextResponse.json({
       success: false,
       error: 'Failed to load master data',
-      detail: String(error)
+      detail: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

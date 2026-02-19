@@ -8,9 +8,10 @@ interface TeamLeadAgentStatsModalProps {
   isOpen: boolean
   onClose: () => void
   userEmail: string
+  isAdmin?: boolean // New prop to indicate if this is for admin
 }
 
-export default function TeamLeadAgentStatsModal({ isOpen, onClose, userEmail }: TeamLeadAgentStatsModalProps) {
+export default function TeamLeadAgentStatsModal({ isOpen, onClose, userEmail, isAdmin = false }: TeamLeadAgentStatsModalProps) {
   const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   const handleRefresh = () => {
@@ -32,7 +33,7 @@ export default function TeamLeadAgentStatsModal({ isOpen, onClose, userEmail }: 
             <div className="flex items-center">
               <Users className="w-6 h-6 mr-2 text-blue-200" />
               <h2 className="text-xl font-bold text-white">
-                Team Agent Statistics
+                {isAdmin ? 'Organization Agent Statistics' : 'Team Agent Statistics'}
               </h2>
             </div>
             <div className="flex items-center space-x-2">
@@ -57,6 +58,7 @@ export default function TeamLeadAgentStatsModal({ isOpen, onClose, userEmail }: 
               <TeamLeadAgentStatistics 
                 userEmail={userEmail} 
                 onRefresh={handleRefresh}
+                isAdmin={isAdmin}
                 key={refreshTrigger}
               />
             </div>

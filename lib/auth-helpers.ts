@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { UserService } from './services/userService';
+import { createServerSupabaseClient } from './supabase-server';
 
 const userService = new UserService();
 
@@ -11,32 +12,48 @@ export interface AuthenticatedUser {
 }
 
 /**
- * Get authenticated user from session cookie
+ * Get authenticated user from Supabase session
  * Returns null if not authenticated or user is inactive
  */
 export async function getAuthenticatedUser(request: NextRequest): Promise<AuthenticatedUser | null> {
-  const sessionCookie = request.cookies.get('user-session');
-  if (!sessionCookie) {
-    return null;
-  }
-  
   try {
-    const sessionData = JSON.parse(sessionCookie.value);
+    // Get Supabase client with request context
+    const supabase = await createServerSupabaseClient();
     
-    // Verify user still exists and is active
-    const userProfile = await userService.getUserProfileByEmail(sessionData.email);
-    if (!userProfile || !userProfile.is_active) {
+    // Get the current user (this validates the JWT from cookies)
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
+      return null;
+    }
+    
+    // Get user profile from database
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('email, role, team_name, full_name, is_active')
+      .eq('auth_id', user.id)
+      .single();
+    
+    // Type assertion for profile
+    const userProfile = profile as {
+      email: string;
+      role: string;
+      team_name: string;
+      full_name: string;
+      is_active: boolean;
+    } | null;
+    
+    if (profileError || !userProfile || !userProfile.is_active) {
       return null;
     }
     
     return {
-      email: sessionData.email,
-      role: sessionData.role,
-      team_name: sessionData.team_name,
-      full_name: userProfile.full_name
+      email: userProfile.email,
+      role: userProfile.role,
+      team_name: userProfile.team_name,
+             full_name: userProfile.full_name,
     };
   } catch (error) {
-    console.error('Error parsing session:', error);
     return null;
   }
 }

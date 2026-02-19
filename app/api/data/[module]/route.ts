@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authenticateRequest } from '@/lib/api-auth';
 import { ModuleQuerySchema, MODULE_SCHEMAS, ModuleName } from '../../../../lib/models/visits';
 import { visitService, demoService, healthCheckService, momService, userService } from '../../../../lib/services';
 import { UserRole } from '../../../../lib/models/user';
+import { v4 as uuidv4 } from 'uuid'; // Import uuid for visit_id generation
 
 export async function GET(
   request: NextRequest,
@@ -13,17 +15,16 @@ export async function GET(
     
     if (!MODULE_SCHEMAS[module]) {
       return NextResponse.json({
+        success: false,
         error: `Module '${module}' not found`
       }, { status: 404 });
     }
 
-    // Get user info from middleware
-    const userEmail = request.headers.get('x-user-email');
-    const userRole = request.headers.get('x-user-role');
-    const userTeam = request.headers.get('x-user-team');
-    
-    if (!userEmail) {
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
+    if (!user) {
       return NextResponse.json({
+        success: false,
         error: 'Authentication required'
       }, { status: 401 });
     }
@@ -47,29 +48,19 @@ export async function GET(
     });
 
     // Get role-based filters
-    const baseFilters = userService.getDataFiltersForUser({
-      email: userEmail,
-      role: userRole as any,
-      team_name: userTeam || undefined,
-      full_name: '',
-      permissions: [],
-      is_active: true
-    });
+    const baseFilters = userService.getDataFiltersForUser(user as any); // Pass full user object
     
     // Merge with request filters (if user has permission)
     let filters = { ...baseFilters };
     
-    // Normalize role for comparison
-    const normalizedRole = userRole?.toLowerCase().replace(/[_\s]/g, '');
-    
     // Admin can override filters, team leads can filter within their team
-    if (normalizedRole === 'admin') {
+    if (user.role === 'Admin') {
       if (queryParams.team) {
         filters.team = queryParams.team;
       }
-    } else if (normalizedRole === 'teamlead' && queryParams.team) {
+    } else if (user.role === 'Team Lead' && queryParams.team) {
       // Team leads can only filter within their own team
-      if (queryParams.team === userTeam) {
+      if (queryParams.team === user.team_name) {
         filters.team = queryParams.team;
       }
     }
@@ -81,7 +72,7 @@ export async function GET(
       switch (module) {
         case 'visits':
           const visitsResult = await visitService.getVisits({
-            email: userEmail,
+            userProfile: user as any, // Pass the entire user object
             page: Math.floor(queryParams.offset / queryParams.limit) + 1,
             limit: queryParams.limit,
             search: queryParams.search
@@ -99,18 +90,14 @@ export async function GET(
           break;
           
         case 'demos':
-          const demosResult = await demoService.getDemosForAgent({
-            agentId: userEmail,
-            role: userRole as any,
-            teamName: userTeam || undefined
-          });
+          const demosResult = await demoService.getDemosForAgent(user as any); // Pass the entire user object
           moduleData = demosResult;
           total = demosResult.length;
           break;
           
         case 'health-checks':
           const healthChecksResult = await healthCheckService.getHealthChecks({
-            email: userEmail,
+            userProfile: user as any, // Pass the entire user object
             page: Math.floor(queryParams.offset / queryParams.limit) + 1,
             limit: queryParams.limit
           });
@@ -120,7 +107,7 @@ export async function GET(
           
         case 'MOM':
           const momResult = await momService.getMOMs({
-            email: userEmail,
+            userProfile: user as any, // Pass the entire user object
             page: Math.floor(queryParams.offset / queryParams.limit) + 1,
             limit: queryParams.limit
           });
@@ -135,124 +122,24 @@ export async function GET(
     } catch (serviceError) {
       console.error(`❌ Service error for ${module}:`, serviceError);
       
-      // Fallback to demo data if Convex fails
-      switch (module) {
-        case 'visits':
-          moduleData = [
-            {
-              id: '1',
-              visit_id: 'V001',
-              brand_id: 'B001',
-              brand_name: 'Sample Restaurant',
-              agent_id: userEmail,
-              agent_name: 'Agent',
-              team_lead_id: userTeam || '',
-              scheduled_date: '2024-01-15',
-              visit_date: '2024-01-15',
-              visit_status: 'Completed',
-              mom_shared: 'Yes',
-              mom_shared_date: '2024-01-16',
-              approval_status: 'Approved',
-              visit_year: '2024',
-              purpose: 'Regular check-up',
-              outcome: 'Positive feedback',
-              next_steps: 'Follow up in 2 weeks',
-              duration_minutes: '45',
-              attendees: 'Manager, Owner',
-              notes: 'Good meeting',
-              created_at: '2024-01-15T10:00:00Z',
-              updated_at: '2024-01-16T10:00:00Z'
-            }
-          ];
-          total = 1;
-          break;
-          
-        case 'demos':
-          moduleData = [
-            {
-              id: '1',
-              demo_id: 'D001',
-              customer_name: 'Sample Customer',
-              demo_date: '2024-01-15',
-              product_demo: 'POS System',
-              attendees: 'Owner, Manager',
-              outcome: 'Interested',
-              follow_up_date: '2024-01-22',
-              created_by: userEmail,
-              team: userTeam || 'Default Team',
-              status: 'Completed',
-              demo_done_count: '1',
-              demo_pending_count: '0',
-              last_connected: '2024-01-15',
-              brand_type: 'Restaurant'
-            }
-          ];
-          total = 1;
-          break;
-          
-        case 'health-checks':
-          moduleData = [
-            {
-              id: '1',
-              check_id: 'HC001',
-              kam_name: 'Agent',
-              brand_name: 'Sample Restaurant',
-              zone: 'South',
-              health_status: 'Good',
-              nature_of_visit: 'Regular Check',
-              remarks: 'All systems working well',
-              dead_not_connected: 'Connected',
-              customer_name: 'Restaurant Owner',
-              check_date: '2024-01-15',
-              health_score: 85,
-              issues_identified: 'None',
-              action_items: 'Continue monitoring',
-              next_check_date: '2024-02-15',
-              created_by: userEmail,
-              team: userTeam || 'Default Team'
-            }
-          ];
-          total = 1;
-          break;
-          
-        case 'MOM':
-          moduleData = [
-            {
-              id: '1',
-              ticket_id: 'MOM001',
-              title: 'Sample MOM Record',
-              description: 'This is a sample MOM record for testing',
-              status: 'Open',
-              priority: 'Medium',
-              created_by: userEmail,
-              assigned_to: userEmail,
-              team: userTeam || 'Default Team',
-              created_at: '2024-01-15T10:00:00Z',
-              updated_at: '2024-01-15T10:00:00Z'
-            }
-          ];
-          total = 1;
-          break;
-          
-        default:
-          moduleData = [];
-          total = 0;
-      }
+      // Fallback to demo data if service fails - remove demo data for security reasons
+      // The service should throw an error if authorization fails, not return fake data.
+      // Re-throw the error to be caught by the outer catch block.
+      throw serviceError; 
     }
 
+    // This part should be unreachable if case statements above return responses
     return NextResponse.json({
       data: moduleData,
       total: total,
-      message: total > 0 ? `${module} data loaded from Convex` : `${module} module - no data available`,
+      message: total > 0 ? `${module} data loaded from Supabase` : `${module} module - no data available`,
       filters_applied: filters
     });
   } catch (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`❌ Error fetching module data: ${error}`);
-    }
+    console.error('[Module GET] Error:', error);
     return NextResponse.json({
-      error: 'Failed to fetch module data',
-      detail: String(error)
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }
@@ -268,17 +155,16 @@ export async function POST(
     
     if (!MODULE_SCHEMAS[module]) {
       return NextResponse.json({
+        success: false,
         error: `Module '${module}' not found`
       }, { status: 404 });
     }
 
-    // Get user info from middleware
-    const userEmail = request.headers.get('x-user-email');
-    const userRole = request.headers.get('x-user-role');
-    const userTeam = request.headers.get('x-user-team');
-    
-    if (!userEmail) {
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
+    if (!user) {
       return NextResponse.json({
+        success: false,
         error: 'Authentication required'
       }, { status: 401 });
     }
@@ -287,18 +173,13 @@ export async function POST(
     
     // Handle visit creation
     if (module === 'visits') {
-      const { v4: uuidv4 } = require('uuid');
-      
-      // Get user profile for agent name
-      const userProfile = await userService.getUserProfileByEmail(userEmail);
-      
       const visitData = {
-        visit_id: uuidv4(),
+        visit_id: uuidv4(), // Generate UUID
         brand_id: body.brand_id,
         brand_name: body.brand_name,
-        agent_id: userEmail,
-        agent_name: userProfile?.full_name || userEmail,
-        team_name: userTeam || userProfile?.team_name,
+        agent_id: user.email, // Use authenticated user's email
+        agent_name: user.full_name, // Use authenticated user's full_name
+        team_name: user.team_name, // Use authenticated user's team_name
         scheduled_date: body.scheduled_date,
         visit_status: body.visit_status || 'Scheduled',
         visit_year: body.visit_year || new Date(body.scheduled_date).getFullYear().toString(),
@@ -306,7 +187,7 @@ export async function POST(
         zone: body.zone,
       };
       
-      await visitService.createVisit(visitData);
+      await visitService.createVisit(visitData, user); // Pass userProfile
       
       return NextResponse.json({
         success: true,
@@ -315,13 +196,14 @@ export async function POST(
     }
 
     return NextResponse.json({
+      success: false,
       error: `Create ${module} not yet implemented`
     }, { status: 501 });
   } catch (error) {
-    console.log(`❌ Error creating record: ${error}`);
+    console.error('[Module POST] Error:', error);
     return NextResponse.json({
-      error: 'Failed to create record',
-      detail: String(error)
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }
@@ -337,27 +219,29 @@ export async function PUT(
     
     if (!MODULE_SCHEMAS[module]) {
       return NextResponse.json({
+        success: false,
         error: `Module '${module}' not found`
       }, { status: 404 });
     }
 
-    // Get user info from middleware
-    const userEmail = request.headers.get('x-user-email');
-    
-    if (!userEmail) {
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
+    if (!user) {
       return NextResponse.json({
+        success: false,
         error: 'Authentication required'
       }, { status: 401 });
     }
 
     return NextResponse.json({
-      error: `Update ${module} not yet implemented with Convex`
+      success: false,
+      error: `Update ${module} not yet implemented`
     }, { status: 501 });
   } catch (error) {
-    console.log(`❌ Error updating record: ${error}`);
+    console.error('[Module PUT] Error:', error);
     return NextResponse.json({
-      error: 'Failed to update record',
-      detail: String(error)
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }
@@ -373,35 +257,37 @@ export async function DELETE(
     
     if (!MODULE_SCHEMAS[module]) {
       return NextResponse.json({
+        success: false,
         error: `Module '${module}' not found`
       }, { status: 404 });
     }
 
-    // Get user info from middleware
-    const userEmail = request.headers.get('x-user-email');
-    const userRole = request.headers.get('x-user-role');
-    
-    if (!userEmail) {
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
+    if (!user) {
       return NextResponse.json({
+        success: false,
         error: 'Authentication required'
       }, { status: 401 });
     }
 
     // Only admins can delete records
-    if (userRole !== UserRole.ADMIN) {
+    if (user.role !== UserRole.ADMIN) {
       return NextResponse.json({
+        success: false,
         error: 'Admin access required for delete operations'
       }, { status: 403 });
     }
 
     return NextResponse.json({
-      error: `Delete ${module} not yet implemented with Convex`
+      success: false,
+      error: `Delete ${module} not yet implemented`
     }, { status: 501 });
   } catch (error) {
-    console.log(`❌ Error deleting record: ${error}`);
+    console.error('[Module DELETE] Error:', error);
     return NextResponse.json({
-      error: 'Failed to delete record',
-      detail: String(error)
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

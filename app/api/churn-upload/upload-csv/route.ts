@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authenticateRequest, hasRole, unauthorizedResponse } from '@/lib/api-auth';
 import { ChurnCSVRowSchema } from '../../../../lib/models/churn';
-import { UserRole } from '../../../../lib/models/user';
+import { UserRole } from '@/lib/models/user';
 import { churnService } from '../../../../lib/services';
-import { getAuthenticatedUser } from '../../../../lib/auth-helpers';
 import { sanitizeInput, sanitizeFileName } from '../../../../lib/sanitize';
 import csv from 'csv-parser';
 import { Readable } from 'stream';
@@ -103,24 +103,19 @@ const isBOTeamMember = (userRole: string, userTeam?: string): boolean => {
 
 export async function POST(request: NextRequest) {
   try {
-    // Get authenticated user
-    const user = await getAuthenticatedUser(request);
-    
+    // Authenticate
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
     if (!user) {
       return NextResponse.json({
         success: false,
-        error: 'Authentication required',
-        detail: 'User not authenticated'
+        error: 'Authentication required'
       }, { status: 401 });
     }
 
     // Check if user is BO team member (Admin can upload)
-    if (!isBOTeamMember(user.role, user.team_name || '')) {
-      return NextResponse.json({
-        success: false,
-        error: 'Access denied',
-        detail: 'Only BO Team members and Admins can upload CSV files'
-      }, { status: 403 });
+    if (!isBOTeamMember(user.role, user.team_name)) {
+      return unauthorizedResponse('Only BO Team members and Admins can upload CSV files');
     }
 
     // Parse form data

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
-import { convexAPI } from '@/lib/convex-api'
+import { api } from '@/lib/api'
 import DashboardLayout from '@/components/Layout/DashboardLayout'
 import RejectMomModal from '@/components/modals/RejectMomModal'
 import { ThumbsUp, ThumbsDown, Clock, AlertTriangle } from 'lucide-react'
@@ -11,13 +11,7 @@ import { ThumbsUp, ThumbsDown, Clock, AlertTriangle } from 'lucide-react'
 // Define Id type locally to avoid import issues
 type Id<T> = string
 
-interface User {
-  email: string;
-  full_name: string;
-  role: string;
-  team_name?: string;
-  permissions: string[];
-}
+
 
 interface Visit {
   _id: Id<"visits">;
@@ -43,7 +37,7 @@ interface Visit {
 }
 
 export default function ApprovalsPage() {
-  const { user, userProfile, loading: authLoading } = useAuth()
+  const { userProfile, session } = useAuth()
   const [loading, setLoading] = useState(true);
   const [pendingVisits, setPendingVisits] = useState<Visit[]>([]);
   const [filteredVisits, setFilteredVisits] = useState<Visit[]>([]);
@@ -74,8 +68,8 @@ export default function ApprovalsPage() {
   };
 
   const loadPendingVisits = useCallback(async () => {
-    if (!user || !userProfile) {
-      console.log('❌ No user or userProfile, redirecting to login')
+    if (!userProfile) {
+      console.log('❌ No userProfile, redirecting to login')
       router.push('/login');
       return;
     }
@@ -84,10 +78,9 @@ export default function ApprovalsPage() {
       setLoading(true);
 
       if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
-        console.log('👥 [APPROVALS] Team Lead loading pending visits for:', user.email, 'Team:', userProfile.team_name);
+        console.log('👥 [APPROVALS] Team Lead loading pending visits for:', userProfile.email, 'Team:', userProfile.team_name);
         
-        const visitsResponse = await convexAPI.getVisits({
-          email: user.email,
+        const visitsResponse = await api.getVisits({
           // Don't filter by search - we'll filter by approval_status instead
         });
         
@@ -117,8 +110,7 @@ export default function ApprovalsPage() {
           pendingVisits.map(async (visit: any) => {
             try {
               console.log('🔍 Loading MOM for visit:', visit.visit_id);
-              const momResponse = await convexAPI.getMOM({
-                email: user.email,
+              const momResponse = await api.getMOM({
                 search: visit.visit_id // Search by visit_id to find related MOM
               });
               
@@ -172,13 +164,11 @@ export default function ApprovalsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user, userProfile, router]);
+  }, [userProfile, router]); // Dependency array here is updated
 
   useEffect(() => {
-    if (!authLoading) {
-      loadPendingVisits();
-    }
-  }, [loadPendingVisits, authLoading]);
+    loadPendingVisits();
+  }, [loadPendingVisits, userProfile]);
 
   // Filter visits based on submission type
   useEffect(() => {
@@ -214,7 +204,7 @@ export default function ApprovalsPage() {
     // Handle approval directly
     try {
       setActionLoading(true);
-      await convexAPI.approveVisit(visitId, userProfile.email, status);
+      await api.approveVisit(visitId, userProfile.email, status);
       await loadPendingVisits(); // Refresh the list
     } catch (error: any) {
       console.error(`Failed to set visit status to ${status}:`, error);
@@ -229,7 +219,7 @@ export default function ApprovalsPage() {
     
     try {
       setActionLoading(true);
-      await convexAPI.approveVisit(selectedVisit.visit_id, userProfile.email, 'Rejected', remarks);
+      await api.approveVisit(selectedVisit.visit_id, userProfile.email, 'Rejected', remarks);
       setRejectModalOpen(false);
       setSelectedVisit(null);
       await loadPendingVisits(); // Refresh the list
@@ -241,16 +231,7 @@ export default function ApprovalsPage() {
     }
   };
 
-  if (authLoading || loading || !userProfile) {
-    return (
-      <DashboardLayout userProfile={userProfile}>
-        <div className="text-center p-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading Approvals...</p>
-        </div>
-      </DashboardLayout>
-    );
-  }
+
 
   return (
     <DashboardLayout userProfile={userProfile}>

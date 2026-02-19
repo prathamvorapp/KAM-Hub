@@ -87,7 +87,7 @@ export default function ChurnReasonModal({
       setLoadingFollowUp(true)
       
       // Use Convex instead of backend API
-      const { convexAPI } = await import('@/lib/convex-api')
+      const { api } = await import('@/lib/api')
       const { useAuth } = await import('@/contexts/AuthContext')
       
       // Get user email for role-based filtering
@@ -95,7 +95,7 @@ export default function ChurnReasonModal({
         localStorage.getItem('user_email') || 
         sessionStorage.getItem('user_email') : null;
       
-      const response = await convexAPI.getFollowUpStatus(rid, currentReason || '', userEmail || undefined)
+      const response = await api.getFollowUpStatus(rid, currentReason || '', userEmail || undefined)
       
       if (response.success && response.data) {
         const data = response.data
@@ -219,8 +219,8 @@ export default function ChurnReasonModal({
       }
 
       // Save follow-up data using Convex
-      const { convexAPI } = await import('@/lib/convex-api')
-      const response = await convexAPI.recordCallAttempt({
+      const { api } = await import('@/lib/api')
+      const response = await api.recordCallAttempt({
         rid,
         call_response: actualCallResponse,
         notes: callNotes,
@@ -237,7 +237,7 @@ export default function ChurnReasonModal({
       }
 
       // Fetch updated follow-up data from Convex to ensure UI is in sync
-      const statusResponse = await convexAPI.getFollowUpStatus(rid, currentChurnReason)
+      const statusResponse = await api.getFollowUpStatus(rid, currentChurnReason)
       if (statusResponse.success && statusResponse.data) {
         const updatedStatus = statusResponse.data
         setFollowUpData({

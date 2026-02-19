@@ -74,12 +74,13 @@ interface TeamWiseBreakdown {
 interface TeamLeadAgentStatisticsProps {
   userEmail: string
   onRefresh?: () => void
+  isAdmin?: boolean // New prop to indicate if this is for admin
 }
 
 type SortField = 'name' | 'team' | 'progress' | 'completed' | 'pending' | 'brands'
 type SortOrder = 'asc' | 'desc'
 
-export default function TeamLeadAgentStatistics({ userEmail, onRefresh }: TeamLeadAgentStatisticsProps) {
+export default function TeamLeadAgentStatistics({ userEmail, onRefresh, isAdmin = false }: TeamLeadAgentStatisticsProps) {
   const [teamAgentStatistics, setTeamAgentStatistics] = useState<AgentStatistics[]>([])
   const [teamWiseBreakdown, setTeamWiseBreakdown] = useState<TeamWiseBreakdown[]>([])
   const [teamSummary, setTeamSummary] = useState<any>(null)
@@ -92,60 +93,62 @@ export default function TeamLeadAgentStatistics({ userEmail, onRefresh }: TeamLe
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table')
   const [showOnlyActive, setShowOnlyActive] = useState(false)
   const [showTeamWiseBreakdown, setShowTeamWiseBreakdown] = useState(true)
+  const [selectedTeam, setSelectedTeam] = useState<string>('all') // New state for team filter
+  const [availableTeams, setAvailableTeams] = useState<string[]>([]) // New state for team list
 
   const loadTeamStatistics = async () => {
     try {
       setLoading(true)
       setError(null)
       
-      console.log('📊 Loading team statistics for team lead:', userEmail)
+      console.log(`📊 Loading ${isAdmin ? 'organization' : 'team'} statistics for:`, userEmail)
       
-      // Use the team statistics endpoint
-      const apiUrl = '';  // Use relative paths for same-origin requests
-      const response = await fetch(`${apiUrl}/api/data/visits/team-statistics`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include', // Include cookies for session
-        body: JSON.stringify({ email: userEmail })
-      });
+      // Use the team statistics endpoint (works for both team lead and admin)
+      const result = await api.getTeamVisitStatistics(); // Call without email parameter
       
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (!result.success) { // Check for result.success instead of response.ok
+        throw new Error(result.error || `Failed to fetch ${isAdmin ? 'organization' : 'team'} statistics`);
       }
-      
-      const result = await response.json();
       
       if (result.success) {
         // Extract team statistics (excluding team lead from agent list)
-        const allTeamStats = result.data.team_statistics || []
-        const teamLeadName = result.data.team_lead || ''
+        const { team_statistics, team_summary, team_name, team_lead, team_wise_breakdown } = result.data;
+
+        const allTeamStats = team_statistics || [];
+        const teamLeadName = team_lead || '';
         
-        // Filter out team lead from agent statistics
+        // Filter out team lead from agent statistics, and if isAdmin, filter by current team
         const agentOnlyStats = allTeamStats.filter((agent: AgentStatistics) => 
-          agent.agent_name !== teamLeadName
-        )
+          agent.agent_name !== teamLeadName && 
+          (isAdmin ? true : agent.team_name === team_name) // If not admin, show only current team
+        );
         
-        setTeamAgentStatistics(agentOnlyStats)
-        setTeamWiseBreakdown(result.data.team_wise_breakdown || [])
-        setTeamSummary(result.data.team_summary)
+        setTeamAgentStatistics(agentOnlyStats);
+        setTeamWiseBreakdown(team_wise_breakdown || []);
+        setTeamSummary(team_summary);
         setTeamInfo({
-          team_name: result.data.team_name,
-          team_lead: result.data.team_lead
-        })
+          team_name: team_name,
+          team_lead: team_lead
+        });
         
-        console.log('✅ Team statistics loaded:', {
+        // Extract unique team names for filter dropdown (admin only)
+        if (isAdmin) {
+          const teams = Array.from(new Set(allTeamStats.map((agent: AgentStatistics) => agent.team_name).filter(Boolean))) as string[];
+          setAvailableTeams(teams.sort());
+        }
+        
+        console.log(`✅ ${isAdmin ? 'Organization' : 'Team'} statistics loaded:`, {
           totalAgents: agentOnlyStats.length,
-          teamName: result.data.team_name,
-          teamLead: result.data.team_lead
-        })
+          teamName: team_name,
+          teamLead: team_lead,
+          teams: isAdmin ? availableTeams.length : 0
+        });
       } else {
-        setError('Failed to load team statistics')
+        setError(result.error || `Failed to load ${isAdmin ? 'organization' : 'team'} statistics`);
       }
     } catch (err: any) {
-      console.error('❌ Error loading team statistics:', err)
-      setError(err.message || 'Failed to load team statistics')
+      console.error(`❌ Error loading ${isAdmin ? 'organization' : 'team'} statistics:`, err);
+      setError(err.message || `Failed to load ${isAdmin ? 'organization' : 'team'} statistics`);
     } finally {
       setLoading(false)
     }
@@ -173,7 +176,10 @@ export default function TeamLeadAgentStatistics({ userEmail, onRefresh }: TeamLe
       
       const isActive = !showOnlyActive || (agent.current_month_scheduled + agent.total_scheduled_visits) >= 3
       
-      return matchesSearch && isActive
+      // Team filter (admin only)
+      const matchesTeam = !isAdmin || selectedTeam === 'all' || agent.team_name === selectedTeam
+      
+      return matchesSearch && isActive && matchesTeam
     })
     .sort((a, b) => {
       if (a.error && !b.error) return 1
@@ -300,10 +306,13 @@ export default function TeamLeadAgentStatistics({ userEmail, onRefresh }: TeamLe
         <div>
           <h2 className="text-xl font-bold text-gray-900 flex items-center">
             <Users className="w-6 h-6 mr-2 text-blue-600" />
-            Team Agent Analytics
+            {isAdmin ? 'Organization-wide Agent Analytics' : 'Team Agent Analytics'}
           </h2>
           <p className="text-sm text-gray-600">
-            Performance overview for {teamInfo?.team_name} team members
+            {isAdmin 
+              ? 'Performance overview for all agents across all teams'
+              : `Performance overview for ${teamInfo?.team_name} team members`
+            }
           </p>
         </div>
         <div className="flex items-center space-x-2">
@@ -327,13 +336,13 @@ export default function TeamLeadAgentStatistics({ userEmail, onRefresh }: TeamLe
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 mb-6 border border-blue-100">
         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
           <BarChart3 className="w-5 h-5 mr-2 text-blue-600" />
-          {teamInfo?.team_name} Team Performance Dashboard
+          {isAdmin ? 'Organization Performance Dashboard' : `${teamInfo?.team_name} Team Performance Dashboard`}
         </h3>
         
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-4">
           <div className="text-center p-3 bg-white rounded-lg shadow-sm">
             <div className="text-2xl font-bold text-blue-600">{teamMetrics.totalAgents}</div>
-            <div className="text-xs text-gray-600">Team Agents</div>
+            <div className="text-xs text-gray-600">{isAdmin ? 'Total Agents' : 'Team Agents'}</div>
           </div>
           <div className="text-center p-3 bg-white rounded-lg shadow-sm">
             <div className="text-2xl font-bold text-purple-600">{teamMetrics.totalBrands}</div>
@@ -353,7 +362,7 @@ export default function TeamLeadAgentStatistics({ userEmail, onRefresh }: TeamLe
           </div>
           <div className="text-center p-3 bg-white rounded-lg shadow-sm">
             <div className="text-2xl font-bold text-indigo-600">{Math.round(teamProgress)}%</div>
-            <div className="text-xs text-gray-600">Team Progress</div>
+            <div className="text-xs text-gray-600">{isAdmin ? 'Org Progress' : 'Team Progress'}</div>
           </div>
           <div className="text-center p-3 bg-white rounded-lg shadow-sm">
             <div className="text-2xl font-bold text-green-500">{teamMetrics.agentsAtTarget}</div>
@@ -368,7 +377,7 @@ export default function TeamLeadAgentStatistics({ userEmail, onRefresh }: TeamLe
         {/* Team Progress Bar */}
         <div className="mb-2">
           <div className="flex justify-between text-sm mb-1">
-            <span className="text-gray-700 font-medium">Team Monthly Progress</span>
+            <span className="text-gray-700 font-medium">{isAdmin ? 'Organization' : 'Team'} Monthly Progress</span>
             <span className="font-semibold">{teamMetrics.totalCurrentMonthCompleted} / {teamMetrics.totalMonthlyTarget} visits</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-4">
@@ -396,6 +405,25 @@ export default function TeamLeadAgentStatistics({ userEmail, onRefresh }: TeamLe
               autoComplete="off"
             />
           </div>
+
+          {/* Team Filter Dropdown (Admin Only) */}
+          {isAdmin && availableTeams.length > 0 && (
+            <select
+              value={selectedTeam}
+              onChange={(e) => setSelectedTeam(e.target.value)}
+              className="text-sm border rounded-md px-3 py-2 bg-white"
+            >
+              <option value="all">All Teams ({teamAgentStatistics.length} agents)</option>
+              {availableTeams.map(team => {
+                const teamCount = teamAgentStatistics.filter(a => a.team_name === team).length
+                return (
+                  <option key={team} value={team}>
+                    {team} ({teamCount} agents)
+                  </option>
+                )
+              })}
+            </select>
+          )}
 
           <div className="flex items-center space-x-2">
             <Filter className="w-4 h-4 text-gray-500" />
@@ -443,6 +471,9 @@ export default function TeamLeadAgentStatistics({ userEmail, onRefresh }: TeamLe
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agent</th>
+                {isAdmin && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team</th>
+                )}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team Rank</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Progress</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Brands</th>
@@ -472,6 +503,13 @@ export default function TeamLeadAgentStatistics({ userEmail, onRefresh }: TeamLe
                         </div>
                       </div>
                     </td>
+                    {isAdmin && (
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {agent.team_name || 'No Team'}
+                        </span>
+                      </td>
+                    )}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {!agent.error && (
                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${

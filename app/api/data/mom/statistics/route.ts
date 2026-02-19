@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUser } from '../../../../../lib/auth-helpers';
+import { authenticateRequest } from '@/lib/api-auth';
 import { momService } from '@/lib/services';
 import NodeCache from 'node-cache';
 
@@ -7,8 +7,8 @@ const momStatsCache = new NodeCache({ stdTTL: 180 });
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthenticatedUser(request);
-    
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
     if (!user) {
       return NextResponse.json({
         success: false,
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 
     console.log(`📊 Getting MOM statistics for: ${user.email}`);
 
-    const stats = await momService.getMOMStatistics(user.email);
+    const stats = await momService.getMOMStatistics(user); // Pass the entire user object as userProfile
 
     const response = {
       success: true,
@@ -38,11 +38,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(response);
 
   } catch (error) {
-    console.error('❌ Error getting MOM statistics:', error);
+    console.error('[MOM Statistics] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to load statistics',
-      detail: String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

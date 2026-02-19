@@ -19,6 +19,7 @@ export interface Database {
       user_profiles: {
         Row: {
           id: string
+          auth_id: string | null
           email: string
           full_name: string
           password: string | null
@@ -32,6 +33,7 @@ export interface Database {
         }
         Insert: {
           id?: string
+          auth_id?: string | null
           email: string
           full_name: string
           password?: string | null
@@ -45,6 +47,7 @@ export interface Database {
         }
         Update: {
           id?: string
+          auth_id?: string | null
           email?: string
           full_name?: string
           password?: string | null

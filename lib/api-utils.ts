@@ -4,7 +4,6 @@
  */
 
 import { NextResponse } from 'next/server';
-import { handleSupabaseError } from './supabase-client';
 
 /**
  * Standard API response format
@@ -67,8 +66,14 @@ export function errorResponse(
  * Handle Supabase errors and return appropriate response
  */
 export function handleDatabaseError(error: any, context?: string): NextResponse<ApiResponse> {
-  const { error: message, status } = handleSupabaseError(error, context);
-  return errorResponse(message, status, error);
+  const errorMessage = error?.message || 'Database error occurred';
+  const status = error?.code === 'PGRST116' ? 404 : 500;
+  
+  if (context) {
+    console.error(`[${context}] Database error:`, error);
+  }
+  
+  return errorResponse(errorMessage, status, error);
 }
 
 /**
@@ -124,7 +129,7 @@ export function parsePaginationParams(searchParams: URLSearchParams): {
   limit: number;
 } {
   const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
-  const limit = Math.min(1000, Math.max(1, parseInt(searchParams.get('limit') || '100')));
+  const limit = Math.max(1, parseInt(searchParams.get('limit') || '100'));
   
   return { page, limit };
 }
@@ -237,7 +242,7 @@ export function hasRequiredRole(
 }
 
 /**
- * Extract user info from request headers (set by middleware)
+ * Extract user info from request (deprecated - use requireAuth instead)
  */
 export function getUserFromHeaders(headers: Headers): {
   email: string | null;

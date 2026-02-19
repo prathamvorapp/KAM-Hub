@@ -9,7 +9,7 @@
  * Run this ONCE to fix all existing data, then the auto-fix will handle new records.
  */
 
-import { getSupabaseAdmin } from '../lib/supabase-client';
+import { getSupabaseAdmin } from '../lib/supabase-server';
 import { isCompletedReason, isNoAgentResponse } from '../lib/constants/churnReasons';
 
 async function fixAllChurnRecords() {

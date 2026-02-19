@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { authenticateRequest, hasRole, unauthorizedResponse } from '@/lib/api-auth';
 import { UserService } from '../../../../lib/services/userService';
-import { UserRole } from '../../../../lib/models/user';
+import { UserRole } from '@/lib/models/user';
 
 const userService = new UserService();
 
@@ -18,6 +19,7 @@ export async function GET(request: NextRequest) {
 
     if (!targetEmail) {
       return NextResponse.json({
+        success: false,
         error: 'Email parameter required',
         detail: 'Please provide email query parameter'
       }, { status: 400 });
@@ -25,46 +27,32 @@ export async function GET(request: NextRequest) {
 
     const { email } = ProfileByEmailSchema.parse({ email: targetEmail });
 
-    // Get current user info from middleware (if available)
-    const currentUserEmail = request.headers.get('x-user-email');
-    const currentUserRole = request.headers.get('x-user-role');
-    
-    // If no middleware headers, try to get from session cookie
-    let authenticatedEmail = currentUserEmail;
-    let authenticatedRole = currentUserRole;
-    
-    if (!authenticatedEmail) {
-      const userSession = request.cookies.get('user-session');
-      if (userSession) {
-        try {
-          const userData = JSON.parse(userSession.value);
-          authenticatedEmail = userData.email;
-          authenticatedRole = userData.role;
-        } catch (e) {
-          // Session parsing failed
-        }
-      }
+    // Authenticate
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
+    if (!user) {
+      return NextResponse.json({
+        success: false,
+        error: 'Authentication required'
+      }, { status: 401 });
     }
 
     // Check permissions
     // Allow if:
     // 1. User is requesting their own profile
     // 2. User is an admin
-    // 3. No authentication (for initial auth flow)
-    if (authenticatedEmail && authenticatedEmail !== email && authenticatedRole !== UserRole.ADMIN) {
-      return NextResponse.json({
-        error: 'Insufficient permissions',
-        detail: 'Only admins can view other users profiles'
-      }, { status: 403 });
+    if (user.email !== email && !hasRole(user, [UserRole.ADMIN])) {
+      return unauthorizedResponse('Only admins can view other users profiles');
     }
 
     console.log(`🔍 Getting profile for email: ${email}`);
 
-    // Get user profile from Convex
+    // Get user profile from Supabase
     const userProfile = await userService.getUserProfileByEmail(email);
 
     if (!userProfile) {
       return NextResponse.json({
+        success: false,
         error: 'User profile not found',
         detail: 'User profile not found in system'
       }, { status: 404 });
@@ -75,10 +63,11 @@ export async function GET(request: NextRequest) {
       user: userProfile
     });
   } catch (error) {
-    console.log(`❌ Error getting user profile by email: ${error}`);
+    console.error(`❌ [User Profile By Email] Error:`, error);
     return NextResponse.json({
+      success: false,
       error: 'Failed to get user profile',
-      detail: String(error)
+      detail: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

@@ -1,9 +1,8 @@
 /**
  * Churn Service - Supabase Implementation
- * Replaces Convex churn functions
  */
 
-import { supabase, getSupabaseAdmin } from '../supabase-client';
+import { supabase, getSupabaseAdmin } from '../supabase-server';
 import { 
   ACTIVE_FOLLOW_UP_REASONS, 
   COMPLETED_CHURN_REASONS,
@@ -11,14 +10,16 @@ import {
   isNoAgentResponse,
   isCompletedReason
 } from '../constants/churnReasons';
+import { normalizeUserProfile } from '../../utils/authUtils';
 
 // User profile type
 interface UserProfile {
   email: string;
-  full_name: string;
+  fullName: string;
   role: string;
   team_name?: string;
-  is_active: boolean;
+  teamName?: string; // Add camelCase for compatibility
+  is_active?: boolean;
 }
 
 // Churn record type
@@ -61,72 +62,77 @@ function safeParseDate(dateStr: string): Date | null {
 export const churnService = {
   // Get churn data with role-based filtering and pagination
   async getChurnData(params: {
-    email?: string;
+    userProfile: UserProfile; // userProfile is now required
     page?: number;
     limit?: number;
     search?: string;
     filter?: 'all' | 'newCount' | 'overdue' | 'followUps' | 'completed';
   }) {
-    const { email, page = 1, limit = 100, search, filter = 'all' } = params;
+    const { userProfile: rawProfile, page = 1, limit = 100, search, filter = 'all' } = params;
+
+    console.log('🕵️‍♂️ DEBUG ChurnService.getChurnData - Incoming userProfile:', rawProfile);
     
-    let userProfile: UserProfile | null = null;
-    let kamFilter: string[] | null = null;
+    // Normalize userProfile for backward/forward compatibility
+    const userProfile = normalizeUserProfile(rawProfile);
     
-    if (email) {
-      console.log(`🔍 Querying user profile for email: ${email}`);
-      const { data: profile, error: profileError } = await getSupabaseAdmin()
-        .from('user_profiles')
-        .select('*')
-        .eq('email', email)
-        .single() as { data: UserProfile | null; error: any };
-      
-      if (profileError) {
-        console.error(`❌ Error fetching user profile:`, profileError);
-      }
-      
-      userProfile = profile;
-      
-      console.log(`🔍 User Profile for ${email}:`, profile);
-      
-      if (profile) {
-        // Normalize role for comparison
-        const normalizedRole = profile.role?.toLowerCase().replace(/\s+/g, '_');
-        console.log(`🔍 Normalized role: ${normalizedRole}`);
-        
-        if (normalizedRole === 'agent') {
-          kamFilter = [profile.full_name];
-          console.log(`👤 Agent filter - showing records for KAM: ${profile.full_name}`);
-        } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
-          if (profile.team_name) {
-            const { data: teamMembers } = await getSupabaseAdmin()
-              .from('user_profiles')
-              .select('full_name')
-              .eq('team_name', profile.team_name)
-              .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
-            kamFilter = teamMembers?.map(m => m.full_name) || [];
-            console.log(`👥 Team Lead filter - showing records for team ${profile.team_name}:`, kamFilter);
-          } else {
-            console.log(`⚠️ Team Lead has no team_name, showing no records`);
-            kamFilter = [];
-          }
-        } else if (normalizedRole === 'admin') {
-          console.log(`👑 Admin - showing all records`);
-          kamFilter = null; // Admin sees all
-        } else {
-          console.log(`⚠️ Unknown role: ${profile.role}, treating as no filter`);
-        }
+    let kamFilter: string[] | null = null; // null means no KAM filter (admin sees all)
+    
+    if (!userProfile) {
+      console.error(`❌ No user profile provided to getChurnData. Denying access.`);
+      return {
+        data: [],
+        total: 0,
+        missing_churn_reasons: 0,
+        categorization: { newCount: 0, overdue: 0, followUps: 0, completed: 0 },
+        page, limit, total_pages: 0, has_next: false, has_prev: false,
+        user_role: null, kam_filter: null
+      };
+    }
+    
+    console.log(`🔍 User Profile for ${userProfile.email}:`, userProfile);
+    
+    // Normalize role for comparison
+    const normalizedRole = userProfile.role?.toLowerCase().replace(/\s+/g, '');
+    console.log(`🔍 Normalized role: ${normalizedRole}`);
+
+    console.log(`🕵️‍♂️ DEBUG ChurnService.getChurnData - userProfile.fullName before agent filter check:`, userProfile.fullName);
+    
+    if (normalizedRole === 'agent') {
+      kamFilter = [userProfile.fullName];
+      console.log(`👤 Agent filter - showing records for KAM: ${userProfile.fullName}`);
+    } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
+      if (userProfile.team_name) {
+        const { data: teamMembers } = await getSupabaseAdmin()
+          .from('user_profiles')
+          .select('full_name')
+          .eq('team_name', userProfile.team_name)
+          .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
+        kamFilter = teamMembers?.map(m => m.full_name) || [];
+        console.log(`👥 Team Lead filter - showing records for team ${userProfile.team_name}:`, kamFilter);
       } else {
-        console.error(`❌ No user profile found for email: ${email}`);
+        console.log(`⚠️ Team Lead has no team_name, showing no records`);
+        kamFilter = [];
       }
+    } else if (normalizedRole === 'admin') {
+      console.log(`👑 Admin - showing all records`);
+      kamFilter = null; // Admin sees all
+    } else {
+      console.log(`⚠️ Unknown role: ${userProfile.role}, treating as no filter (should ideally deny access)`);
+      kamFilter = []; // Default to no records for unknown roles for safety
     }
     
     let query = getSupabaseAdmin().from('churn_records').select('*', { count: 'exact' });
     
-    if (kamFilter && kamFilter.length > 0) {
+    if (kamFilter !== null && kamFilter.length > 0) { // Only apply filter if kamFilter is not null and has items
       console.log(`🔒 Applying KAM filter:`, kamFilter);
       query = query.in('kam', kamFilter);
+    } else if (kamFilter !== null && kamFilter.length === 0) {
+      // If kamFilter is explicitly empty (e.g., Team Lead with no team members, or unknown role),
+      // ensure no records are returned by adding a condition that will always fail
+      console.log(`🔒 Explicitly empty KAM filter, returning no records.`);
+      query = query.eq('rid', 'NON_EXISTENT_RID');
     } else {
-      console.log(`🔓 No KAM filter applied - showing all records`);
+      console.log(`🔓 No KAM filter applied (Admin or global view)`);
     }
     
     const { data: allRecords, count } = await query as { data: ChurnRecord[] | null; count: number | null };
@@ -365,9 +371,12 @@ export const churnService = {
     churn_reason: string;
     remarks?: string;
     mail_sent_confirmation?: boolean;
-    email?: string;
+    userProfile: UserProfile; // userProfile is now required
   }) {
-    const { rid, churn_reason, remarks, mail_sent_confirmation } = params;
+    const { rid, churn_reason, remarks, mail_sent_confirmation, userProfile: rawProfile } = params;
+    
+    // Normalize userProfile
+    const userProfile = normalizeUserProfile(rawProfile);
     
     const { data: record } = await getSupabaseAdmin()
       .from('churn_records')
@@ -377,6 +386,30 @@ export const churnService = {
     
     if (!record) {
       throw new Error(`Record with RID ${rid} not found`);
+    }
+    
+    // Role-based access check
+    let hasAccess = false;
+    const normalizedRole = userProfile.role.toLowerCase().replace(/[_\s]/g, '');
+
+    if (normalizedRole === 'admin') {
+      hasAccess = true;
+    } else if (normalizedRole === 'teamlead' || normalizedRole === 'team_lead') {
+      if (userProfile.team_name) {
+        const { data: teamMembers } = await getSupabaseAdmin()
+          .from('user_profiles')
+          .select('full_name')
+          .eq('team_name', userProfile.team_name)
+          .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
+        const teamKams = teamMembers?.map(m => m.full_name) || [];
+        hasAccess = teamKams.includes(record.kam);
+      }
+    } else if (normalizedRole === 'agent') {
+      hasAccess = record.kam === userProfile.fullName;
+    }
+
+    if (!hasAccess) {
+      throw new Error(`Access denied: User ${userProfile.email} cannot update churn reason for RID ${rid}`);
     }
     
     const currentDateTime = new Date().toISOString();
@@ -454,35 +487,50 @@ export const churnService = {
   },
 
   // Get churn statistics
-  async getChurnStatistics(email?: string) {
+  async getChurnStatistics(rawProfile: UserProfile) { // email removed, userProfile required
+    const userProfile = normalizeUserProfile(rawProfile);
     let kamFilter: string[] | null = null;
     
-    if (email) {
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('email', email)
-        .single() as { data: UserProfile | null; error: any };
-      
-      if (profile) {
-        if (profile.role === 'Agent' || profile.role === 'agent') {
-          kamFilter = [profile.full_name];
-        } else if (profile.role === 'Team Lead' || profile.role === 'team_lead') {
-          if (profile.team_name) {
-            const { data: teamMembers } = await supabase
-              .from('user_profiles')
-              .select('full_name')
-              .eq('team_name', profile.team_name)
-              .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
-            kamFilter = teamMembers?.map(m => m.full_name) || [];
-          }
-        }
+    if (!userProfile) { // Deny access if no user profile
+      console.error(`❌ No user profile provided to getChurnStatistics. Denying access.`);
+      return {
+        total_records: 0,
+        missing_churn_reasons: 0,
+        completed_churn_reasons: 0,
+        completion_percentage: 0,
+        active_follow_ups: 0,
+        completed_follow_ups: 0,
+        churn_reason_breakdown: {},
+      };
+    }
+
+    console.log(`🔍 [getChurnStatistics] User Profile for ${userProfile.email}:`, userProfile);
+    const normalizedRole = userProfile.role.toLowerCase().replace(/[_\s]/g, '');
+    
+    if (normalizedRole === 'agent') {
+      kamFilter = [userProfile.fullName];
+    } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
+      if (userProfile.team_name) {
+        const { data: teamMembers } = await getSupabaseAdmin()
+          .from('user_profiles')
+          .select('full_name')
+          .eq('team_name', userProfile.team_name)
+          .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
+        kamFilter = teamMembers?.map(m => m.full_name) || [];
+      } else {
+        kamFilter = []; // Team Lead with no team, no stats
       }
+    } else if (normalizedRole === 'admin') {
+      kamFilter = null; // Admin sees all
+    } else {
+      kamFilter = []; // Unknown role, no stats for safety
     }
     
     let query = getSupabaseAdmin().from('churn_records').select('*');
-    if (kamFilter && kamFilter.length > 0) {
+    if (kamFilter !== null && kamFilter.length > 0) {
       query = query.in('kam', kamFilter);
+    } else if (kamFilter !== null && kamFilter.length === 0) {
+      query = query.eq('rid', 'NON_EXISTENT_RID'); // Deny access
     }
     
     const { data: records } = await query as { data: ChurnRecord[] | null; error: any };
@@ -518,7 +566,8 @@ export const churnService = {
   },
 
   // Get follow-up status
-  async getFollowUpStatus(rid: string, email?: string) {
+  async getFollowUpStatus(rid: string, rawProfile: UserProfile) { // email removed, userProfile required
+    const userProfile = normalizeUserProfile(rawProfile);
     const { data: record } = await getSupabaseAdmin()
       .from('churn_records')
       .select('*')
@@ -539,36 +588,27 @@ export const churnService = {
     }
     
     // Role-based access check
-    if (email) {
-      const { data: userProfile } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('email', email)
-        .single() as { data: UserProfile | null; error: any };
-      
-      if (userProfile) {
-        let hasAccess = false;
-        
-        if (userProfile.role === 'Admin' || userProfile.role === 'admin') {
-          hasAccess = true;
-        } else if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
-          if (userProfile.team_name) {
-            const { data: teamMembers } = await supabase
-              .from('user_profiles')
-              .select('full_name')
-              .eq('team_name', userProfile.team_name)
-              .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
-            const teamKams = teamMembers?.map(m => m.full_name) || [];
-            hasAccess = teamKams.includes(record.kam);
-          }
-        } else if (userProfile.role === 'Agent' || userProfile.role === 'agent') {
-          hasAccess = record.kam === userProfile.full_name;
-        }
-        
-        if (!hasAccess) {
-          throw new Error(`Access denied: User ${email} cannot access RID ${rid}`);
-        }
+    let hasAccess = false;
+    const normalizedRole = userProfile.role.toLowerCase().replace(/[_\s]/g, '');
+
+    if (normalizedRole === 'admin') {
+      hasAccess = true;
+    } else if (normalizedRole === 'teamlead' || normalizedRole === 'team_lead') {
+      if (userProfile.team_name) {
+        const { data: teamMembers } = await getSupabaseAdmin()
+          .from('user_profiles')
+          .select('full_name')
+          .eq('team_name', userProfile.team_name)
+          .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
+        const teamKams = teamMembers?.map(m => m.full_name) || [];
+        hasAccess = teamKams.includes(record.kam);
       }
+    } else if (normalizedRole === 'agent') {
+      hasAccess = record.kam === userProfile.fullName;
+    }
+    
+    if (!hasAccess) {
+      throw new Error(`Access denied: User ${userProfile.email} cannot access RID ${rid}`);
     }
     
     const currentTime = new Date().toISOString();
@@ -602,9 +642,12 @@ export const churnService = {
     call_response: string;
     notes?: string;
     churn_reason: string;
-    email?: string;
+    userProfile: UserProfile; // email removed, userProfile required
   }) {
-    const { rid, call_response, notes, churn_reason, email } = params;
+    const { rid, call_response, notes, churn_reason, userProfile: rawProfile } = params;
+    
+    // Normalize userProfile
+    const userProfile = normalizeUserProfile(rawProfile);
     
     const { data: record } = await getSupabaseAdmin()
       .from('churn_records')
@@ -617,36 +660,27 @@ export const churnService = {
     }
     
     // Role-based access check (same as getFollowUpStatus)
-    if (email) {
-      const { data: userProfile } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('email', email)
-        .single() as { data: UserProfile | null; error: any };
-      
-      if (userProfile) {
-        let hasAccess = false;
-        
-        if (userProfile.role === 'Admin' || userProfile.role === 'admin') {
-          hasAccess = true;
-        } else if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
-          if (userProfile.team_name) {
-            const { data: teamMembers } = await supabase
-              .from('user_profiles')
-              .select('full_name')
-              .eq('team_name', userProfile.team_name)
-              .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
-            const teamKams = teamMembers?.map(m => m.full_name) || [];
-            hasAccess = teamKams.includes(record.kam);
-          }
-        } else if (userProfile.role === 'Agent' || userProfile.role === 'agent') {
-          hasAccess = record.kam === userProfile.full_name;
-        }
-        
-        if (!hasAccess) {
-          throw new Error(`Access denied: User ${email} cannot record call attempt for RID ${rid}`);
-        }
+    let hasAccess = false;
+    const normalizedRole = userProfile.role.toLowerCase().replace(/[_\s]/g, '');
+
+    if (normalizedRole === 'admin') {
+      hasAccess = true;
+    } else if (normalizedRole === 'teamlead' || normalizedRole === 'team_lead') {
+      if (userProfile.team_name) {
+        const { data: teamMembers } = await getSupabaseAdmin()
+          .from('user_profiles')
+          .select('full_name')
+          .eq('team_name', userProfile.team_name)
+          .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
+        const teamKams = teamMembers?.map(m => m.full_name) || [];
+        hasAccess = teamKams.includes(record.kam);
       }
+    } else if (normalizedRole === 'agent') {
+      hasAccess = record.kam === userProfile.fullName;
+    }
+    
+    if (!hasAccess) {
+      throw new Error(`Access denied: User ${userProfile.email} cannot record call attempt for RID ${rid}`);
     }
     
     const currentDateTime = new Date().toISOString();
@@ -739,52 +773,42 @@ export const churnService = {
   },
 
   // Get active follow-ups
-  async getActiveFollowUps(kam?: string, email?: string) {
+  async getActiveFollowUps(kam?: string, rawProfile?: UserProfile) { // email removed, userProfile added
+    const userProfile = rawProfile ? normalizeUserProfile(rawProfile) : undefined;
     let kamFilter: string[] | null = null;
     
-    if (email) {
-      console.log(`🔍 [getActiveFollowUps] Fetching profile for email: ${email}`);
+    if (userProfile) { // Changed
+      console.log(`🔍 [getActiveFollowUps] Fetching profile for email: ${userProfile.email}`); // Changed
       
-      const { data: userProfile, error: profileError } = await getSupabaseAdmin()
-        .from('user_profiles')
-        .select('*')
-        .eq('email', email)
-        .single() as { data: UserProfile | null; error: any };
+      console.log(`👤 [getActiveFollowUps] User profile found:`, {
+        email: userProfile.email,
+        full_name: userProfile.fullName,
+        role: userProfile.role,
+        team_name: userProfile.team_name
+      });
       
-      if (profileError) {
-        console.error(`❌ [getActiveFollowUps] Error fetching profile:`, profileError);
-      }
+      const normalizedRole = userProfile.role.toLowerCase().replace(/[_\s]/g, ''); // Changed
       
-      if (userProfile) {
-        console.log(`👤 [getActiveFollowUps] User profile found:`, {
-          email: userProfile.email,
-          full_name: userProfile.full_name,
-          role: userProfile.role,
-          team_name: userProfile.team_name
-        });
-        
-        const normalizedRole = userProfile.role.toLowerCase().replace(/[_\s]/g, '');
-        
-        if (normalizedRole === 'agent') {
-          kamFilter = [userProfile.full_name];
-          console.log(`🔒 [getActiveFollowUps] Agent filter applied - showing only records for: ${userProfile.full_name}`);
-        } else if (normalizedRole === 'teamlead') {
-          if (userProfile.team_name) {
-            const { data: teamMembers } = await getSupabaseAdmin()
-              .from('user_profiles')
-              .select('full_name')
-              .eq('team_name', userProfile.team_name)
-              .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
-            kamFilter = teamMembers?.map(m => m.full_name) || [];
-            console.log(`👥 [getActiveFollowUps] Team Lead filter applied - showing records for team members:`, kamFilter);
-          }
-        } else if (normalizedRole === 'admin') {
-          console.log(`👑 [getActiveFollowUps] Admin - showing all records`);
-          kamFilter = null;
+      if (normalizedRole === 'agent') {
+        kamFilter = [userProfile.fullName]; // Changed
+        console.log(`🔒 [getActiveFollowUps] Agent filter applied - showing only records for: ${userProfile.fullName}`); // Changed
+      } else if (normalizedRole === 'teamlead') {
+        if (userProfile.team_name) {
+          const { data: teamMembers } = await getSupabaseAdmin()
+            .from('user_profiles')
+            .select('full_name')
+            .eq('team_name', userProfile.team_name)
+            .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
+          kamFilter = teamMembers?.map(m => m.full_name) || [];
+          console.log(`👥 [getActiveFollowUps] Team Lead filter applied - showing records for team members:`, kamFilter);
         }
-      } else {
-        console.warn(`⚠️ [getActiveFollowUps] No user profile found for email: ${email}`);
+      } else if (normalizedRole === 'admin') {
+        console.log(`👑 [getActiveFollowUps] Admin - showing all records`);
+        kamFilter = null;
       }
+    } else {
+      console.warn(`⚠️ [getActiveFollowUps] No user profile provided.`); // Changed
+      kamFilter = []; // Default to no records for safety if no profile
     }
     
     let query = getSupabaseAdmin()
@@ -792,14 +816,17 @@ export const churnService = {
       .select('*')
       .eq('follow_up_status', 'ACTIVE');
     
-    if (kamFilter && kamFilter.length > 0) {
+    if (kamFilter !== null && kamFilter.length > 0) { // Changed filter logic
       console.log(`🔒 [getActiveFollowUps] Applying KAM filter:`, kamFilter);
       query = query.in('kam', kamFilter);
-    } else if (kam) {
+    } else if (kamFilter !== null && kamFilter.length === 0) {
+      console.log(`🔒 [getActiveFollowUps] Explicitly empty KAM filter, returning no records.`);
+      query = query.eq('rid', 'NON_EXISTENT_RID');
+    } else if (kam) { // Only apply `kam` filter if `kamFilter` is null (admin) and `kam` is explicitly passed
       console.log(`🔒 [getActiveFollowUps] Applying single KAM filter:`, kam);
       query = query.eq('kam', kam);
     } else {
-      console.log(`🔓 [getActiveFollowUps] No KAM filter - showing all records`);
+      console.log(`🔓 [getActiveFollowUps] No KAM filter applied (Admin or global view)`);
     }
     
     const { data: records, error: queryError } = await query as { data: ChurnRecord[] | null; error: any };
@@ -822,54 +849,44 @@ export const churnService = {
   },
 
   // Get overdue follow-ups
-  async getOverdueFollowUps(kam?: string, email?: string) {
+  async getOverdueFollowUps(kam?: string, rawProfile?: UserProfile) { // email removed, userProfile added
+    const userProfile = rawProfile ? normalizeUserProfile(rawProfile) : undefined;
     const currentTime = new Date().toISOString();
     
     let kamFilter: string[] | null = null;
     
-    if (email) {
-      console.log(`🔍 [getOverdueFollowUps] Fetching profile for email: ${email}`);
+    if (userProfile) { // Changed
+      console.log(`🔍 [getOverdueFollowUps] Fetching profile for email: ${userProfile.email}`); // Changed
       
-      const { data: userProfile, error: profileError } = await getSupabaseAdmin()
-        .from('user_profiles')
-        .select('*')
-        .eq('email', email)
-        .single() as { data: UserProfile | null; error: any };
+      console.log(`👤 [getOverdueFollowUps] User profile found:`, {
+        email: userProfile.email,
+        full_name: userProfile.fullName,
+        role: userProfile.role,
+        team_name: userProfile.team_name
+      });
       
-      if (profileError) {
-        console.error(`❌ [getOverdueFollowUps] Error fetching profile:`, profileError);
-      }
+      const normalizedRole = userProfile.role.toLowerCase().replace(/[_\s]/g, ''); // Changed
       
-      if (userProfile) {
-        console.log(`👤 [getOverdueFollowUps] User profile found:`, {
-          email: userProfile.email,
-          full_name: userProfile.full_name,
-          role: userProfile.role,
-          team_name: userProfile.team_name
-        });
-        
-        const normalizedRole = userProfile.role.toLowerCase().replace(/[_\s]/g, '');
-        
-        if (normalizedRole === 'agent') {
-          kamFilter = [userProfile.full_name];
-          console.log(`🔒 [getOverdueFollowUps] Agent filter applied - showing only records for: ${userProfile.full_name}`);
-        } else if (normalizedRole === 'teamlead') {
-          if (userProfile.team_name) {
-            const { data: teamMembers } = await getSupabaseAdmin()
-              .from('user_profiles')
-              .select('full_name')
-              .eq('team_name', userProfile.team_name)
-              .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
-            kamFilter = teamMembers?.map(m => m.full_name) || [];
-            console.log(`👥 [getOverdueFollowUps] Team Lead filter applied - showing records for team members:`, kamFilter);
-          }
-        } else if (normalizedRole === 'admin') {
-          console.log(`👑 [getOverdueFollowUps] Admin - showing all records`);
-          kamFilter = null;
+      if (normalizedRole === 'agent') {
+        kamFilter = [userProfile.fullName]; // Changed
+        console.log(`🔒 [getOverdueFollowUps] Agent filter applied - showing only records for: ${userProfile.fullName}`); // Changed
+      } else if (normalizedRole === 'teamlead') {
+        if (userProfile.team_name) {
+          const { data: teamMembers } = await getSupabaseAdmin()
+            .from('user_profiles')
+            .select('full_name')
+            .eq('team_name', userProfile.team_name)
+            .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
+          kamFilter = teamMembers?.map(m => m.full_name) || [];
+          console.log(`👥 [getOverdueFollowUps] Team Lead filter applied - showing records for team members:`, kamFilter);
         }
-      } else {
-        console.warn(`⚠️ [getOverdueFollowUps] No user profile found for email: ${email}`);
+      } else if (normalizedRole === 'admin') {
+        console.log(`👑 [getOverdueFollowUps] Admin - showing all records`);
+        kamFilter = null;
       }
+    } else {
+      console.warn(`⚠️ [getOverdueFollowUps] No user profile provided.`); // Changed
+      kamFilter = []; // Default to no records for safety if no profile
     }
     
     let query = getSupabaseAdmin()
@@ -879,14 +896,17 @@ export const churnService = {
       .not('next_reminder_time', 'is', null)
       .lte('next_reminder_time', currentTime);
     
-    if (kamFilter && kamFilter.length > 0) {
+    if (kamFilter !== null && kamFilter.length > 0) { // Changed filter logic
       console.log(`🔒 [getOverdueFollowUps] Applying KAM filter:`, kamFilter);
       query = query.in('kam', kamFilter);
-    } else if (kam) {
+    } else if (kamFilter !== null && kamFilter.length === 0) {
+      console.log(`🔒 [getOverdueFollowUps] Explicitly empty KAM filter, returning no records.`);
+      query = query.eq('rid', 'NON_EXISTENT_RID'); // Deny access
+    } else if (kam) { // Only apply `kam` filter if `kamFilter` is null (admin) and `kam` is explicitly passed
       console.log(`🔒 [getOverdueFollowUps] Applying single KAM filter:`, kam);
       query = query.eq('kam', kam);
     } else {
-      console.log(`🔓 [getOverdueFollowUps] No KAM filter - showing all records`);
+      console.log(`🔓 [getOverdueFollowUps] No KAM filter applied (Admin or global view)`);
     }
     
     const { data: records, error: queryError } = await query as { data: ChurnRecord[] | null; error: any };

@@ -1,220 +1,131 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase-client';
+import { getSupabaseAdmin } from '@/lib/supabase-server';
+import { authenticateRequest, hasRole, unauthorizedResponse } from '@/lib/api-auth'; // Import auth helpers
+import { visitService, masterDataService, userService } from '@/lib/services'; // Import services
+import { UserRole } from '@/lib/models/user'; // Import UserRole
+import { requireDebugMode } from '@/lib/debug-protection'; // Keep debug protection
 
 export async function GET(request: NextRequest) {
+  // Protect in production (or if debug mode is disabled)
+  const debugCheck = requireDebugMode();
+  if (debugCheck) return debugCheck; // Returns 404 if debug mode is off or in production
+  
   try {
-    const email = request.nextUrl.searchParams.get('email') || 'rahul.taak@petpooja.com';
-    console.log('🔍 [USER DATA] Fetching data for:', email);
-    
-    const supabase = getSupabaseAdmin();
-    
-    // Step 1: Get user profile
-    console.log('📊 [STEP 1] Fetching user profile...');
-    const { data: userProfile, error: userError } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('email', email)
-      .single();
-    
-    if (userError) {
-      console.error('❌ [STEP 1] Error:', userError);
+    // Authenticate the request first
+    const { user, error: authError } = await authenticateRequest(request);
+    if (authError) return authError;
+    if (!user) { // Should not happen if authError is handled
       return NextResponse.json({
         success: false,
-        error: 'User profile not found',
-        details: userError.message,
-        step: 'user_profile'
-      }, { status: 404 });
+        error: 'Authentication required'
+      }, { status: 401 });
+    }
+
+    const requestedEmail = request.nextUrl.searchParams.get('email');
+    let targetUserProfile: UserProfile = user; // Default to authenticated user's profile
+
+    // Determine the target user for whom to fetch data
+    if (requestedEmail && requestedEmail !== user.email) {
+      // Only Admin users can query for other users' data in this debug endpoint
+      if (!hasRole(user, [UserRole.ADMIN])) {
+        return unauthorizedResponse('Access denied - Only Admins can query other users\' debug data');
+      }
+
+      // Fetch the actual profile for the requested email
+      const fetchedTargetProfile = await userService.getUserProfileByEmail(requestedEmail);
+      if (!fetchedTargetProfile) {
+        return NextResponse.json({
+          success: false,
+          error: `Target user profile for ${requestedEmail} not found`
+        }, { status: 404 });
+      }
+      targetUserProfile = fetchedTargetProfile;
+    } else if (requestedEmail && requestedEmail === user.email) {
+      // If requestedEmail is same as authenticated user, use authenticated user's profile
+      targetUserProfile = user;
+    } else if (!requestedEmail && !hasRole(user, [UserRole.ADMIN])) {
+      // If no email requested and not admin, default to own user
+      targetUserProfile = user;
+    } else if (!requestedEmail && hasRole(user, [UserRole.ADMIN])) {
+        // Admin user and no email requested, means get stats for own profile
+        targetUserProfile = user;
     }
     
-    const profile = userProfile as any;
+    console.log('🔍 [USER DATA DEBUG] Fetching data for target:', targetUserProfile.email, 'by authenticated user:', user.email);
     
-    console.log('✅ [STEP 1] User profile found:', {
-      email: profile.email,
-      role: profile.role,
-      team: profile.team_name,
-      name: profile.full_name
-    });
-    
-    // Step 2: Get brands assigned to this user
-    console.log('📊 [STEP 2] Fetching brands from master_data...');
-    const { data: allBrands, error: brandsError } = await supabase
-      .from('master_data')
-      .select('*');
-    
-    if (brandsError) {
-      console.error('❌ [STEP 2] Error:', brandsError);
-      return NextResponse.json({
-        success: false,
-        error: 'Failed to fetch brands',
-        details: brandsError.message,
-        step: 'master_data'
-      }, { status: 500 });
-    }
-    
-    console.log('✅ [STEP 2] Total brands in master_data:', allBrands?.length || 0);
-    
-    const brands = allBrands as any[];
-    
-    // Filter brands based on user role
-    let userBrands: any[] = [];
-    
-    if (profile.role === 'agent' || profile.role === 'Agent') {
-      userBrands = brands?.filter((brand: any) => 
-        brand.kam_email_id === email || brand.kam_name === profile.full_name
-      ) || [];
-      console.log('✅ [STEP 2] Agent brands (filtered by kam_email_id or kam_name):', userBrands.length);
-    } else if (profile.role === 'team_lead' || profile.role === 'Team Lead') {
-      // Get all agents in the team
-      const { data: teamAgents } = await supabase
-        .from('user_profiles')
-        .select('email, full_name')
-        .eq('team_name', profile.team_name)
-        .in('role', ['agent', 'Agent']);
-      
-      const agentEmails = (teamAgents as any)?.map((agent: any) => agent.email) || [];
-      userBrands = brands?.filter((brand: any) => 
-        agentEmails.includes(brand.kam_email_id)
-      ) || [];
-      console.log('✅ [STEP 2] Team lead brands (team:', profile.team_name, '):', userBrands.length);
-    } else if (profile.role === 'admin' || profile.role === 'Admin') {
-      userBrands = brands || [];
-      console.log('✅ [STEP 2] Admin - all brands:', userBrands.length);
-    }
-    
-    // Step 3: Get visits for current year
-    console.log('📊 [STEP 3] Fetching visits...');
-    const currentYear = new Date().getFullYear().toString();
-    
-    let visitQuery = supabase
-      .from('visits')
-      .select('*')
-      .eq('visit_year', currentYear);
-    
-    // Apply role-based filtering
-    if (profile.role === 'agent' || profile.role === 'Agent') {
-      visitQuery = visitQuery.eq('agent_id', email);
-    } else if (profile.role === 'team_lead' || profile.role === 'Team Lead') {
-      visitQuery = visitQuery.eq('team_name', profile.team_name);
-    }
-    
-    const { data: allVisits, error: visitsError } = await visitQuery;
-    
-    if (visitsError) {
-      console.error('❌ [STEP 3] Error:', visitsError);
-      return NextResponse.json({
-        success: false,
-        error: 'Failed to fetch visits',
-        details: visitsError.message,
-        step: 'visits'
-      }, { status: 500 });
-    }
-    
-    console.log('✅ [STEP 3] Total visits found:', allVisits?.length || 0);
-    
-    const visits = allVisits as any[];
-    
-    // Filter visits by user's brands
-    const brandNames = userBrands.map((b: any) => b.brand_name);
-    const userVisits = visits?.filter((visit: any) => 
-      brandNames.includes(visit.brand_name)
-    ) || [];
-    
-    console.log('✅ [STEP 3] Visits for user brands:', userVisits.length);
-    
-    // Calculate statistics
-    const nonCancelledVisits = userVisits.filter((v: any) => v.visit_status !== 'Cancelled');
-    const completedVisits = nonCancelledVisits.filter((v: any) => v.visit_status === 'Completed');
-    const pendingVisits = nonCancelledVisits.filter((v: any) => 
-      v.visit_status === 'Pending' || 
-      v.visit_status === 'Scheduled' || 
-      !v.visit_status
-    );
-    const scheduledVisits = nonCancelledVisits.filter((v: any) => v.visit_status === 'Scheduled');
-    const cancelledVisits = userVisits.filter((v: any) => v.visit_status === 'Cancelled');
-    
-    // Brands with visits
-    const brandsWithVisits = new Set(nonCancelledVisits.map((v: any) => v.brand_name));
-    
-    // MOM statistics
-    const momSharedYes = nonCancelledVisits.filter((v: any) => v.mom_shared === 'Yes').length;
-    const momSharedNo = nonCancelledVisits.filter((v: any) => v.mom_shared === 'No').length;
-    const momPending = nonCancelledVisits.filter((v: any) => v.mom_shared === 'Pending' || !v.mom_shared).length;
-    
-    // Approval statistics
-    const approved = nonCancelledVisits.filter((v: any) => v.approval_status === 'Approved').length;
-    const rejected = nonCancelledVisits.filter((v: any) => v.approval_status === 'Rejected').length;
-    const pendingApproval = nonCancelledVisits.filter((v: any) => v.approval_status === 'Pending' || !v.approval_status).length;
+    // Leverage existing secure service calls instead of reimplementing logic
+    const visitStats = await visitService.getVisitStatistics(targetUserProfile);
+    const masterDataResult = await masterDataService.getMasterData({ userProfile: targetUserProfile, limit: 999999 });
+
+    // Assuming masterDataService.getMasterData returns { data: brands[] }
+    const userBrands = masterDataResult.data || [];
+
+    // All logic related to visits and brands is handled by the services
+    // The statistics from visitStats already include most of what's needed.
+    // Re-construct the response based on the service results
     
     const result = {
       success: true,
       user: {
-        email: profile.email,
-        name: profile.full_name,
-        role: profile.role,
-        team: profile.team_name
+        email: targetUserProfile.email,
+        name: targetUserProfile.fullName,
+        role: targetUserProfile.role,
+        team: targetUserProfile.team_name
       },
       brands: {
-        total: userBrands.length,
-        with_visits: brandsWithVisits.size,
-        without_visits: userBrands.length - brandsWithVisits.size,
-        list: userBrands.map((b: any) => ({
-          brand_name: b.brand_name,
+        total: masterDataResult.total, // Use total from masterDataService
+        with_visits: visitStats.brands_with_visits,
+        without_visits: masterDataResult.total - visitStats.brands_with_visits,
+        list: userBrands.map((b: any) => ({ // Assuming MasterData has brand_name, kam_email_id, kam_name
+          brand_name: b.brandName,
           kam_email: b.kam_email_id,
           kam_name: b.kam_name
         }))
       },
       visits: {
-        total: userVisits.length,
-        completed: completedVisits.length,
-        pending: pendingVisits.length,
-        scheduled: scheduledVisits.length,
-        cancelled: cancelledVisits.length,
+        total: visitStats.total_visits_done + visitStats.total_visits_pending + visitStats.total_scheduled_visits + visitStats.total_cancelled_visits,
+        completed: visitStats.completed,
+        pending: visitStats.pending,
+        scheduled: visitStats.scheduled,
+        cancelled: visitStats.cancelled,
         by_status: {
-          Completed: completedVisits.length,
-          Pending: pendingVisits.length,
-          Scheduled: scheduledVisits.length,
-          Cancelled: cancelledVisits.length
+          Completed: visitStats.completed,
+          Pending: visitStats.pending,
+          Scheduled: visitStats.scheduled,
+          Cancelled: visitStats.cancelled
         }
       },
       mom: {
-        shared_yes: momSharedYes,
-        shared_no: momSharedNo,
-        pending: momPending
+        shared_yes: visitStats.mom_shared_yes,
+        shared_no: visitStats.mom_shared_no,
+        pending: visitStats.mom_pending
       },
       approval: {
-        approved: approved,
-        rejected: rejected,
-        pending: pendingApproval
+        approved: visitStats.approved,
+        rejected: visitStats.rejected,
+        pending: visitStats.pending_approval
       },
       progress: {
-        brands_coverage: userBrands.length > 0 
-          ? Math.round((brandsWithVisits.size / userBrands.length) * 100) 
-          : 0,
-        visit_completion: nonCancelledVisits.length > 0
-          ? Math.round((completedVisits.length / nonCancelledVisits.length) * 100)
-          : 0
+        brands_coverage: visitStats.overall_progress, // Use overall_progress from visitStats
+        visit_completion: visitStats.current_month_progress // Using monthly progress
       },
-      raw_data: {
-        sample_brands: userBrands.slice(0, 5),
-        sample_visits: userVisits.slice(0, 5)
+      // Optionally include some raw data from the services if needed for debug
+      raw_service_data: {
+        visit_statistics: visitStats,
+        master_data_details: masterDataResult.data.slice(0, 5), // Sample
       }
     };
     
-    console.log('📊 [SUMMARY] Results:', {
-      total_brands: result.brands.total,
-      brands_with_visits: result.brands.with_visits,
-      total_visits: result.visits.total,
-      completed_visits: result.visits.completed
-    });
+    console.log('📊 [USER DATA DEBUG - SUMMARY] Results for', targetUserProfile.email);
     
     return NextResponse.json(result);
     
   } catch (error: any) {
-    console.error('❌ [USER DATA] Fatal error:', error);
+    console.error('❌ [USER DATA DEBUG] Fatal error:', error);
     return NextResponse.json({
       success: false,
-      error: error.message,
-      stack: error.stack
+      error: error.message || String(error),
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined // Only show stack in dev
     }, { status: 500 });
   }
 }

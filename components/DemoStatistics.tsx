@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
-import { Presentation, TrendingUp, Clock, CheckCircle } from "lucide-react";
+import { Presentation, TrendingUp, Clock, CheckCircle, RefreshCw } from "lucide-react";
 
 interface DemoStats {
   total: number;
@@ -15,30 +15,40 @@ interface DemoStats {
 }
 
 export default function DemoStatistics() {
-  const { user } = useAuth();
+  const { userProfile } = useAuth();
   const [stats, setStats] = useState<DemoStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    if (user) {
+    if (userProfile) {
       loadStats();
     }
-  }, [user]);
+  }, [userProfile]);
 
-  const loadStats = async () => {
+  const loadStats = async (forceRefresh = false) => {
     try {
-      setLoading(true);
-      const data = await api.getDemoStatistics(
-        user?.email,
-        user?.team_name,
-        user?.role?.toLowerCase() || "agent"
-      );
-      setStats(data);
+      if (forceRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      const response = await api.getDemoStatistics();
+      console.log('📊 Demo statistics response:', response);
+      // Extract data from response if it's wrapped
+      const statsData = response.data || response;
+      console.log('📊 Demo statistics data:', statsData);
+      setStats(statsData);
     } catch (error) {
       console.error("Error loading demo statistics:", error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const handleRefresh = () => {
+    loadStats(true);
   };
 
   if (loading) {
@@ -56,6 +66,7 @@ export default function DemoStatistics() {
   }
 
   if (!stats) {
+    console.log('⚠️ No stats available');
     return (
       <div className="text-center py-8">
         <p className="text-white/60">No demo statistics available</p>
@@ -63,11 +74,24 @@ export default function DemoStatistics() {
     );
   }
 
+  console.log('📊 Rendering stats:', stats);
   const conversionRate = stats.total > 0 ? Math.round((stats.converted / stats.total) * 100) : 0;
   const completionRate = stats.total > 0 ? Math.round(((stats.converted + stats.notConverted) / stats.total) * 100) : 0;
 
   return (
     <div className="space-y-6">
+      {/* Refresh Button */}
+      <div className="flex justify-end">
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="flex items-center space-x-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors disabled:opacity-50"
+        >
+          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+          <span>{refreshing ? 'Refreshing...' : 'Refresh Stats'}</span>
+        </button>
+      </div>
+
       {/* Main Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">

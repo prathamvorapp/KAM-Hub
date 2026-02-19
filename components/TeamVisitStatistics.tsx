@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { convexAPI } from '../lib/convex-api'
+import { api } from '../lib/api'
 import { 
   Building2, 
   CheckCircle, 
@@ -93,64 +93,31 @@ export default function TeamVisitStatistics({ userEmail, refreshKey, onViewAgent
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadTeamStatistics = async () => {
+
+  useEffect(() => {
+    if (userProfile?.email && userProfile?.team_name) {
+      loadTeamStatistics(userProfile.email, userProfile.team_name);
+    }
+  }, [userProfile?.email, userProfile?.team_name, refreshKey]);
+
+  const loadTeamStatistics = async (email: string, teamName: string) => { // Accept email and teamName as parameters
+    setLoading(true);
+    setError(null);
+
+    // No need for the !email || !teamName check here anymore as they are guaranteed by useEffect
+    console.log('📊 Loading team statistics from API for:', email); // Updated log message
+    
     try {
-      setLoading(true);
-      setError(null);
+      const teamVisitStatsResponse = await api.getTeamVisitStatistics();
+      console.log('🔍 Team Visit Stats raw response:', teamVisitStatsResponse);
       
-      const email = userEmail || user?.email;
-      if (!email) {
-        throw new Error('User email is required');
+      if (!teamVisitStatsResponse || !teamVisitStatsResponse.success) {
+        throw new Error(teamVisitStatsResponse?.error || 'Failed to fetch team visit statistics');
       }
 
-      console.log('📊 Loading team statistics from Convex for:', email);
-      
-      // Get team members first
-      const teamName = userProfile?.team_name;
-      if (!teamName) {
-        throw new Error('Team name is required for team statistics');
-      }
+      setStatisticsData(teamVisitStatsResponse.data); // data contains team_statistics, team_summary, team_wise_breakdown
 
-      const teamMembersResponse = await convexAPI.getTeamMembers(teamName);
-      console.log('👥 Team members response:', teamMembersResponse);
-
-      // Extract the data array from the response
-      const teamMembers = teamMembersResponse?.data || [];
-      
-      if (!Array.isArray(teamMembers) || teamMembers.length === 0) {
-        throw new Error('No team members found');
-      }
-
-      console.log('👥 Team members array:', teamMembers);
-
-      // Get statistics for each team member
-      const teamStats = await Promise.all(
-        teamMembers.map(async (member: any) => {
-          try {
-            const stats = await convexAPI.getVisitStatistics(member.email);
-            return {
-              agent_name: member.full_name,
-              agent_email: member.email,
-              ...stats
-            };
-          } catch (err) {
-            console.error(`Error loading stats for ${member.email}:`, err);
-            return {
-              agent_name: member.full_name,
-              agent_email: member.email,
-              error: true
-            };
-          }
-        })
-      );
-
-      setStatisticsData({
-        team_statistics: teamStats,
-        team_name: teamName,
-        team_lead: userProfile?.full_name || ''
-      });
-
-      console.log('✅ Team statistics loaded successfully:', teamStats);
+      console.log('✅ Team statistics loaded successfully:', teamVisitStatsResponse.data);
     } catch (err: any) {
       console.error('❌ Error loading team statistics:', err);
       setError(err.message || 'Failed to load team statistics');
@@ -159,16 +126,17 @@ export default function TeamVisitStatistics({ userEmail, refreshKey, onViewAgent
     }
   };
 
-  useEffect(() => {
-    loadTeamStatistics();
-  }, [userEmail, user?.email, userProfile?.team_name, refreshKey]);
 
   const refresh = () => {
-    loadTeamStatistics();
+    if (userProfile?.email && userProfile?.team_name) {
+      loadTeamStatistics(userProfile.email, userProfile.team_name);
+    }
   };
 
   const retry = () => {
-    loadTeamStatistics();
+    if (userProfile?.email && userProfile?.team_name) {
+      loadTeamStatistics(userProfile.email, userProfile.team_name);
+    }
   };
 
   // Extract data from the response - now it's already in the right structure
@@ -310,81 +278,22 @@ export default function TeamVisitStatistics({ userEmail, refreshKey, onViewAgent
 
   // Calculate team totals from team summary or fallback to calculation
   // Always exclude Team Leads from team totals to avoid double counting
-  let teamTotals;
-  if (teamSummary) {
-    // If we have team summary from backend, we need to check if it includes team lead
-    const teamLeadStats = teamStatistics.find((agent: any) => agent.agent_name === teamInfo?.team_lead);
-    console.log('🔍 Team Lead Stats:', teamLeadStats);
-    console.log('🔍 Original Team Summary:', teamSummary);
-    
-    if (teamLeadStats && !teamLeadStats.error) {
-      // Check if team summary already excludes team lead by comparing totals
-      const calculatedTotal = teamStatistics.reduce((sum: any, agent: any) => {
-        if (!agent.error) {
-          return sum + agent.total_brands;
-        }
-        return sum;
-      }, 0);
-      
-      console.log('🔍 Calculated Total (all agents):', calculatedTotal);
-      console.log('🔍 Team Summary Total:', teamSummary.total_brands);
-      console.log('🔍 Team Lead Brands:', teamLeadStats.total_brands);
-      
-      // If team summary total equals calculated total, it includes team lead - subtract it
-      if (teamSummary.total_brands === calculatedTotal) {
-        console.log('📊 Team summary includes team lead - subtracting');
-        teamTotals = {
-          total_brands: teamSummary.total_brands - teamLeadStats.total_brands,
-          total_visits_done: teamSummary.total_visits_done - teamLeadStats.total_visits_done,
-          total_visits_pending: teamSummary.total_visits_pending - teamLeadStats.total_visits_pending,
-          total_scheduled_visits: teamSummary.total_scheduled_visits - teamLeadStats.total_scheduled_visits,
-          total_cancelled_visits: teamSummary.total_cancelled_visits - teamLeadStats.total_cancelled_visits,
-          current_month_total: teamSummary.current_month_total - teamLeadStats.current_month_total,
-          current_month_total_visits: (teamSummary.current_month_total_visits || 0) - (teamLeadStats.current_month_total_visits || 0),
-          mom_pending: (teamSummary.mom_pending || 0) - (teamLeadStats.mom_pending || 0)
-        };
-      } else {
-        console.log('📊 Team summary already excludes team lead - using as is');
-        teamTotals = teamSummary;
-      }
-    } else {
-      console.log('📊 No team lead found - using team summary as is');
-      teamTotals = teamSummary;
-    }
-  } else {
-    console.log('📊 No team summary - calculating from individual stats');
-    // Fallback calculation excluding team lead
-    teamTotals = teamStatistics.reduce((totals: any, agent: any) => {
-      if (!agent.error && agent.agent_name !== teamInfo?.team_lead) {
-        totals.total_brands += agent.total_brands
-        totals.total_visits_done += agent.total_visits_done
-        totals.total_visits_pending += agent.total_visits_pending
-        totals.total_scheduled_visits += agent.total_scheduled_visits
-        totals.total_cancelled_visits += agent.total_cancelled_visits
-        totals.current_month_total += agent.current_month_total
-        totals.current_month_total_visits += agent.current_month_total_visits || 0
-        totals.mom_pending += agent.mom_pending || 0
-      }
-      return totals
-    }, {
-      total_brands: 0,
-      total_visits_done: 0,
-      total_visits_pending: 0,
-      total_scheduled_visits: 0,
-      total_cancelled_visits: 0,
-      current_month_total: 0,
-      current_month_total_visits: 0,
-      mom_pending: 0
-    });
-  }
-  
-  console.log('📊 Final Team Totals:', teamTotals);
-  console.log('🔍 Component State:', { loading, error, hasData: !!statisticsData, teamStatsLength: teamStatistics.length });
+  const teamTotals = teamSummary || { // Ensure teamTotals is never null if teamSummary is null
+    total_brands: 0,
+    total_visits_done: 0,
+    total_visits_pending: 0,
+    total_scheduled_visits: 0,
+    total_cancelled_visits: 0,
+    current_month_total_visits: 0,
+    current_month_total: 0,
+    mom_pending: 0,
+    monthly_target: 0,
+    current_month_progress: 0,
+    overall_progress: 0
+  };
 
-  const teamMonthlyTarget = teamSummary?.monthly_target 
-    ? (teamSummary.monthly_target - 10) // Subtract team lead's target (assuming 10 per person)
-    : (teamStatistics.filter((a: any) => !a.error && a.agent_name !== teamInfo?.team_lead).length * 10)
-  const teamProgress = teamMonthlyTarget > 0 ? ((teamTotals.current_month_total_visits || teamTotals.current_month_total) / teamMonthlyTarget) * 100 : 0
+  const teamMonthlyTarget = teamSummary?.monthly_target || 0;
+  const teamProgress = teamSummary?.current_month_progress || 0;
 
   // Show agent-wise stats button for team leads
   const isTeamLead = userProfile?.role === 'Team Lead' || 
@@ -413,16 +322,7 @@ export default function TeamVisitStatistics({ userEmail, refreshKey, onViewAgent
           )}
         </div>
         <div className="flex items-center space-x-3">
-          {onViewAgentStats && (
-            <button
-              onClick={onViewAgentStats}
-              className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-            >
-              <Eye className="w-4 h-4 mr-2" />
-              View Agent-wise Stats
-              <ChevronRight className="w-4 h-4 ml-1" />
-            </button>
-          )}
+
           {hasTeamData && (
             <button
               onClick={() => setShowAgentWiseData(!showAgentWiseData)}
@@ -997,19 +897,6 @@ export default function TeamVisitStatistics({ userEmail, refreshKey, onViewAgent
       )}
 
       {/* Show individual statistics when we don't have team data */}
-      {!hasTeamData && (
-        <div className="mt-6">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-            <div className="flex items-center">
-              <AlertCircle className="h-5 w-5 text-blue-500 mr-2" />
-              <span className="text-blue-700">
-                Team statistics are not available. Showing your individual statistics.
-              </span>
-            </div>
-          </div>
-          <VisitStatistics userEmail={userEmail} refreshKey={refreshKey} />
-        </div>
-      )}
     </div>
   )
 }

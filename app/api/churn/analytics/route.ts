@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { convexAPI } from '../../../../lib/convex-api';
-import { getAuthenticatedUser } from '../../../../lib/auth-helpers';
+import { authenticateRequest } from '@/lib/api-auth';
 import NodeCache from 'node-cache';
 
 // Create cache instance with 3-minute TTL for analytics (same as other stats)
@@ -8,14 +8,12 @@ const analyticsCache = new NodeCache({ stdTTL: 180 }); // 3 minutes TTL
 
 export async function GET(request: NextRequest) {
   try {
-    // Get authenticated user from session cookie
-    const user = await getAuthenticatedUser(request);
-    
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
     if (!user) {
       return NextResponse.json({
         success: false,
-        error: 'Authentication required',
-        detail: 'User not authenticated'
+        error: 'Authentication required'
       }, { status: 401 });
     }
 
@@ -36,7 +34,7 @@ export async function GET(request: NextRequest) {
     console.log(`🔍 Getting churn analytics for user: ${user.email}, role: ${user.role}`);
 
     // Get analytics data from Convex
-    const result = await convexAPI.getChurnAnalytics(user.email);
+    const result = await convexAPI.getChurnAnalytics();
 
     console.log(`📊 Analytics result: ${result.overallStats.totalRecords} total records`);
 
@@ -50,35 +48,32 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('❌ Error fetching churn analytics:', error);
+    console.error('[Churn Analytics GET] Error:', error);
     
     return NextResponse.json({
       success: false,
-      error: 'Failed to fetch churn analytics',
-      detail: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    // Get authenticated user from session cookie
-    const user = await getAuthenticatedUser(request);
-    
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
     if (!user) {
       return NextResponse.json({
         success: false,
-        error: 'Authentication required',
-        detail: 'User not authenticated'
+        error: 'Authentication required'
       }, { status: 401 });
     }
 
-    // Check if user has permission to view agent details (Team Lead or Admin only)
-    if (user.role === 'Agent') {
+    // Check if user has permission to view agent details (Team Lead or Admin only, case-insensitive)
+    const normalizedRole = user.role.toLowerCase().replace(/\s+/g, '_');
+    if (normalizedRole !== 'team_lead' && normalizedRole !== 'admin') {
       return NextResponse.json({
         success: false,
-        error: 'Insufficient permissions',
-        detail: 'Only Team Leads and Admins can view agent details'
+        error: 'Insufficient permissions - Team Lead or Admin only'
       }, { status: 403 });
     }
 
@@ -95,7 +90,7 @@ export async function POST(request: NextRequest) {
     console.log(`🔍 Getting agent response time details for: ${agentName}`);
 
     // Get agent details from Convex
-    const result = await convexAPI.getAgentResponseTimeDetails(user.email, agentName);
+    const result = await convexAPI.getAgentResponseTimeDetails(agentName);
 
     console.log(`📊 Agent details result: ${result.recordsWithResponse} records with response`);
 
@@ -105,12 +100,11 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('❌ Error fetching agent response time details:', error);
+    console.error('[Churn Analytics POST] Error:', error);
     
     return NextResponse.json({
       success: false,
-      error: 'Failed to fetch agent response time details',
-      detail: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

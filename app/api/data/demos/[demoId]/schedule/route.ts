@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUser, hasAnyRole } from '../../../../../../lib/auth-helpers';
+import { authenticateRequest } from '@/lib/api-auth';
 import { demoService } from '@/lib/services';
+import { clearDemoStatsCache } from '@/lib/cache/demoCache';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ demoId: string }> }) {
   try {
     const { demoId } = await params;
-    const user = await getAuthenticatedUser(request);
-    
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
     if (!user) {
       return NextResponse.json({
         success: false,
@@ -21,16 +22,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     let result;
     
-    if (isReschedule && hasAnyRole(user, ['Team Lead', 'Admin'])) {
+    const isTeamLeadOrAdmin = user.role === 'Team Lead' || user.role === 'Admin';
+    
+    if (isReschedule && isTeamLeadOrAdmin) {
       // Team Lead or Admin rescheduling
       result = await demoService.rescheduleDemo({
         demoId,
         scheduledDate,
         scheduledTime,
         reason,
-        rescheduleBy: user.email,
-        rescheduleByRole: user.role
-      });
+        // rescheduleBy: user.email, // Removed, now derived from userProfile
+        // rescheduleByRole: user.role // Removed, now derived from userProfile
+      }, user); // Pass the userProfile here
     } else {
       // Regular scheduling
       result = await demoService.scheduleDemo({
@@ -38,8 +41,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         scheduledDate,
         scheduledTime,
         reason
-      });
+      }, user); // Pass the userProfile here
     }
+
+    // Clear the demo statistics cache
+    clearDemoStatsCache(user.email);
 
     return NextResponse.json({
       success: true,
@@ -47,11 +53,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
 
   } catch (error) {
-    console.error('❌ Error scheduling demo:', error);
+    console.error('[Demo Schedule] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to schedule demo',
-      detail: String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

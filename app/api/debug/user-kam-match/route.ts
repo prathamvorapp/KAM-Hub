@@ -1,31 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin, supabase } from '@/lib/supabase-client';
+import { getSupabaseAdmin, supabase } from '@/lib/supabase-server';
+import { requireDebugMode } from '@/lib/debug-protection';
+import { authenticateRequest, hasRole, unauthorizedResponse } from '@/lib/api-auth'; // New import
+import { UserService } from '../../../../lib/services/userService'; // New import
+import { UserRole } from '@/lib/models/user'; // New import
+
+const userService = new UserService(); // Instantiate userService
 
 export async function GET(request: NextRequest) {
+  // Protect in production
+  const debugCheck = requireDebugMode();
+  if (debugCheck) return debugCheck;
+  
   try {
-    const { searchParams } = new URL(request.url);
-    const email = searchParams.get('email');
-    
-    if (!email) {
+    // Authenticate the request
+    const { user, error: authError } = await authenticateRequest(request);
+    if (authError) return authError;
+    if (!user) { // Should not happen if authError is handled
       return NextResponse.json({
-        error: 'Email parameter required'
-      }, { status: 400 });
+        success: false,
+        error: 'Authentication required'
+      }, { status: 401 });
     }
 
-    // Get user profile
-    const { data: userProfile } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('email', email)
-      .single();
+    const requestedEmail = request.nextUrl.searchParams.get('email');
+    let targetEmail: string;
+
+    // Determine target user for whom to fetch data
+    if (requestedEmail && requestedEmail !== user.email) {
+      // Only Admin users can query for other users' data in this debug endpoint
+      if (!hasRole(user, [UserRole.ADMIN])) {
+        return unauthorizedResponse('Access denied - Only Admins can query other users\' debug data');
+      }
+      targetEmail = requestedEmail;
+    } else if (requestedEmail && requestedEmail === user.email) {
+      targetEmail = requestedEmail;
+    } else {
+      // If no email requested, default to authenticated user's email
+      targetEmail = user.email;
+    }
+    
+    // Get user profile for the target email
+    const userProfile = await userService.getUserProfileByEmail(targetEmail);
+    // Note: The previous code was using `supabase.from('user_profiles')` but `userService` is preferred.
 
     if (!userProfile) {
       return NextResponse.json({
-        error: 'User profile not found'
+        error: 'User profile not found for target email',
+        target_email: targetEmail
       }, { status: 404 });
     }
 
-    const profile = userProfile as any;
+    const profile = userProfile as any; // Use profile from userService
 
     // Get all unique KAM names from churn_records
     const { data: churnRecords } = await getSupabaseAdmin()

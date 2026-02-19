@@ -1,16 +1,15 @@
 'use client'
 import VisitStatistics from '@/components/VisitStatistics';
 import TeamVisitStatistics from '@/components/TeamVisitStatistics';
-import AdminSummaryStats from '@/components/AdminSummaryStats';
-import AdminAgentStatsModal from '@/components/AdminAgentStatsModal';
-import TeamLeadSummaryStats from '@/components/TeamLeadSummaryStats';
 import TeamLeadAgentStatsModal from '@/components/TeamLeadAgentStatsModal';
+import TeamLeadAgentStatistics from '@/components/TeamLeadAgentStatistics';
+import AllVisitStats from '@/components/AllVisitStats';
 import Pagination from '@/components/Pagination';
 
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
-import { convexAPI } from '@/lib/convex-api'
+import { api } from '@/lib/api'
 import DashboardLayout from '@/components/Layout/DashboardLayout'
 import ScheduleVisitModal from '@/components/modals/ScheduleVisitModal'
 import RescheduleVisitModal from '@/components/modals/RescheduleVisitModal'
@@ -24,13 +23,7 @@ type Id<T> = string
 
 import { v4 as uuidv4 } from 'uuid';
 
-export interface User {
-  email: string;
-  full_name: string;
-  role: string;
-  team_name?: string;
-  permissions: string[];
-}
+
 
 // Interfaces based on Convex schema
 export interface Brand {
@@ -65,20 +58,25 @@ export interface Visit {
 }
 
 export default function VisitManagementPage() {
-  const { user, userProfile, loading: authLoading } = useAuth()
+  const { userProfile, session } = useAuth() // Updated destructuring
   const [loading, setLoading] = useState(true);
-  const [brands, setBrands] = useState<Brand[]>([]);
+  const [allBrands, setAllBrands] = useState<Brand[]>([]); // Store all brands
+  const [displayedBrands, setDisplayedBrands] = useState<Brand[]>([]); // Brands currently displayed
+  const [visibleBrandsCount, setVisibleBrandsCount] = useState(10); // Number of brands to show
   const [visits, setVisits] = useState<Visit[]>([]);
   const [visitStats, setVisitStats] = useState<any>(null);
   const [visitStatsLoading, setVisitStatsLoading] = useState(true);
   const [showAdminStatsModal, setShowAdminStatsModal] = useState(false);
   const [showTeamLeadStatsModal, setShowTeamLeadStatsModal] = useState(false);
+  const [showAgentWiseStatsModal, setShowAgentWiseStatsModal] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const router = useRouter();
+  
+  // Use ref to prevent concurrent loads
+  const loadingRef = useRef(false)
+  const mountedRef = useRef(true)
 
-  // Pagination and search state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  // Search state
   const [totalBrands, setTotalBrands] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -89,7 +87,7 @@ export default function VisitManagementPage() {
   const [isVisitsSearching, setIsVisitsSearching] = useState(false);
   const [visitsSearchTimeout, setVisitsSearchTimeout] = useState<NodeJS.Timeout | null>(null);
   
-  const brandsPerPage = 10;
+  const brandsPerChunk = 10; // Load 10 brands at a time
 
   // Schedule Modal State
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
@@ -121,61 +119,72 @@ export default function VisitManagementPage() {
 
   const currentYear = new Date().getFullYear().toString();
 
-  const loadData = useCallback(async (page = 1, search = '', visitsSearch = '') => {
-    if (!user || !userProfile) {
-      console.log('❌ No user or userProfile, cannot load data');
+  const loadData = useCallback(async (search = '', visitsSearch = '', shouldRefreshStats = false) => {
+    if (!userProfile) { // Simplified check
+      console.log('❌ [Visits] No userProfile, cannot load data');
       return;
     }
+    
+    // Prevent concurrent loads
+    if (loadingRef.current) {
+      console.log('⏳ [Visits] Load already in progress, skipping...')
+      return
+    }
+
+    loadingRef.current = true
 
     try {
       setLoading(true);
-      setVisitStatsLoading(true);
+      setVisitStatsLoading(shouldRefreshStats); // Only show stats loading if we're refreshing stats
       setIsSearching(!!search);
       setIsVisitsSearching(!!visitsSearch);
 
-      console.log('Loading data for user:', user.email, 'page:', page, 'search:', search, 'visitsSearch:', visitsSearch);
+      console.log('🔄 [Visits] Loading data for user:', userProfile.email, 'search:', search, 'visitsSearch:', visitsSearch, 'shouldRefreshStats:', shouldRefreshStats);
+
+      const visitsParams: { search: string; email?: string; teamName?: string } = {
+        search: visitsSearch,
+      };
+
+      // Add email and teamName to visitsParams if the user is a Team Lead
+      const isTeamLead = userProfile?.role?.toLowerCase().includes('team') || userProfile?.role?.toLowerCase().includes('lead');
+      if (isTeamLead && userProfile?.team_name) {
+        visitsParams.email = userProfile.email; // Pass current user's email
+        visitsParams.teamName = userProfile.team_name; // Pass team name
+      } else if (userProfile?.role?.toLowerCase() === 'agent') {
+        visitsParams.email = userProfile.email; // Agents only see their own visits
+      }
+      // Admins should see all visits, so no email/teamName filter needed for them
+
 
       const [brandsResponse, visitsResponse] = await Promise.all([
-        convexAPI.getMasterData(user.email, 1, 1000, search), // Use getMasterData to support Team Leads
-        convexAPI.getVisits({ 
-          email: user.email, 
-          search: visitsSearch,
-          paginationOpts: {
-            numItems: 100 // Get up to 100 visits
-          }
-        })
+        api.getMasterData(1, 999999, search), // Fetch all brands
+        api.getVisits(visitsParams)
       ]);
       
-      console.log('Brands response:', brandsResponse);
-      console.log('Visits response:', visitsResponse);
+      console.log('✅ [Visits] Data loaded successfully');
       
-      // Handle all brands response (client-side pagination like Demos page)
+      // Handle all brands response
       if (brandsResponse.data && brandsResponse.data.data) {
-        const allBrands = brandsResponse.data.data || [];
-        console.log(`🔍 VISITS PAGE DEBUG - Received ${allBrands.length} total brands`);
+        const fetchedBrands = brandsResponse.data.data || [];
         
         // Map the snake_case API response to camelCase Brand interface
-        const mappedBrands: Brand[] = allBrands.map((brand: any) => ({
+        const mappedBrands: Brand[] = fetchedBrands.map((brand: any) => ({
           _id: brand.id || brand._id,
           brandName: brand.brand_name || brand.brandName,
           kamEmailId: brand.kam_email_id || brand.kamEmailId,
           zone: brand.zone
         }));
         
-        // Apply client-side pagination
-        const startIndex = (page - 1) * brandsPerPage;
-        const endIndex = startIndex + brandsPerPage;
-        const paginatedBrands = mappedBrands.slice(startIndex, endIndex);
-        
-        console.log(`📊 VISITS PAGE DEBUG - Showing ${paginatedBrands.length} brands on page ${page} (${startIndex}-${endIndex})`);
-        setBrands(paginatedBrands);
+        // Store all brands
+        setAllBrands(mappedBrands);
         setTotalBrands(mappedBrands.length);
-        setTotalPages(Math.ceil(mappedBrands.length / brandsPerPage));
-        setCurrentPage(page);
+        
+        // Display first chunk
+        setVisibleBrandsCount(brandsPerChunk);
+        setDisplayedBrands(mappedBrands.slice(0, brandsPerChunk));
       } else {
         // Fallback for old API response format
         const brandsData = Array.isArray(brandsResponse.data) ? brandsResponse.data as any[] : [];
-        console.log(`🔍 VISITS PAGE DEBUG - Fallback: ${brandsData.length} brands`);
         
         // Map the snake_case API response to camelCase Brand interface
         const mappedBrands: Brand[] = brandsData.map((brand: any) => ({
@@ -185,16 +194,16 @@ export default function VisitManagementPage() {
           zone: brand.zone
         }));
         
-        // Apply client-side pagination to fallback data
-        const startIndex = (page - 1) * brandsPerPage;
-        const endIndex = startIndex + brandsPerPage;
-        const paginatedBrands = mappedBrands.slice(startIndex, endIndex);
-        
-        setBrands(paginatedBrands);
+        // Store all brands
+        setAllBrands(mappedBrands);
         setTotalBrands(mappedBrands.length);
-        setTotalPages(Math.ceil(mappedBrands.length / brandsPerPage));
-        setCurrentPage(page);
+        
+        // Display first chunk
+        setVisibleBrandsCount(brandsPerChunk);
+        setDisplayedBrands(mappedBrands.slice(0, brandsPerChunk));
       }
+      
+      console.log('🔍 [Visits] Raw visits response from API:', visitsResponse); // ADDED LOG
       
       // Handle visits response - check multiple possible response structures
       let visitsData = [];
@@ -212,27 +221,59 @@ export default function VisitManagementPage() {
         visitsData = visitsResponse.data;
       }
       
-      console.log(`📋 VISITS PAGE DEBUG - Received ${visitsData.length} visits`);
       setVisits(visitsData);
       
       // Note: VisitStatistics component will load its own data via API
       setVisitStats({}); // Set empty object to indicate data loading is complete
-      setRefreshKey(prev => prev + 1); // Trigger statistics refresh
-
-      if (user.email.includes('jinal')) {
-        console.log('Jinal user data:', visitsData);
+      
+      // Only refresh statistics if explicitly requested (e.g., after creating/updating visits)
+      if (shouldRefreshStats) {
+        setRefreshKey(prev => prev + 1); // Trigger statistics refresh
+        console.log('📊 [Visits] Refreshing visit statistics');
       }
     } catch (error) {
-      console.error("Failed to load visit management data:", error);
+      console.error("❌ [Visits] Failed to load data:", error);
       setVisitStats(null); // Explicitly set to null on error
-      setRefreshKey(prev => prev + 1); // Trigger statistics refresh even on error
+      
+      // Only refresh statistics if explicitly requested
+      if (shouldRefreshStats) {
+        setRefreshKey(prev => prev + 1); // Trigger statistics refresh even on error
+      }
     } finally {
       setLoading(false);
       setVisitStatsLoading(false);
       setIsSearching(false);
       setIsVisitsSearching(false);
+      loadingRef.current = false
     }
-  }, [user, userProfile, brandsPerPage]);
+  }, [userProfile?.id, brandsPerChunk]); // Updated dependency array
+
+  // Load more brands when scrolling
+  const loadMoreBrands = useCallback(() => {
+    const nextCount = visibleBrandsCount + brandsPerChunk;
+    setVisibleBrandsCount(nextCount);
+    setDisplayedBrands(allBrands.slice(0, nextCount));
+    console.log(`📊 Loading more brands: showing ${Math.min(nextCount, allBrands.length)} of ${allBrands.length}`);
+  }, [allBrands, visibleBrandsCount, brandsPerChunk]);
+
+  // Infinite scroll effect - horizontal scrolling
+  useEffect(() => {
+    const brandsContainer = document.getElementById('brands-scroll-container');
+    if (!brandsContainer) return;
+
+    const handleScroll = () => {
+      const scrollPosition = brandsContainer.scrollLeft + brandsContainer.clientWidth;
+      const scrollWidth = brandsContainer.scrollWidth;
+      
+      // Load more when within 200px of right edge and there are more brands to load
+      if (scrollPosition >= scrollWidth - 200 && visibleBrandsCount < allBrands.length && !loading) {
+        loadMoreBrands();
+      }
+    };
+
+    brandsContainer.addEventListener('scroll', handleScroll);
+    return () => brandsContainer.removeEventListener('scroll', handleScroll);
+  }, [visibleBrandsCount, allBrands.length, loading, loadMoreBrands]);
 
   const handleSearch = useCallback((term: string) => {
     setSearchTerm(term);
@@ -244,11 +285,10 @@ export default function VisitManagementPage() {
     
     // Only auto-search if term is empty (to clear search results)
     if (term === '') {
-      setCurrentPage(1);
-      loadData(1, term);
+      loadData(term, visitsSearchTerm, false); // Don't refresh stats for brand search
     }
     // For non-empty terms, only update the input value - don't search automatically
-  }, [loadData, searchTimeout]);
+  }, [loadData, searchTimeout, visitsSearchTerm]);
 
   // Handle search button click or Enter key
   const handleSearchClick = useCallback(() => {
@@ -257,9 +297,8 @@ export default function VisitManagementPage() {
       clearTimeout(searchTimeout);
     }
     
-    // Trigger immediate search
-    setCurrentPage(1);
-    loadData(1, searchTerm, visitsSearchTerm);
+    // Trigger immediate search - don't refresh stats for brand search
+    loadData(searchTerm, visitsSearchTerm, false);
   }, [loadData, searchTerm, visitsSearchTerm, searchTimeout]);
 
   // Visits search handlers
@@ -273,10 +312,10 @@ export default function VisitManagementPage() {
     
     // Only auto-search if term is empty (to clear search results)
     if (term === '') {
-      loadData(currentPage, searchTerm, term);
+      loadData(searchTerm, term, false); // Don't refresh stats for visit search
     }
     // For non-empty terms, only update the input value - don't search automatically
-  }, [loadData, currentPage, searchTerm, visitsSearchTimeout]);
+  }, [loadData, searchTerm, visitsSearchTimeout]);
 
   // Handle visits search button click or Enter key
   const handleVisitsSearchClick = useCallback(() => {
@@ -285,33 +324,15 @@ export default function VisitManagementPage() {
       clearTimeout(visitsSearchTimeout);
     }
     
-    // Trigger immediate search
-    loadData(currentPage, searchTerm, visitsSearchTerm);
-  }, [loadData, currentPage, searchTerm, visitsSearchTerm, visitsSearchTimeout]);
-
-  // Pagination handlers
-  const handlePageChange = useCallback((page: number) => {
-    setCurrentPage(page);
-    loadData(page, searchTerm, visitsSearchTerm);
-  }, [loadData, searchTerm, visitsSearchTerm]);
-
-  const handlePrevPage = () => {
-    if (currentPage > 1) {
-      handlePageChange(currentPage - 1);
-    }
-  };
-
-  const handleNextPage = () => {
-    if (currentPage < totalPages) {
-      handlePageChange(currentPage + 1);
-    }
-  };
+    // Trigger immediate search - don't refresh stats for visit search
+    loadData(searchTerm, visitsSearchTerm, false);
+  }, [loadData, searchTerm, visitsSearchTerm, visitsSearchTimeout]);
 
   useEffect(() => {
-    if (!authLoading && user && userProfile) {
-      loadData(1, '', '');
-    } else if (!authLoading && (!user || !userProfile)) {
-      console.log('❌ No user or userProfile, redirecting to login');
+    if (userProfile) { // Check for userProfile presence
+      loadData('', '', true); // Initial load should refresh stats
+    } else { // No user profile, redirect to login
+      console.log('❌ No userProfile, redirecting to login');
       router.push('/login');
     }
     
@@ -324,12 +345,12 @@ export default function VisitManagementPage() {
         clearTimeout(visitsSearchTimeout);
       }
     };
-  }, [loadData, authLoading, user, userProfile, router, searchTimeout, visitsSearchTimeout]);
+  }, [loadData, userProfile, router, searchTimeout, visitsSearchTimeout]); // Updated dependencies
 
   const visitsByBrand = useMemo(() => {
     const counts: Record<string, { scheduled: number; done: number; total: number }> = {};
     
-    for (const brand of brands) {
+    for (const brand of displayedBrands) {
       const brandVisits = visits.filter(
         (visit) => visit.brand_name === brand.brandName && visit.visit_year === currentYear && visit.visit_status !== 'Cancelled'
       );
@@ -340,7 +361,7 @@ export default function VisitManagementPage() {
       };
     }
     return counts;
-  }, [brands, visits, currentYear]);
+  }, [displayedBrands, visits, currentYear]);
 
   // Schedule Visit Modal Handlers
   const handleOpenScheduleModal = (brand: Brand) => {
@@ -360,12 +381,12 @@ export default function VisitManagementPage() {
     }
 
     try {
-      await convexAPI.createVisit({
+      await api.createVisit({
         visit_id: uuidv4(),
         brand_id: selectedBrandForSchedule._id.toString(),
         brand_name: selectedBrandForSchedule.brandName,
         agent_id: userProfile.email,
-        agent_name: userProfile.full_name,
+        agent_name: userProfile.fullName || 'Unknown Agent',
         team_name: userProfile.team_name,
         scheduled_date: visitDate,
         visit_status: 'Scheduled',
@@ -374,7 +395,7 @@ export default function VisitManagementPage() {
       });
       
       handleCloseScheduleModal();
-      await loadData();
+      await loadData('', '', true); // Refresh stats after creating visit
     } catch (error: any) {
       console.error("Failed to schedule visit:", error);
       alert(`Error: ${error.message || error}`);
@@ -384,8 +405,8 @@ export default function VisitManagementPage() {
   // Update Visit Status Handler (Complete/Cancel)
   const handleUpdateVisitStatus = async (visitId: string, status: 'Completed' | 'Cancelled') => {
     try {
-      await convexAPI.updateVisitStatus(visitId, status);
-      await loadData();
+      await api.updateVisitStatus(visitId, status);
+      await loadData('', '', true); // Refresh stats after updating visit status
     } catch (error: any) {
       console.error(`Failed to update visit status to ${status}:`, error);
       alert(`Error updating visit status: ${error.message || error}`);
@@ -431,11 +452,11 @@ export default function VisitManagementPage() {
       console.log('📝 Submitting MOM for visit:', selectedVisitForMom.visit_id);
       
       // Submit the enhanced MOM with open points
-      const result = await convexAPI.submitVisitMOM({
+      const result = await api.submitVisitMOM({
         visit_id: selectedVisitForMom.visit_id,
-        created_by: user?.email || '',
+        created_by: userProfile.email,
         brand_name: selectedVisitForMom.brand_name,
-        agent_name: selectedVisitForMom.agent_name || userProfile?.full_name || 'Unknown Agent',
+        agent_name: selectedVisitForMom.agent_name || userProfile?.fullName || 'Unknown Agent',
         open_points: formData.open_points,
         mom_shared: "Yes", // ✅ FIX: Add mom_shared to trigger approval workflow
       });
@@ -447,7 +468,7 @@ export default function VisitManagementPage() {
       console.log('✅ MOM submitted successfully with approval workflow triggered');
       
       handleCloseMomModal();
-      await loadData(); 
+      await loadData('', '', true); // Refresh stats after submitting MOM
       
       alert('MOM submitted successfully! Waiting for Team Lead approval.');
     } catch (error: any) {
@@ -457,7 +478,7 @@ export default function VisitManagementPage() {
   };
 
   const handleResubmitMom = async (visitId: string) => {
-    if (!user?.email) {
+    if (!userProfile?.email) { // Updated check
       alert("Error: User not authenticated.");
       return;
     }
@@ -470,8 +491,8 @@ export default function VisitManagementPage() {
         console.log('🔍 Fetching previous MOM data for visit:', visitId);
         
         // Get all MOM records for the user (without search filter first)
-        const momResponse = await convexAPI.getMOM({
-          email: user.email,
+        const momResponse = await api.getMOM({
+          email: userProfile.email, // Updated
           limit: 1000 // Get more records to ensure we find the visit MOM
         });
         
@@ -512,14 +533,14 @@ export default function VisitManagementPage() {
     open_points: any[];
     resubmission_notes?: string;
   }) => {
-    if (!user?.email || !selectedVisitForResubmit) {
+    if (!userProfile?.email || !selectedVisitForResubmit) { // Updated check
       alert("Error: User not authenticated or no visit selected.");
       return;
     }
 
     try {
       // First resubmit the MOM to reset its status
-      await convexAPI.resubmitMoM(selectedVisitForResubmit.visit_id, user.email);
+      await api.resubmitMoM(selectedVisitForResubmit.visit_id, userProfile.email); // Updated
       
       // Sanitize open_points: Remove created_at and updated_at fields that Convex doesn't expect
       const sanitizedOpenPoints = formData.open_points.map(point => {
@@ -536,11 +557,11 @@ export default function VisitManagementPage() {
       });
       
       // Then submit the new MOM data with sanitized open points, marking it as a resubmission
-      await convexAPI.submitVisitMOM({
+      await api.submitVisitMOM({
         visit_id: selectedVisitForResubmit.visit_id,
-        created_by: user.email,
+        created_by: userProfile.email, // Updated
         brand_name: selectedVisitForResubmit.brand_name,
-        agent_name: selectedVisitForResubmit.agent_name || user.email,
+        agent_name: selectedVisitForResubmit.agent_name || userProfile.fullName || 'Unknown Agent',
         open_points: sanitizedOpenPoints,
         is_resubmission: true,
         resubmission_notes: formData.resubmission_notes,
@@ -549,7 +570,7 @@ export default function VisitManagementPage() {
 
       setIsResubmitModalOpen(false);
       setSelectedVisitForResubmit(null);
-      await loadData(); // Refresh the data
+      await loadData('', '', true); // Refresh stats after resubmitting MOM
       alert("MOM has been resubmitted for review with updated action items.");
     } catch (error: any) {
       console.error("Failed to resubmit MOM:", error);
@@ -569,21 +590,21 @@ export default function VisitManagementPage() {
   };
 
   const handleRescheduleSubmit = async (newDate: string, reason: string) => {
-    if (!selectedVisitForReschedule || !user?.email) {
+    if (!selectedVisitForReschedule || !userProfile?.email) { // Updated check
       alert("Error: No visit selected or user not authenticated.");
       return;
     }
 
     try {
-      await convexAPI.rescheduleVisit(
+      await api.rescheduleVisit(
         selectedVisitForReschedule.visit_id,
         newDate,
         reason,
-        user.email
+        userProfile.email // Updated
       );
       
       handleCloseRescheduleModal();
-      await loadData(); // Refresh the data
+      await loadData('', '', true); // Refresh stats after rescheduling
       alert("Visit has been successfully rescheduled.");
     } catch (error: any) {
       console.error("Failed to reschedule visit:", error);
@@ -610,7 +631,7 @@ export default function VisitManagementPage() {
         if (normalizedRole === 'teamlead') {
           // Team Leads see all agents in their team
           console.log('👥 Fetching team members for team:', userProfile?.team_name);
-          const teamMembers = await convexAPI.getTeamMembers(userProfile?.team_name || '');
+          const teamMembers = await api.getTeamMembers(userProfile?.team_name || '');
           
           console.log('📊 Team members response:', teamMembers);
           
@@ -631,7 +652,7 @@ export default function VisitManagementPage() {
         } else if (normalizedRole === 'admin') {
           // Admins see all active agents
           console.log('👥 Fetching all active agents');
-          const allAgents = await convexAPI.getAllActiveAgents();
+          const allAgents = await api.getAllActiveAgents();
           
           if (allAgents.success && allAgents.data) {
             agents = allAgents.data.map((agent: any) => ({
@@ -674,7 +695,7 @@ export default function VisitManagementPage() {
     zone?: string;
     backdate_reason: string;
   }) => {
-    if (!user?.email) {
+    if (!userProfile?.email) { // Updated check
       alert("Error: User not authenticated.");
       return;
     }
@@ -682,7 +703,7 @@ export default function VisitManagementPage() {
     try {
       const visitYear = new Date(visitData.scheduled_date).getFullYear().toString();
       
-      await convexAPI.scheduleBackdatedVisit({
+      await api.scheduleBackdatedVisit({
         visit_id: uuidv4(),
         brand_id: visitData.brand_id,
         brand_name: visitData.brand_name,
@@ -695,11 +716,11 @@ export default function VisitManagementPage() {
         zone: visitData.zone,
         visit_year: visitYear,
         backdate_reason: visitData.backdate_reason,
-        created_by: user.email,
+        created_by: userProfile.email,
       });
       
       handleCloseBackdatedModal();
-      await loadData(); // Refresh the data
+      await loadData('', '', true); // Refresh stats after backdated visit
       alert("Backdated visit has been successfully scheduled.");
     } catch (error: any) {
       console.error("Failed to schedule backdated visit:", error);
@@ -740,15 +761,9 @@ export default function VisitManagementPage() {
     }
   };
 
-  if (authLoading || loading || !userProfile) {
-    return (
-      <DashboardLayout userProfile={userProfile}>
-        <div className="text-center p-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-            <p className="mt-4 text-secondary-600">Loading Visit Management...</p>
-        </div>
-      </DashboardLayout>
-    );
+
+  if (!userProfile) { // Updated initial check, removed authLoading
+    return null // Will redirect to login
   }
 
   return (
@@ -775,25 +790,19 @@ export default function VisitManagementPage() {
 
         {/* Statistics Section - Role-based Display */}
         {userProfile?.role === 'Admin' || userProfile?.role === 'admin' ? (
-          <AdminSummaryStats 
-            userEmail={user?.email || ''} 
-            onViewDetails={() => setShowAdminStatsModal(true)} 
+          <AllVisitStats 
+            userEmail={userProfile?.email || ''} 
+            refreshKey={refreshKey}
           />
         ) : (userProfile?.role === 'Team Lead' || userProfile?.role === 'team_lead' || userProfile?.role === 'TEAM_LEAD') ? (
-          <>
-            <TeamLeadSummaryStats 
-              userEmail={user?.email || ''} 
-              onViewDetails={() => setShowTeamLeadStatsModal(true)} 
-            />
-            <TeamVisitStatistics 
-              userEmail={user?.email || ''} 
-              refreshKey={refreshKey}
-              onViewAgentStats={undefined}
-            />
-          </>
-        ) : (
-          <VisitStatistics userEmail={user?.email || ''} refreshKey={refreshKey} />
-        )}
+          <TeamVisitStatistics 
+            userEmail={userProfile?.email || ''} 
+            refreshKey={refreshKey}
+            onViewAgentStats={() => setShowAgentWiseStatsModal(true)} // Pass handler to show modal
+          />
+        ) : (userProfile?.role !== 'Admin' && userProfile?.role !== 'admin') ? (
+          <VisitStatistics userEmail={userProfile?.email || ''} refreshKey={refreshKey} />
+        ) : null}
 
         <div className="glass-morphism p-6 rounded-xl">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
@@ -863,53 +872,85 @@ export default function VisitManagementPage() {
               )}
             </div>
 
-            {brands.length > 0 ? (
+            {displayedBrands.length > 0 ? (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-                  {(() => {
-                    console.log(`🎨 VISITS PAGE RENDER - Rendering ${brands.length} brands:`, brands.map(b => b.brandName));
-                    return brands.map(brand => {
-                      const brandVisitData = visitsByBrand[brand.brandName] || { scheduled: 0, done: 0, total: 2};
-                      const isQuotaMet = brandVisitData.scheduled >= brandVisitData.total;
-                      console.log(`🏢 Rendering brand: ${brand.brandName}, visits: ${brandVisitData.scheduled}/${brandVisitData.total}`);
-                      return (
-                        <div key={brand._id.toString()} className="bg-white p-4 rounded-lg border border-gray-200 flex flex-col justify-between shadow-sm">
-                          <div>
-                            <h3 className="font-bold text-gray-900 truncate" title={brand.brandName}>{brand.brandName}</h3>
-                            <p className="text-sm text-gray-600 mt-2">{brandVisitData.done} / {brandVisitData.total} Visits Done</p>
-                            <div className="w-full bg-gray-300 rounded-full h-2.5 mt-2">
-                                <div className="bg-gradient-to-r from-green-400 to-blue-500 h-2.5 rounded-full" style={{ width: `${(brandVisitData.done / brandVisitData.total) * 100}%` }}></div>
-                            </div>
-                            <p className="text-xs text-gray-500 mt-1">{brandVisitData.scheduled} scheduled, {brandVisitData.total - brandVisitData.scheduled} remaining.</p>
-                          </div>
-                          <button 
-                            className="btn btn-primary btn-sm mt-4 w-full"
-                            onClick={() => handleOpenScheduleModal(brand)}
-                            disabled={isQuotaMet}
+                {/* Horizontal scrolling container */}
+                <div 
+                  id="brands-scroll-container"
+                  className="overflow-x-auto pb-4"
+                  style={{ 
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: '#CBD5E0 #F7FAFC'
+                  }}
+                >
+                  <div className="flex gap-4" style={{ minWidth: 'min-content' }}>
+                    {(() => {
+                      console.log(`🎨 VISITS PAGE RENDER - Rendering ${displayedBrands.length} brands:`, displayedBrands.map(b => b.brandName));
+                      return displayedBrands.map(brand => {
+                        const brandVisitData = visitsByBrand[brand.brandName] || { scheduled: 0, done: 0, total: 2};
+                        const isQuotaMet = brandVisitData.scheduled >= brandVisitData.total;
+                        console.log(`🏢 Rendering brand: ${brand.brandName}, visits: ${brandVisitData.scheduled}/${brandVisitData.total}`);
+                        return (
+                          <div 
+                            key={brand._id.toString()} 
+                            className="bg-white p-4 rounded-lg border border-gray-200 flex flex-col justify-between shadow-sm flex-shrink-0"
+                            style={{ width: '280px', minWidth: '280px' }}
                           >
-                            <PlusCircle className="w-4 h-4" />
-                            {isQuotaMet ? 'Quota Met' : 'Schedule Visit'}
+                            <div>
+                              <h3 className="font-bold text-gray-900 truncate" title={brand.brandName}>{brand.brandName}</h3>
+                              <p className="text-sm text-gray-600 mt-2">{brandVisitData.done} / {brandVisitData.total} Visits Done</p>
+                              <div className="w-full bg-gray-300 rounded-full h-2.5 mt-2">
+                                  <div className="bg-gradient-to-r from-green-400 to-blue-500 h-2.5 rounded-full" style={{ width: `${(brandVisitData.done / brandVisitData.total) * 100}%` }}></div>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">{brandVisitData.scheduled} scheduled, {brandVisitData.total - brandVisitData.scheduled} remaining.</p>
+                            </div>
+                            <button 
+                              className="btn btn-primary btn-sm mt-4 w-full"
+                              onClick={() => handleOpenScheduleModal(brand)}
+                              disabled={isQuotaMet}
+                            >
+                              <PlusCircle className="w-4 h-4" />
+                              {isQuotaMet ? 'Quota Met' : 'Schedule Visit'}
+                            </button>
+                          </div>
+                        );
+                      });
+                    })()}
+                    
+                    {/* Loading indicator at the end */}
+                    {visibleBrandsCount < allBrands.length && (
+                      <div 
+                        className="flex items-center justify-center flex-shrink-0 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300"
+                        style={{ width: '280px', minWidth: '280px' }}
+                      >
+                        <div className="text-center p-4">
+                          <p className="text-sm text-gray-600 mb-2">
+                            {displayedBrands.length} of {totalBrands}
+                          </p>
+                          <button
+                            onClick={loadMoreBrands}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                          >
+                            Load More →
                           </button>
                         </div>
-                      );
-                    });
-                  })()}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {/* Pagination Controls */}
-                {totalPages > 1 && (
-                  <div className="mt-6">
-                    <Pagination
-                      currentPage={currentPage}
-                      totalPages={totalPages}
-                      totalRecords={totalBrands}
-                      recordsPerPage={brandsPerPage}
-                      onPageChange={handlePageChange}
-                      hasNext={currentPage < totalPages}
-                      hasPrev={currentPage > 1}
-                    />
-                  </div>
-                )}
+                {/* Status message below the scroll container */}
+                <div className="mt-2 text-center">
+                  {visibleBrandsCount >= allBrands.length && allBrands.length > brandsPerChunk ? (
+                    <p className="text-sm text-gray-600">
+                      All {totalBrands} brands loaded
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500">
+                      Scroll right to see more brands →
+                    </p>
+                  )}
+                </div>
               </>
             ) : (
               <div className="text-center text-gray-600 py-8">
@@ -1167,28 +1208,31 @@ export default function VisitManagementPage() {
         onSubmit={handleSubmitMom}
         visitId={selectedVisitForMom._id} // Pass the Convex Id
         brandName={selectedVisitForMom.brand_name}
-        agentName={selectedVisitForMom.agent_name || userProfile?.full_name || 'Unknown Agent'}
+        agentName={selectedVisitForMom.agent_name || userProfile?.fullName || 'Unknown Agent'}
         visitCompletionDate={selectedVisitForMom.visit_date || selectedVisitForMom.scheduled_date} // Use visit_date if available, fallback to scheduled_date
       />
     )}
 
-    {/* Admin Agent Statistics Modal */}
-    {userProfile?.role === 'Admin' && (
-      <AdminAgentStatsModal
+    {/* Admin Agent Statistics Modal - Now using TeamLeadAgentStatsModal with isAdmin prop */}
+    {(userProfile?.role === 'Admin' || userProfile?.role === 'admin') && (
+      <TeamLeadAgentStatsModal
         isOpen={showAdminStatsModal}
         onClose={() => setShowAdminStatsModal(false)}
-        userEmail={user?.email || ''}
+        userEmail={userProfile?.email || ''}
+        isAdmin={true}
       />
     )}
 
-    {/* Team Lead Agent Statistics Modal */}
-    {userProfile?.role === 'Team Lead' && (
+    {/* Team Lead Agent Statistics Modal (when opened from TeamVisitStatistics) */}
+    {(userProfile?.role?.toLowerCase().includes('team') || userProfile?.role?.toLowerCase().includes('lead')) && (
       <TeamLeadAgentStatsModal
-        isOpen={showTeamLeadStatsModal}
-        onClose={() => setShowTeamLeadStatsModal(false)}
-        userEmail={user?.email || ''}
+        isOpen={showAgentWiseStatsModal}
+        onClose={() => setShowAgentWiseStatsModal(false)}
+        userEmail={userProfile?.email || ''}
       />
     )}
+
+
 
     {/* Resubmit MOM Modal */}
     {selectedVisitForResubmit && (
@@ -1203,7 +1247,7 @@ export default function VisitManagementPage() {
         visitDetails={{
           visit_id: selectedVisitForResubmit.visit_id,
           brand_name: selectedVisitForResubmit.brand_name,
-          agent_name: selectedVisitForResubmit.agent_name || userProfile?.full_name || 'Unknown Agent',
+          agent_name: selectedVisitForResubmit.agent_name || userProfile?.fullName || 'Unknown Agent',
           rejection_remarks: selectedVisitForResubmit.rejection_remarks,
           rejected_by: selectedVisitForResubmit.rejected_by,
           rejected_at: selectedVisitForResubmit.rejected_at,
@@ -1237,7 +1281,7 @@ export default function VisitManagementPage() {
       onSchedule={handleBackdatedVisitSubmit}
       userRole={userProfile?.role || 'Agent'}
       userTeam={userProfile?.team_name}
-      availableBrands={brands.map(brand => ({
+      availableBrands={allBrands.map(brand => ({
         brandId: brand._id.toString(),
         brandName: brand.brandName,
         kamEmailId: brand.kamEmailId,

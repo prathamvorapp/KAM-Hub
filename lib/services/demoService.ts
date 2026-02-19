@@ -1,15 +1,17 @@
 /**
  * Demo Service - Supabase Implementation
- * Replaces Convex demo functions
  */
 
-import { supabase, getSupabaseAdmin } from '../supabase-client';
+import { supabase, getSupabaseAdmin } from '../supabase-server';
+import { normalizeUserProfile } from '../../utils/authUtils';
 
 // Type definitions
 interface BrandData {
   id: string;
   kam_email_id: string;
   brand_name?: string;
+  kam_name?: string; // Added for consistency
+  zone?: string; // Added for consistency
   [key: string]: any;
 }
 
@@ -18,6 +20,7 @@ interface UserProfile {
   full_name: string;
   role: string;
   team_name?: string;
+  teamName?: string; // Add camelCase for compatibility
   [key: string]: any;
 }
 
@@ -54,8 +57,76 @@ export const DEMO_CONDUCTORS = [
 ] as const;
 
 export const demoService = {
+  // Authorization Helper
+  _authorizeDemoAccess: async (demo: Demo, rawProfile: UserProfile): Promise<boolean> => {
+    const userProfile = normalizeUserProfile(rawProfile);
+    const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
+    
+    if (normalizedRole === 'admin') {
+      return true;
+    }
+    if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
+      // Team Lead can access demos in their team
+      const teamName = userProfile.team_name || userProfile.teamName;
+      return teamName === demo.team_name;
+    }
+    if (normalizedRole === 'agent') {
+      // Agent can access their own demos
+      return userProfile.email === demo.agent_id;
+    }
+    return false;
+  },
+
+  // Authorization Helper for Brand initialization
+  _authorizeBrandInitialization: async (brandId: string, rawProfile: UserProfile): Promise<boolean> => {
+    const userProfile = normalizeUserProfile(rawProfile);
+    const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
+
+    if (normalizedRole === 'admin') {
+      return true; // Admin can initialize any brand
+    }
+
+    const { data: brandData } = await getSupabaseAdmin()
+        .from('master_data')
+        .select('kam_email_id')
+        .eq('id', brandId)
+        .single() as { data: BrandData | null; error: any };
+
+    if (!brandData) {
+        throw new Error("Brand not found for authorization check");
+    }
+
+    if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
+      // Team Lead can initialize brands that belong to their team members
+      const teamName = userProfile.team_name || userProfile.teamName;
+      if (teamName) {
+        const { data: teamMembers } = await getSupabaseAdmin()
+          .from('user_profiles')
+          .select('email')
+          .eq('team_name', teamName)
+          .in('role', ['agent', 'Agent']);
+        const agentEmails = teamMembers?.map(m => m.email) || [];
+        return agentEmails.includes(brandData.kam_email_id);
+      }
+      return false;
+    }
+
+    if (normalizedRole === 'agent') {
+      // Agent can only initialize their own assigned brands
+      return userProfile.email === brandData.kam_email_id;
+    }
+    return false;
+  },
+
   // Initialize demos for a brand from Master_Data
-  async initializeBrandDemosFromMasterData(brandId: string) {
+  async initializeBrandDemosFromMasterData(brandId: string, rawProfile: UserProfile) { // userProfile required
+    const userProfile = normalizeUserProfile(rawProfile);
+    // Authorization check
+    const isAuthorized = await demoService._authorizeBrandInitialization(brandId, userProfile);
+    if (!isAuthorized) {
+        throw new Error(`Access denied: User ${userProfile.email} is not authorized to initialize demos for brand ${brandId}`);
+    }
+
     const { data: brandData } = await getSupabaseAdmin()
       .from('master_data')
       .select('*')
@@ -66,9 +137,10 @@ export const demoService = {
       throw new Error("Brand not found in Master_Data");
     }
     
-    const { data: agentProfile } = await supabase
+    // Fetch KAM's full profile to get team_name for demo records
+    const { data: kamProfile } = await getSupabaseAdmin()
       .from('user_profiles')
-      .select('*')
+      .select('full_name, team_name')
       .eq('email', brandData.kam_email_id)
       .single() as { data: UserProfile | null; error: any };
     
@@ -94,8 +166,8 @@ export const demoService = {
         brand_id: brandId,
         product_name: product,
         agent_id: brandData.kam_email_id,
-        agent_name: brandData.kam_name,
-        team_name: agentProfile?.team_name,
+        agent_name: kamProfile?.full_name || brandData.kam_name, // Use full_name from profile if available
+        team_name: kamProfile?.team_name || brandData.team_name, // Use team_name from profile if available
         zone: brandData.zone,
         current_status: "Step 1 Pending",
         workflow_completed: false,
@@ -111,24 +183,42 @@ export const demoService = {
   },
 
   // Get demos for agent's brands (role-based access)
-  async getDemosForAgent(params: {
-    agentId: string;
-    role: string;
-    teamName?: string;
-  }) {
-    const normalizedRole = params.role.toLowerCase().replace(/\s+/g, '_');
+  async getDemosForAgent(rawProfile: UserProfile) { // userProfile required
+    const userProfile = normalizeUserProfile(rawProfile);
+    const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
+    
+    console.log(`🔍 [getDemosForAgent] Called by: ${userProfile.email} with role:`, {
+      role: userProfile.role,
+      normalizedRole,
+      teamName: userProfile.team_name || userProfile.teamName
+    });
     
     let query = getSupabaseAdmin().from('demos').select('*');
     
     if (normalizedRole === "admin") {
+      console.log(`👑 [getDemosForAgent] Admin - fetching all demos`);
       // Admin can see all demos
-    } else if (normalizedRole === "team_lead" && params.teamName) {
-      query = query.eq('team_name', params.teamName);
+    } else if (normalizedRole === "team_lead") {
+      const teamName = userProfile.team_name || userProfile.teamName;
+      if (teamName) {
+        console.log(`👥 [getDemosForAgent] Team Lead - fetching demos for team: ${teamName}`);
+        query = query.eq('team_name', teamName);
+      } else {
+        console.log(`⚠️ [getDemosForAgent] Team Lead has no team assigned`);
+        query = query.eq('agent_id', 'NON_EXISTENT_EMAIL');
+      }
     } else {
-      query = query.eq('agent_id', params.agentId);
+      console.log(`👤 [getDemosForAgent] Agent - fetching demos for: ${userProfile.email}`);
+      query = query.eq('agent_id', userProfile.email);
     }
     
-    const { data: demos } = await query as { data: Demo[] | null; error: any };
+    const { data: demos, error } = await query as { data: Demo[] | null; error: any };
+    
+    if (error) {
+      console.error(`❌ [getDemosForAgent] Error fetching demos:`, error);
+    }
+    
+    console.log(`📊 [getDemosForAgent] Found ${demos?.length || 0} demos`);
     
     const brandGroups = (demos || []).reduce((acc, demo) => {
       if (!acc[demo.brand_name]) {
@@ -145,7 +235,10 @@ export const demoService = {
       return acc;
     }, {} as Record<string, any>);
     
-    return Object.values(brandGroups);
+    const result = Object.values(brandGroups);
+    console.log(`📦 [getDemosForAgent] Returning ${result.length} brand groups`);
+    
+    return result;
   },
 
   // Step 1: Set Product Applicability
@@ -153,7 +246,8 @@ export const demoService = {
     demoId: string;
     isApplicable: boolean;
     nonApplicableReason?: string;
-  }) {
+  }, rawProfile: UserProfile) { // userProfile required
+    const userProfile = normalizeUserProfile(rawProfile);
     const { data: demo } = await getSupabaseAdmin()
       .from('demos')
       .select('*')
@@ -162,6 +256,12 @@ export const demoService = {
     
     if (!demo) {
       throw new Error("Demo not found");
+    }
+
+    // Authorization check
+    const isAuthorized = await demoService._authorizeDemoAccess(demo, userProfile);
+    if (!isAuthorized) {
+      throw new Error(`Access denied: User ${userProfile.email} is not authorized to modify demo ${params.demoId}`);
     }
     
     if (demo.step1_completed_at) {
@@ -202,7 +302,8 @@ export const demoService = {
   async setUsageStatus(params: {
     demoId: string;
     usageStatus: string;
-  }) {
+  }, rawProfile: UserProfile) { // userProfile required
+    const userProfile = normalizeUserProfile(rawProfile);
     const { data: demo } = await getSupabaseAdmin()
       .from('demos')
       .select('*')
@@ -211,6 +312,12 @@ export const demoService = {
     
     if (!demo) {
       throw new Error("Demo not found");
+    }
+
+    // Authorization check
+    const isAuthorized = await demoService._authorizeDemoAccess(demo, userProfile);
+    if (!isAuthorized) {
+      throw new Error(`Access denied: User ${userProfile.email} is not authorized to modify demo ${params.demoId}`);
     }
     
     if (!demo.step1_completed_at || !demo.is_applicable) {
@@ -252,7 +359,8 @@ export const demoService = {
     scheduledDate: string;
     scheduledTime: string;
     reason?: string;
-  }) {
+  }, rawProfile: UserProfile) { // userProfile required
+    const userProfile = normalizeUserProfile(rawProfile);
     const { data: demo } = await getSupabaseAdmin()
       .from('demos')
       .select('*')
@@ -261,6 +369,12 @@ export const demoService = {
     
     if (!demo) {
       throw new Error("Demo not found");
+    }
+
+    // Authorization check
+    const isAuthorized = await demoService._authorizeDemoAccess(demo, userProfile);
+    if (!isAuthorized) {
+      throw new Error(`Access denied: User ${userProfile.email} is not authorized to modify demo ${params.demoId}`);
     }
     
     if (demo.current_status !== "Demo Pending" && demo.current_status !== "Demo Scheduled") {
@@ -287,7 +401,7 @@ export const demoService = {
         demo_scheduled_time: params.scheduledTime,
         demo_rescheduled_count: (demo.demo_rescheduled_count || 0) + (isReschedule ? 1 : 0),
         demo_scheduling_history: history,
-        current_status: "Demo Scheduled",
+        ...(demo.workflow_completed ? {} : { current_status: "Demo Scheduled" }),
         updated_at: now,
       })
       .eq('demo_id', params.demoId);
@@ -300,7 +414,8 @@ export const demoService = {
     demoId: string;
     conductedBy: string;
     completionNotes?: string;
-  }) {
+  }, rawProfile: UserProfile) { // userProfile required
+    const userProfile = normalizeUserProfile(rawProfile);
     const { data: demo } = await getSupabaseAdmin()
       .from('demos')
       .select('*')
@@ -309,6 +424,12 @@ export const demoService = {
     
     if (!demo) {
       throw new Error("Demo not found");
+    }
+
+    // Authorization check
+    const isAuthorized = await demoService._authorizeDemoAccess(demo, userProfile);
+    if (!isAuthorized) {
+      throw new Error(`Access denied: User ${userProfile.email} is not authorized to modify demo ${params.demoId}`);
     }
     
     if (demo.current_status !== "Demo Scheduled") {
@@ -341,7 +462,8 @@ export const demoService = {
     demoId: string;
     conversionStatus: string;
     nonConversionReason?: string;
-  }) {
+  }, rawProfile: UserProfile) { // userProfile required
+    const userProfile = normalizeUserProfile(rawProfile);
     const { data: demo } = await getSupabaseAdmin()
       .from('demos')
       .select('*')
@@ -350,6 +472,12 @@ export const demoService = {
     
     if (!demo) {
       throw new Error("Demo not found");
+    }
+
+    // Authorization check
+    const isAuthorized = await demoService._authorizeDemoAccess(demo, userProfile);
+    if (!isAuthorized) {
+      throw new Error(`Access denied: User ${userProfile.email} is not authorized to modify demo ${params.demoId}`);
     }
     
     if (demo.current_status !== "Feedback Awaited") {
@@ -383,12 +511,13 @@ export const demoService = {
     scheduledDate: string;
     scheduledTime: string;
     reason: string;
-    rescheduleBy: string;
-    rescheduleByRole: string;
-  }) {
-    const normalizedRole = params.rescheduleByRole.toLowerCase().replace(/\s+/g, '_');
+    // rescheduleBy: string; // Removed, comes from userProfile
+    // rescheduleByRole: string; // Removed, comes from userProfile
+  }, rawProfile: UserProfile) { // userProfile required
+    const userProfile = normalizeUserProfile(rawProfile);
+    const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
     if (normalizedRole !== "team_lead" && normalizedRole !== "admin") {
-      throw new Error("Only Team Lead and Admin can reschedule demos");
+      throw new Error(`Access denied: User ${userProfile.email} (Role: ${userProfile.role}) is not authorized to reschedule demos`);
     }
 
     const { data: demo } = await getSupabaseAdmin()
@@ -402,14 +531,10 @@ export const demoService = {
     }
     
     if (normalizedRole === "team_lead") {
-      const { data: rescheduleByProfile } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('email', params.rescheduleBy)
-        .single() as { data: UserProfile | null; error: any };
-      
-      if (!rescheduleByProfile || rescheduleByProfile.team_name !== demo.team_name) {
-        throw new Error("Team Lead can only reschedule demos from their team");
+      // Team Lead can only reschedule demos from their team
+      const teamName = userProfile.team_name || userProfile.teamName;
+      if (teamName !== demo.team_name) {
+        throw new Error(`Access denied: Team Lead ${userProfile.email} can only reschedule demos from their team`);
       }
     }
     
@@ -426,7 +551,7 @@ export const demoService = {
         scheduled_date: demo.demo_scheduled_date!,
         scheduled_time: demo.demo_scheduled_time!,
         rescheduled_at: now,
-        reason: `${params.reason} (Rescheduled by ${params.rescheduleByRole}: ${params.rescheduleBy})`,
+        reason: `${params.reason} (Rescheduled by ${userProfile.role}: ${userProfile.email})`, // Use userProfile
       });
     }
     
@@ -445,27 +570,32 @@ export const demoService = {
     return { 
       success: true, 
       isReschedule,
-      rescheduledBy: params.rescheduleBy,
-      rescheduledByRole: params.rescheduleByRole 
+      rescheduledBy: userProfile.email, // Use userProfile
+      rescheduledByRole: userProfile.role // Use userProfile
     };
   },
 
   // Get demo statistics
-  async getDemoStatistics(params: {
-    agentId?: string;
-    teamName?: string;
-    role: string;
-  }) {
-    const normalizedRole = params.role.toLowerCase().replace(/\s+/g, '_');
+  async getDemoStatistics(rawProfile: UserProfile) { // userProfile required
+    const userProfile = normalizeUserProfile(rawProfile);
+    const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
     
     let query = getSupabaseAdmin().from('demos').select('*');
     
     if (normalizedRole === "admin") {
       // Admin sees all
-    } else if (normalizedRole === "team_lead" && params.teamName) {
-      query = query.eq('team_name', params.teamName);
-    } else if (params.agentId) {
-      query = query.eq('agent_id', params.agentId);
+    } else if (normalizedRole === "team_lead") {
+      const teamName = userProfile.team_name || userProfile.teamName;
+      if (teamName) {
+        query = query.eq('team_name', teamName);
+      } else {
+        query = query.eq('agent_id', 'NON_EXISTENT_EMAIL');
+      }
+    } else if (normalizedRole === "agent") {
+      query = query.eq('agent_id', userProfile.email);
+    } else {
+      console.warn(`⚠️ Unknown role: ${userProfile.role}, denying access to demo statistics`);
+      query = query.eq('agent_id', 'NON_EXISTENT_EMAIL'); // Deny for unknown roles
     }
     
     const { data: demos } = await query as { data: Demo[] | null; error: any };

@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUser } from '../../../../../lib/auth-helpers';
+import { authenticateRequest } from '@/lib/api-auth';
 import { demoService } from '@/lib/services';
-import NodeCache from 'node-cache';
-
-const demoStatsCache = new NodeCache({ stdTTL: 180 });
+import { demoStatsCache, getDemoStatsCacheKey } from '@/lib/cache/demoCache';
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthenticatedUser(request);
-    
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
     if (!user) {
       return NextResponse.json({
         success: false,
@@ -16,7 +14,7 @@ export async function GET(request: NextRequest) {
       }, { status: 401 });
     }
 
-    const cacheKey = `demo_stats_${user.email}`;
+    const cacheKey = getDemoStatsCacheKey(user.email);
     const cachedData = demoStatsCache.get(cacheKey);
     
     if (cachedData) {
@@ -26,11 +24,7 @@ export async function GET(request: NextRequest) {
 
     console.log(`📊 Getting demo statistics for user: ${user.email}`);
 
-    const stats = await demoService.getDemoStatistics({
-      agentId: user.email,
-      teamName: user.team_name,
-      role: user.role
-    });
+    const stats = await demoService.getDemoStatistics(user); // Pass the entire user object as userProfile
 
     const response = {
       success: true,
@@ -42,11 +36,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(response);
 
   } catch (error) {
-    console.error('❌ Error getting demo statistics:', error);
+    console.error('[Demo Statistics] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to load demo statistics',
-      detail: String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

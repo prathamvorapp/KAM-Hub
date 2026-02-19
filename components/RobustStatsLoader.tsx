@@ -13,8 +13,8 @@ export default function RobustStatsLoader({
   onDataLoaded, 
   onError, 
   showDebugInfo = false 
-}: RobustStatsLoaderProps) {
-  const { user } = useAuth();
+ }: RobustStatsLoaderProps) {
+  const { userProfile } = useAuth();
   
   const {
     data: statisticsData,
@@ -22,7 +22,7 @@ export default function RobustStatsLoader({
     error,
     retry,
     refresh
-  } = useTeamStatistics(user?.email, {
+  } = useTeamStatistics(userProfile?.email, {
     autoLoad: true,
     retryOnMount: true,
     refreshInterval: 300000, // 5 minutes
@@ -67,15 +67,14 @@ export default function RobustStatsLoader({
         {showDebugInfo && (
           <div className="mt-4 p-3 bg-red-100 rounded text-xs">
             <strong>Debug Info:</strong>
-            <br />User: {user?.email || 'Not logged in'}
-            <br />Role: {user?.role || 'N/A'}
-            <br />Team: {user?.team_name || 'N/A'}
+            <br />User: {userProfile?.email || 'Not logged in'}
+            <br />Role: {userProfile?.role || 'N/A'}
+            <br />Team: {userProfile?.teamName || userProfile?.team_name || 'N/A'}
           </div>
         )}
       </div>
     );
   }
-
   if (!statisticsData) {
     return (
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">

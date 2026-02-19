@@ -1,27 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase-client';
+import { authenticateRequest, hasRole, unauthorizedResponse } from '@/lib/api-auth';
+import { getSupabaseAdmin } from '@/lib/supabase-server';
+import { UserRole } from '@/lib/models/user'; // Import UserRole
 
 export async function GET(request: NextRequest) {
   try {
-    // Get user info from middleware
-    const userEmail = request.headers.get('x-user-email');
-    
-    if (!userEmail) {
+    // Authenticate
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
+    if (!user) {
       return NextResponse.json({
-        error: 'Authentication required',
-        detail: 'User not authenticated'
+        success: false,
+        error: 'Authentication required'
       }, { status: 401 });
     }
 
-    console.log(`🎯 Getting notification targets for: ${userEmail}`);
+    // Only allow admins to view all notification targets
+    if (!hasRole(user, [UserRole.ADMIN])) {
+      return unauthorizedResponse('Access denied - Only Admins can view all notification targets');
+    }
+
+    console.log(`🎯 Getting notification targets for: ${user.email}`);
 
     // Get notification preferences from Supabase
-    const { data: preferences, error } = await getSupabaseAdmin()
+    const { data: preferences, error: queryError } = await getSupabaseAdmin()
       .from('notification_preferences')
       .select('*')
       .eq('email_notifications', true);
 
-    if (error) throw error;
+    if (queryError) throw queryError;
 
     return NextResponse.json({
       success: true,
@@ -30,8 +37,9 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('❌ Error getting notification targets:', error);
+    console.error('❌ [Notification Targets] Error:', error);
     return NextResponse.json({
+      success: false,
       error: 'Failed to get notification targets',
       detail: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });

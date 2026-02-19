@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authenticateRequest } from '@/lib/api-auth';
 import { UpdateChurnReasonSchema } from '../../../../lib/models/churn';
 import { churnService } from '@/lib/services';
 import NodeCache from 'node-cache';
@@ -9,11 +10,12 @@ const statisticsCache = new NodeCache({ stdTTL: 180 });
 
 export async function PATCH(request: NextRequest) {
   try {
-    // Get user info from middleware
-    const userEmail = request.headers.get('x-user-email');
-    
-    if (!userEmail) {
+    // Authenticate
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
+    if (!user) {
       return NextResponse.json({
+        success: false,
         error: 'Authentication required'
       }, { status: 401 });
     }
@@ -21,14 +23,14 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json();
     const { rid, churn_reason, remarks } = UpdateChurnReasonSchema.parse(body);
 
-    console.log(`📝 Updating churn reason for RID: ${rid} by user: ${userEmail}`);
+    console.log(`📝 Updating churn reason for RID: ${rid} by user: ${user.email}`);
 
     // Update churn reason in Supabase
     const result = await churnService.updateChurnReason({
       rid,
       churn_reason,
       remarks,
-      email: userEmail
+      userProfile: user // Pass the entire user object as userProfile
     });
 
     if (result.success) {
@@ -45,7 +47,7 @@ export async function PATCH(request: NextRequest) {
           rid,
           churn_reason,
           remarks,
-          updated_by: userEmail,
+          updated_by: user.email,
           updated_at: new Date().toISOString()
         }
       });
@@ -56,11 +58,11 @@ export async function PATCH(request: NextRequest) {
       }, { status: 400 });
     }
   } catch (error) {
-    console.log(`❌ Error updating churn reason: ${error}`);
+    console.error(`❌ [Update Churn Reason] Error:`, error);
     return NextResponse.json({
       success: false,
       error: 'Failed to update churn reason',
-      detail: String(error)
+      detail: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

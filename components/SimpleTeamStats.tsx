@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 
 export default function SimpleTeamStats() {
-  const { user } = useAuth();
+  const { userProfile } = useAuth();
   
   const {
     data: statisticsData,
@@ -22,7 +22,7 @@ export default function SimpleTeamStats() {
     error,
     retry,
     refresh
-  } = useTeamStatistics(user?.email, {
+  } = useTeamStatistics(userProfile?.email, {
     autoLoad: true,
     retryOnMount: true,
     onError: (error) => {

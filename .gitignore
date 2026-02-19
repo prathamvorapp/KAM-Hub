@@ -44,10 +44,12 @@ next-env.d.ts
 # Convex
 .convex/
 
-# Caddy logs
-caddy.log
-access.log
+# Logs
 *.log
+
+# Build artifacts
+caddy/
+Caddyfile
 
 # IDE
 .vscode/

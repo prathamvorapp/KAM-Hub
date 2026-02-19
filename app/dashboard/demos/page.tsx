@@ -89,7 +89,7 @@ interface BrandWithDemos extends Brand {
 }
 
 export default function DemosPage() {
-  const { user } = useAuth();
+  const { userProfile } = useAuth();
   const [brands, setBrands] = useState<BrandWithDemos[]>([]);
   const [filteredBrands, setFilteredBrands] = useState<BrandWithDemos[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,57 +101,78 @@ export default function DemosPage() {
   // Pagination and search states
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchInput, setSearchInput] = useState(""); // Separate state for input field
   const [itemsPerPage] = useState(12); // Show 12 brands per page
   const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
-    if (user) {
+    if (userProfile) {
       loadBrandsAndDemos();
     }
-  }, [user]);
+  }, [userProfile]);
 
-  // Filter brands based on search term
+  // Filter brands based on search term (only when searchTerm changes via Go button)
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      setIsSearching(true);
-      if (!searchTerm.trim()) {
-        setFilteredBrands(brands);
-      } else {
-        const filtered = brands.filter(brand =>
-          brand.brand_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          brand.kam_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          brand.brand_state.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          brand.zone.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-        setFilteredBrands(filtered);
-      }
-      setCurrentPage(1); // Reset to first page when searching
-      setIsSearching(false);
-    }, 300); // Debounce search
-
-    return () => clearTimeout(timeoutId);
+    if (!searchTerm.trim()) {
+      setFilteredBrands(brands);
+    } else {
+      const filtered = brands.filter(brand =>
+        brand.brand_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        brand.kam_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        brand.brand_state.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        brand.zone.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredBrands(filtered);
+    }
+    setCurrentPage(1); // Reset to first page when searching
   }, [brands, searchTerm]);
+
+  // Handle search button click
+  const handleSearch = () => {
+    setIsSearching(true);
+    setSearchTerm(searchInput);
+    setTimeout(() => setIsSearching(false), 300);
+  };
+
+  // Handle clear button click
+  const handleClearSearch = () => {
+    setSearchInput("");
+    setSearchTerm("");
+  };
+
+  // Handle Enter key press in search input
+  const handleSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  };
 
   const loadBrandsAndDemos = async () => {
     try {
       setLoading(true);
       
-      // Get brands from Master_Data table - request all brands for frontend pagination
-      const brandsResponse = await api.getBrandsByAgentEmail(user?.email || ""); // Get all brands
-      const brandsData = brandsResponse.data?.data || [];
+      // Get brands from Master_Data table
+      // For admins, get all brands. For agents/team leads, get their assigned brands.
+      let brandsData: Brand[] = [];
       
-      console.log('📊 DEMOS PAGE DEBUG - Brands response:', brandsResponse);
-      console.log('📊 DEMOS PAGE DEBUG - Brands data:', brandsData.length);
+      if (userProfile?.role?.toLowerCase() === 'admin') {
+        // Admin: Get all brands using getMasterData
+        const brandsResponse = await api.getMasterData(1, 10000); // Get all brands
+        brandsData = brandsResponse.data?.data || [];
+        console.log('📊 DEMOS PAGE DEBUG - Admin fetching all brands:', brandsData.length);
+      } else {
+        // Agent/Team Lead: Get brands assigned to them
+        const brandsResponse = await api.getBrandsByAgentEmail(userProfile?.email || "");
+        brandsData = brandsResponse.data?.data || [];
+        console.log('📊 DEMOS PAGE DEBUG - Agent/TL fetching assigned brands:', brandsData.length);
+      }
       
       // Get demos for the user based on their role
       let demosData: any[] = [];
       try {
         const demosResponse = await api.getDemosForAgent(
-          user?.email || "",
-          user?.role || "agent",
-          user?.team_name
+          userProfile?.email || ""
         );
-        console.log('📊 DEMOS PAGE DEBUG - Demos data:', demosResponse);
         demosData = demosResponse.data || [];
       } catch (demoError) {
         console.warn('Could not load demos:', demoError);
@@ -160,8 +181,10 @@ export default function DemosPage() {
       
       // Map brands with their demos
       const brandsWithDemos: BrandWithDemos[] = brandsData.map((brand: Brand) => {
-        // Find demos for this brand
-        const brandDemoGroup = demosData.find((dg: any) => dg.brandId === brand._id);
+        // Find demos for this brand - try both id and _id for compatibility
+        const brandDemoGroup = demosData.find((dg: any) => 
+          dg.brandId === brand.id || dg.brandId === brand._id
+        );
         const brandDemos = brandDemoGroup?.products || [];
         
         // Calculate progress
@@ -182,7 +205,6 @@ export default function DemosPage() {
       });
       
       setBrands(brandsWithDemos);
-      console.log('📊 DEMOS PAGE DEBUG - Final brands with demos:', brandsWithDemos.length);
     } catch (error) {
       console.error("Error loading brands and demos:", error);
     } finally {
@@ -194,8 +216,12 @@ export default function DemosPage() {
     try {
       console.log('🚀 Initializing demos for brand:', brand.brand_name);
       
-      // Initialize demos using the brand's Master_Data _id
-      await api.initializeBrandDemosFromMasterData(brand._id);
+      // Initialize demos using the brand's Master_Data id (Supabase UUID)
+      const brandId = brand.id || brand._id;
+      if (!brandId) {
+        throw new Error('Brand ID not found');
+      }
+      await api.initializeBrandDemosFromMasterData(brandId);
       
       console.log('✅ Demos initialized successfully for:', brand.brand_name);
       alert(`Demos initialized successfully for ${brand.brand_name}! All 8 products are now ready.`);
@@ -283,7 +309,7 @@ export default function DemosPage() {
   };
 
   const handleRescheduleDemo = async (demo: Demo) => {
-    if (!user?.email || !user?.role) return;
+    if (!userProfile?.email || !userProfile?.role) return;
     
     // Set the selected demo and open reschedule interface
     setSelectedDemo(demo);
@@ -306,9 +332,7 @@ export default function DemosPage() {
         selectedDemo.demo_id,
         formData.date,
         formData.time,
-        formData.reason,
-        user?.email || "",
-        user?.role || ""
+        formData.reason
       );
       closeStepInterface();
       loadBrandsAndDemos();
@@ -375,7 +399,7 @@ export default function DemosPage() {
 
   const canRescheduleDemo = (demo: Demo) => {
     // Only Team Lead and Admin can reschedule demos
-    const userRole = user?.role?.toLowerCase().replace(/\s+/g, '_');
+    const userRole = userProfile?.role?.toLowerCase().replace(/\s+/g, '_');
     const canReschedule = userRole === 'team_lead' || userRole === 'admin';
     
     // Demo must have completed Step 1 (applicability decision made)
@@ -422,7 +446,7 @@ export default function DemosPage() {
 
   if (loading) {
     return (
-      <DashboardLayout userProfile={user}>
+      <DashboardLayout userProfile={userProfile}>
         <div className="flex items-center justify-center min-h-screen">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
         </div>
@@ -431,7 +455,7 @@ export default function DemosPage() {
   }
 
   return (
-    <DashboardLayout userProfile={user}>
+    <DashboardLayout userProfile={userProfile}>
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Product Demos Management</h1>
@@ -446,27 +470,44 @@ export default function DemosPage() {
         {/* Search and Filter Section */}
         <div className="mb-6 bg-white rounded-lg shadow-sm border p-4">
           <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-            <div className="flex-1 max-w-md">
-              <div className="relative">
-                <input
-                  id="demo-search"
-                  name="demo-search"
-                  type="text"
-                  placeholder="Search brands, KAM, state, or zone..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  autoComplete="off"
-                />
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  {isSearching ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                  ) : (
-                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  )}
+            <div className="flex-1 max-w-2xl">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    id="demo-search"
+                    name="demo-search"
+                    type="text"
+                    placeholder="Search brands, KAM, state, or zone..."
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    onKeyPress={handleSearchKeyPress}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    autoComplete="off"
+                  />
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    {isSearching ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                    ) : (
+                      <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    )}
+                  </div>
                 </div>
+                <button
+                  onClick={handleSearch}
+                  className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
+                >
+                  Go
+                </button>
+                {(searchInput || searchTerm) && (
+                  <button
+                    onClick={handleClearSearch}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
             </div>
             <div className="text-sm text-gray-600">
@@ -482,7 +523,7 @@ export default function DemosPage() {
                 <>
                   <p className="text-gray-500 text-lg mb-4">No brands found matching "{searchTerm}"</p>
                   <button
-                    onClick={() => setSearchTerm("")}
+                    onClick={handleClearSearch}
                     className="text-blue-500 hover:text-blue-700 underline"
                   >
                     Clear search
@@ -500,17 +541,17 @@ export default function DemosPage() {
           <>
             <div className="space-y-6">
               {currentBrands.map((brand) => (
-                <div key={brand._id} className="bg-white rounded-lg shadow-md border">
+                <div key={brand.id || brand._id} className="bg-white rounded-lg shadow-md border">
                   {/* Brand Header */}
                   <div className="p-6 border-b">
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-gray-900 mb-2">{brand.brand_name}</h3>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600">
-                          <div>KAM: {brand.kam_name}</div>
-                          <div>State: {brand.brand_state}</div>
-                          <div>Zone: {brand.zone}</div>
-                          <div>Progress: {brand.demoProgress.completed}/{brand.demoProgress.total}</div>
+                          <div key="kam">KAM: {brand.kam_name}</div>
+                          <div key="state">State: {brand.brand_state}</div>
+                          <div key="zone">Zone: {brand.zone}</div>
+                          <div key="progress">Progress: {brand.demoProgress.completed}/{brand.demoProgress.total}</div>
                         </div>
                       </div>
                       <div className="flex items-center space-x-3">
@@ -523,12 +564,12 @@ export default function DemosPage() {
                           </button>
                         ) : (
                           <button
-                            onClick={() => toggleBrandExpansion(brand._id)}
+                            onClick={() => toggleBrandExpansion(brand.id || brand._id)}
                             className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center space-x-2"
                           >
-                            <span>{expandedBrand === brand._id ? 'Hide' : 'Show'} Demos</span>
+                            <span>{expandedBrand === (brand.id || brand._id) ? 'Hide' : 'Show'} Demos</span>
                             <svg 
-                              className={`w-4 h-4 transition-transform ${expandedBrand === brand._id ? 'rotate-180' : ''}`} 
+                              className={`w-4 h-4 transition-transform ${expandedBrand === (brand.id || brand._id) ? 'rotate-180' : ''}`} 
                               fill="none" 
                               stroke="currentColor" 
                               viewBox="0 0 24 24"
@@ -558,7 +599,7 @@ export default function DemosPage() {
                   </div>
 
                   {/* Expanded Demo Management */}
-                  {expandedBrand === brand._id && brand.demos.length > 0 && (
+                  {expandedBrand === (brand.id || brand._id) && brand.demos.length > 0 && (
                     <div className="p-6">
                       {/* 5-Step Workflow Guide */}
                       <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">

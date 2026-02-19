@@ -1,6 +1,6 @@
 'use client'
 
-import { convexAPI } from '@/lib/convex-api'
+import { api } from '@/lib/api'
 import { useEffect, useState } from 'react'
 
 export default function TestConvexPage() {
@@ -12,7 +12,7 @@ export default function TestConvexPage() {
     const testConvex = async () => {
       try {
         setLoading(true)
-        const result = await convexAPI.getChurnStatistics("admin@petpooja.com")
+        const result = await api.getChurnStatistics("admin@petpooja.com")
         setChurnStats(result.data)
       } catch (err: any) {
         setError(err.message || 'Failed to connect to Convex')

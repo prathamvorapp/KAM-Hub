@@ -30,7 +30,7 @@ Your project is already using Supabase! The migration has been mostly completed.
 
 5. **Authentication**
    - Cookie-based session management
-   - Middleware for route protection
+   - Client-side route guards
    - Role-based access control (RBAC)
 
 ## Optimization Tasks

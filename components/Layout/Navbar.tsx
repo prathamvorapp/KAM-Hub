@@ -8,10 +8,11 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { FollowUpNotifications } from '../FollowUpNotifications'
 
 interface User {
+  id: string;
   email: string;
-  full_name: string;
+  fullName: string;
   role: string;
-  team_name?: string;
+  teamName?: string;
   permissions: string[];
 }
 
@@ -26,8 +27,16 @@ export default function Navbar({ userProfile }: NavbarProps) {
   const { signOut } = useAuth()
 
   const handleLogout = async () => {
-    await signOut()
-    router.push('/login')
+    try {
+      console.log('🚪 [Navbar] Logging out...')
+      await signOut()
+      // signOut already redirects to /login via server action
+      console.log('✅ [Navbar] Logout successful')
+    } catch (error) {
+      console.error('❌ [Navbar] Logout error:', error)
+      // Fallback: force redirect to login
+      router.push('/login')
+    }
   }
 
   const getRoleBadgeColor = (role: string) => {
@@ -104,7 +113,7 @@ export default function Navbar({ userProfile }: NavbarProps) {
                     <User className="w-5 h-5 text-white" />
                   </motion.div>
                   <div className="text-sm">
-                    <p className="font-medium text-secondary-800">{userProfile.full_name || userProfile.email}</p>
+                    <p className="font-medium text-secondary-800">{userProfile.fullName || userProfile.email}</p>
                     <motion.span
                       className={`inline-block px-3 py-1 text-xs font-medium rounded-full border ${getRoleBadgeColor(userProfile.role)}`}
                       whileHover={{ scale: 1.05 }}
@@ -172,7 +181,7 @@ export default function Navbar({ userProfile }: NavbarProps) {
                 <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
                   <User className="w-8 h-8 text-secondary-600" />
                   <div>
-                    <p className="font-medium text-secondary-800">{userProfile.full_name || userProfile.email}</p>
+                    <p className="font-medium text-secondary-800">{userProfile.fullName || userProfile.email}</p>
                     <span className={`inline-block px-2 py-1 text-xs font-medium rounded-full border ${getRoleBadgeColor(userProfile.role)}`}>
                       {userProfile.role?.toUpperCase() || 'USER'}
                     </span>

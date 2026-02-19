@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, memo } from 'react'
-import { useRouter } from 'next/navigation'
+import { memo } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useChurnData } from '@/hooks/useChurnData'
 import DashboardLayout from '@/components/Layout/DashboardLayout'
+
 import { LoadingSkeleton, StatCardSkeleton } from '@/components/LoadingSkeleton'
 import { formatDDMMYYYYToMMMFormat } from '@/utils/dateUtils'
-import { LogOut, Users, BarChart3, AlertCircle } from 'lucide-react'
+import { LogOut, Users, BarChart3, AlertCircle, TrendingDown, MapPin, Presentation } from 'lucide-react'
 
 // PERFORMANCE OPTIMIZATION: Memoize statistics cards
 const StatCard = memo(({ title, value, icon: Icon, trend, color }: {
@@ -64,8 +64,7 @@ const ChurnTableRow = memo(({ record, index }: { record: any, index: number }) =
 ChurnTableRow.displayName = 'ChurnTableRow'
 
 export default function DashboardPage() {
-  const router = useRouter()
-  const { user, userProfile, loading: authLoading, signOut } = useAuth()
+  const { userProfile } = useAuth()
   const { 
     data: churnData, 
     pagination, 
@@ -73,166 +72,47 @@ export default function DashboardPage() {
     missingChurnReasons, 
     loading: dataLoading, 
     error
-  } = useChurnData()
-
-  // Redirect to login if not authenticated
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/login')
-    }
-  }, [user, authLoading, router])
-
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
-        <div className="text-secondary-800 text-xl">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!user || !userProfile) {
-    return null // Will redirect to login
-  }
-
-  // PERFORMANCE OPTIMIZATION: Calculate completion rate only when needed
-  const completionRate = pagination.total > 0 ? Math.round(((pagination.total - missingChurnReasons) / pagination.total) * 100) : 0
+  } = useChurnData({ autoFetch: !!userProfile })
 
   return (
-    <DashboardLayout userProfile={userProfile}>
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {dataLoading ? (
-          // Show skeleton loading for stats
-          <>
-            <StatCardSkeleton />
-            <StatCardSkeleton />
-            <StatCardSkeleton />
-            <StatCardSkeleton />
-          </>
-        ) : (
-          <>
-            <StatCard
-              title="Total Records"
-              value={pagination.total}
-              icon={BarChart3}
-              trend="+12%"
-              color="text-primary-500"
-            />
-            <StatCard
-              title="Missing Churn Reasons"
-              value={missingChurnReasons}
-              icon={AlertCircle}
-              trend="-5%"
-              color="text-error-500"
-            />
-            <StatCard
-              title="Completed Records"
-              value={pagination.total - missingChurnReasons}
-              icon={BarChart3}
-              trend="+23%"
-              color="text-success-500"
-            />
-            <StatCard
-              title="Completion Rate"
-              value={`${completionRate}%`}
-              icon={Users}
-              trend="+8%"
-              color="text-primary-600"
-            />
-          </>
-        )}
-      </div>
-
-      {/* Data Table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-          <h2 className="text-xl font-semibold text-secondary-800">Churn Data</h2>
-          <p className="text-secondary-600 text-sm">
-            {dataLoading ? (
-              'Loading...'
-            ) : (
-              <>
-                Showing {churnData.length} of {pagination.total} records
-                {userInfo && (
-                  <span className="ml-2">
-                    (Role: {userInfo.role}
-                    {userInfo.team && `, Team: ${userInfo.team}`})
-                  </span>
-                )}
-              </>
-            )}
-          </p>
-        </div>
-
-        {dataLoading ? (
-          <div className="p-6">
-            <LoadingSkeleton rows={8} />
-          </div>
-        ) : error ? (
-          <div className="p-8 text-center text-error-600">
-            Error: {error}
-          </div>
-        ) : churnData.length === 0 ? (
-          <div className="p-8 text-center text-secondary-600">
-            No churn data available
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
-                    RID
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
-                    Restaurant
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
-                    KAM
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
-                    Zone
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
-                    Churn Reason
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary-600 uppercase tracking-wider">
-                    Date
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 bg-white">
-                {churnData.map((record, index) => (
-                  <ChurnTableRow key={record._id || index} record={record} index={index} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Pagination */}
-      {!dataLoading && pagination.total_pages > 1 && (
-        <div className="mt-6 flex justify-center">
-          <div className="flex items-center space-x-2">
-            <button
-              disabled={!pagination.has_prev}
-              className="px-4 py-2 bg-white border border-gray-300 text-secondary-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
-            >
-              Previous
-            </button>
-            <span className="text-secondary-700">
-              Page {pagination.page} of {pagination.total_pages}
-            </span>
-            <button
-              disabled={!pagination.has_next}
-              className="px-4 py-2 bg-white border border-gray-300 text-secondary-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
-            >
-              Next
-            </button>
+    <>
+      <DashboardLayout userProfile={userProfile}>
+        {/* Quick Navigation to Features */}
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center max-w-2xl">
+            <div className="mb-6">
+              <BarChart3 className="w-20 h-20 mx-auto text-primary-500 opacity-50" />
+            </div>
+            <h2 className="text-3xl font-bold text-secondary-800 mb-4">
+              Welcome to KAM HUB
+            </h2>
+            <p className="text-secondary-600 text-lg mb-8">
+              Select a feature from the sidebar to get started
+            </p>
+            
+            {/* Quick Links */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
+              <a href="/dashboard/churn" className="p-6 bg-white rounded-xl border border-gray-200 hover:border-primary-500 hover:shadow-lg transition-all">
+                <TrendingDown className="w-8 h-8 mx-auto text-red-500 mb-3" />
+                <h3 className="font-semibold text-secondary-800">Churn Data</h3>
+                <p className="text-sm text-secondary-600 mt-2">Track and manage customer churn</p>
+              </a>
+              
+              <a href="/dashboard/visits" className="p-6 bg-white rounded-xl border border-gray-200 hover:border-primary-500 hover:shadow-lg transition-all">
+                <MapPin className="w-8 h-8 mx-auto text-green-500 mb-3" />
+                <h3 className="font-semibold text-secondary-800">Visits</h3>
+                <p className="text-sm text-secondary-600 mt-2">Manage brand visits and MOMs</p>
+              </a>
+              
+              <a href="/dashboard/demos" className="p-6 bg-white rounded-xl border border-gray-200 hover:border-primary-500 hover:shadow-lg transition-all">
+                <Presentation className="w-8 h-8 mx-auto text-purple-500 mb-3" />
+                <h3 className="font-semibold text-secondary-800">Demos</h3>
+                <p className="text-sm text-secondary-600 mt-2">Track product demo workflow</p>
+              </a>
+            </div>
           </div>
         </div>
-      )}
-    </DashboardLayout>
+      </DashboardLayout>
+    </>
   )
 }

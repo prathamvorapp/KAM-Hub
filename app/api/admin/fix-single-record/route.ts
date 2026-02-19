@@ -1,9 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase-client';
+import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { isCompletedReason } from '@/lib/constants/churnReasons';
+import { authenticateRequest, hasRole, unauthorizedResponse } from '@/lib/api-auth';
+import { UserRole } from '@/lib/models/user'; // Assuming UserRole enum is needed
 
 export async function POST(request: NextRequest) {
   try {
+    // Authenticate
+    const { user, error: authError } = await authenticateRequest(request);
+    if (authError) return authError;
+    if (!user) {
+      return NextResponse.json({
+        success: false,
+        error: 'Authentication required'
+      }, { status: 401 });
+    }
+
+    // Only allow admins to run this
+    if (!hasRole(user, [UserRole.ADMIN])) { // Use UserRole.ADMIN for clarity
+      return unauthorizedResponse('Admin access required');
+    }
+    
     const body = await request.json();
     const { rid } = body;
 
@@ -11,6 +28,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'RID required' }, { status: 400 });
     }
 
+    console.log(`👤 Admin ${user.email} initiating single record fix for RID: ${rid}`);
     console.log(`🔧 Fixing record: ${rid}`);
 
     // Get the record

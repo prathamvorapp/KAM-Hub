@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUser } from '../../../../../lib/auth-helpers';
+import { authenticateRequest } from '@/lib/api-auth';
 import { healthCheckService } from '@/lib/services';
 import NodeCache from 'node-cache';
 
@@ -7,8 +7,8 @@ const agentStatsCache = new NodeCache({ stdTTL: 180 });
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthenticatedUser(request);
-    
+    const { user, error } = await authenticateRequest(request);
+    if (error) return error;
     if (!user) {
       return NextResponse.json({
         success: false,
@@ -16,8 +16,9 @@ export async function GET(request: NextRequest) {
       }, { status: 401 });
     }
 
-    // Only Team Leads and Admins can view agent statistics
-    if (user.role !== 'Team Lead' && user.role !== 'Admin') {
+    // Only Team Leads and Admins can view agent statistics (case-insensitive)
+    const normalizedRole = user.role.toLowerCase().replace(/\s+/g, '_');
+    if (normalizedRole !== 'team_lead' && normalizedRole !== 'admin') {
       return NextResponse.json({
         success: false,
         error: 'Access denied'
@@ -38,8 +39,14 @@ export async function GET(request: NextRequest) {
     console.log(`📊 Getting agent-wise health check statistics`);
 
     const stats = await healthCheckService.getHealthCheckStatistics({
-      email: user.email,
+      userProfile: user, // Pass the entire user object as userProfile
       month
+    });
+
+    console.log(`📊 Agent statistics result:`, {
+      total: stats.total,
+      agentCount: stats.byAgent.length,
+      sampleAgent: stats.byAgent[0]
     });
 
     const response = {
@@ -52,11 +59,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(response);
 
   } catch (error) {
-    console.error('❌ Error getting agent statistics:', error);
+    console.error('[Health Check Agent Statistics] Error:', error);
     return NextResponse.json({
       success: false,
-      error: 'Failed to load agent statistics',
-      detail: String(error)
+      error: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }
