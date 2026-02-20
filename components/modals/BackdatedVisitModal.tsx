@@ -86,23 +86,23 @@ export default function BackdatedVisitModal({
 
     setLoadingBrands(true);
     try {
-      console.log('🔍 Fetching brands for agent:', agentEmail);
+      // console.log('🔍 Fetching brands for agent:', agentEmail);
       
       // Fetch all brands for the selected agent (no limit)
       const response = await api.getBrandsByAgentEmail(agentEmail, 1, 1000); // High limit to get all brands
       
       if (response.success && response.data && response.data.data) {
         const brands = response.data.data;
-        console.log('✅ Found', brands.length, 'brands for agent:', agentEmail);
-        console.log('📦 Sample brand data:', brands[0]); // Debug log
+        // console.log('✅ Found', brands.length, 'brands for agent:', agentEmail);
+        // console.log('📦 Sample brand data:', brands[0]); // Debug log
         setAgentBrands(brands);
       } else if (response.data && Array.isArray(response.data)) {
         // Handle direct array response
-        console.log('✅ Found', response.data.length, 'brands for agent:', agentEmail);
-        console.log('📦 Sample brand data:', response.data[0]); // Debug log
+        // console.log('✅ Found', response.data.length, 'brands for agent:', agentEmail);
+        // console.log('📦 Sample brand data:', response.data[0]); // Debug log
         setAgentBrands(response.data);
       } else {
-        console.log('⚠️ No brands found for agent:', agentEmail);
+        // console.log('⚠️ No brands found for agent:', agentEmail);
         setAgentBrands([]);
       }
     } catch (error) {

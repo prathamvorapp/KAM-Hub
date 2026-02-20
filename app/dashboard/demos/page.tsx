@@ -159,12 +159,12 @@ export default function DemosPage() {
         // Admin: Get all brands using getMasterData
         const brandsResponse = await api.getMasterData(1, 10000); // Get all brands
         brandsData = brandsResponse.data?.data || [];
-        console.log('📊 DEMOS PAGE DEBUG - Admin fetching all brands:', brandsData.length);
+        // console.log('📊 DEMOS PAGE DEBUG - Admin fetching all brands:', brandsData.length);
       } else {
         // Agent/Team Lead: Get brands assigned to them
         const brandsResponse = await api.getBrandsByAgentEmail(userProfile?.email || "");
         brandsData = brandsResponse.data?.data || [];
-        console.log('📊 DEMOS PAGE DEBUG - Agent/TL fetching assigned brands:', brandsData.length);
+        // console.log('📊 DEMOS PAGE DEBUG - Agent/TL fetching assigned brands:', brandsData.length);
       }
       
       // Get demos for the user based on their role
@@ -214,7 +214,7 @@ export default function DemosPage() {
 
   const initializeBrandDemos = async (brand: Brand) => {
     try {
-      console.log('🚀 Initializing demos for brand:', brand.brand_name);
+      // console.log('🚀 Initializing demos for brand:', brand.brand_name);
       
       // Initialize demos using the brand's Master_Data id (Supabase UUID)
       const brandId = brand.id || brand._id;
@@ -223,7 +223,7 @@ export default function DemosPage() {
       }
       await api.initializeBrandDemosFromMasterData(brandId);
       
-      console.log('✅ Demos initialized successfully for:', brand.brand_name);
+      // console.log('✅ Demos initialized successfully for:', brand.brand_name);
       alert(`Demos initialized successfully for ${brand.brand_name}! All 8 products are now ready.`);
       
       // Reload the page data

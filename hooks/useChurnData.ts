@@ -77,12 +77,12 @@ export function useChurnData(options: UseChurnDataOptions = {}) {
   const fetchChurnData = useCallback(async (fetchPage = page, fetchLimit = limit, fetchSearch = search) => {
     // Prevent concurrent fetches
     if (fetchingRef.current) {
-      console.log('⏳ [useChurnData] Fetch already in progress, skipping...')
+      // console.log('⏳ [useChurnData] Fetch already in progress, skipping...')
       return
     }
     
     if (!userId || !session) {
-      console.log('❌ [useChurnData] User not authenticated', { userId: !!userId, session: !!session });
+      // console.log('❌ [useChurnData] User not authenticated', { userId: !!userId, session: !!session });
       setError('User not authenticated')
       setLoading(false)
       return
@@ -106,7 +106,7 @@ export function useChurnData(options: UseChurnDataOptions = {}) {
         params.append('search', fetchSearch)
       }
 
-      console.log(`🔍 [useChurnData] Fetching: page=${fetchPage}, limit=${fetchLimit}, search=${fetchSearch}`)
+      // console.log(`🔍 [useChurnData] Fetching: page=${fetchPage}, limit=${fetchLimit}, search=${fetchSearch}`)
 
       // Add timeout to prevent infinite loading
       const controller = new AbortController();
@@ -133,7 +133,7 @@ export function useChurnData(options: UseChurnDataOptions = {}) {
         
         if (!mountedRef.current) return
         
-        console.log(`✅ [useChurnData] Fetched: ${result.data.length} records, total: ${result.pagination.total}`)
+        // console.log(`✅ [useChurnData] Fetched: ${result.data.length} records, total: ${result.pagination.total}`)
 
         setData(result.data)
         setPagination(result.pagination)
@@ -164,7 +164,7 @@ export function useChurnData(options: UseChurnDataOptions = {}) {
     }
 
     try {
-      console.log(`📝 [useChurnData] Updating churn reason for RID: ${rid}`)
+      // console.log(`📝 [useChurnData] Updating churn reason for RID: ${rid}`)
 
       // Cookies are sent automatically, no need for Authorization header
       const response = await fetch(`${apiUrl}/api/churn/update-reason`, {
@@ -186,7 +186,7 @@ export function useChurnData(options: UseChurnDataOptions = {}) {
       }
 
       const result = await response.json()
-      console.log(`✅ [useChurnData] Churn reason updated for RID: ${rid}`)
+      // console.log(`✅ [useChurnData] Churn reason updated for RID: ${rid}`)
 
       // Refresh data after update
       await fetchChurnData()
@@ -206,17 +206,17 @@ export function useChurnData(options: UseChurnDataOptions = {}) {
     mountedRef.current = true
     
     if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 [useChurnData] useEffect triggered', {
-        autoFetch,
-        hasUserId: !!userId,
-        hasSession: !!session,
-        userEmail
-      });
+      // console.log('🔍 [useChurnData] useEffect triggered', {
+      //   autoFetch,
+      //   hasUserId: !!userId,
+      //   hasSession: !!session,
+      //   userEmail
+      // });
     }
     
     if (userId && session) {
       if (process.env.NODE_ENV === 'development') {
-        console.log('✅ [useChurnData] Conditions met, fetching data');
+        // console.log('✅ [useChurnData] Conditions met, fetching data');
       }
       fetchChurnData(page, limit, search)
     }

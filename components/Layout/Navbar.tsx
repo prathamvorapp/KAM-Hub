@@ -28,10 +28,10 @@ export default function Navbar({ userProfile }: NavbarProps) {
 
   const handleLogout = async () => {
     try {
-      console.log('🚪 [Navbar] Logging out...')
+      // console.log('🚪 [Navbar] Logging out...')
       await signOut()
       // signOut already redirects to /login via server action
-      console.log('✅ [Navbar] Logout successful')
+      // console.log('✅ [Navbar] Logout successful')
     } catch (error) {
       console.error('❌ [Navbar] Logout error:', error)
       // Fallback: force redirect to login

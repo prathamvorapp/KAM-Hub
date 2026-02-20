@@ -101,7 +101,7 @@ export default function TeamLeadAgentStatistics({ userEmail, onRefresh, isAdmin 
       setLoading(true)
       setError(null)
       
-      console.log(`📊 Loading ${isAdmin ? 'organization' : 'team'} statistics for:`, userEmail)
+      // console.log(`📊 Loading ${isAdmin ? 'organization' : 'team'} statistics for:`, userEmail)
       
       // Use the team statistics endpoint (works for both team lead and admin)
       const result = await api.getTeamVisitStatistics(); // Call without email parameter
@@ -137,12 +137,12 @@ export default function TeamLeadAgentStatistics({ userEmail, onRefresh, isAdmin 
           setAvailableTeams(teams.sort());
         }
         
-        console.log(`✅ ${isAdmin ? 'Organization' : 'Team'} statistics loaded:`, {
-          totalAgents: agentOnlyStats.length,
-          teamName: team_name,
-          teamLead: team_lead,
-          teams: isAdmin ? availableTeams.length : 0
-        });
+        // console.log(`✅ ${isAdmin ? 'Organization' : 'Team'} statistics loaded:`, {
+        //   totalAgents: agentOnlyStats.length,
+        //   teamName: team_name,
+        //   teamLead: team_lead,
+        //   teams: isAdmin ? availableTeams.length : 0
+        // });
       } else {
         setError(result.error || `Failed to load ${isAdmin ? 'organization' : 'team'} statistics`);
       }

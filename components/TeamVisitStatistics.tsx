@@ -105,11 +105,11 @@ export default function TeamVisitStatistics({ userEmail, refreshKey, onViewAgent
     setError(null);
 
     // No need for the !email || !teamName check here anymore as they are guaranteed by useEffect
-    console.log('📊 Loading team statistics from API for:', email); // Updated log message
+    // console.log('📊 Loading team statistics from API for:', email); // Updated log message
     
     try {
       const teamVisitStatsResponse = await api.getTeamVisitStatistics();
-      console.log('🔍 Team Visit Stats raw response:', teamVisitStatsResponse);
+      // console.log('🔍 Team Visit Stats raw response:', teamVisitStatsResponse);
       
       if (!teamVisitStatsResponse || !teamVisitStatsResponse.success) {
         throw new Error(teamVisitStatsResponse?.error || 'Failed to fetch team visit statistics');
@@ -117,7 +117,7 @@ export default function TeamVisitStatistics({ userEmail, refreshKey, onViewAgent
 
       setStatisticsData(teamVisitStatsResponse.data); // data contains team_statistics, team_summary, team_wise_breakdown
 
-      console.log('✅ Team statistics loaded successfully:', teamVisitStatsResponse.data);
+      // console.log('✅ Team statistics loaded successfully:', teamVisitStatsResponse.data);
     } catch (err: any) {
       console.error('❌ Error loading team statistics:', err);
       setError(err.message || 'Failed to load team statistics');
@@ -152,17 +152,17 @@ export default function TeamVisitStatistics({ userEmail, refreshKey, onViewAgent
   const hasTeamData = teamStatistics.length > 0 && teamStatistics.some((agent: any) => !agent.error);
   
   // Enhanced debug logging
-  console.log('🔍 TeamVisitStatistics Debug:', {
-    loading,
-    error,
-    hasData: !!statisticsData,
-    statisticsDataKeys: statisticsData ? Object.keys(statisticsData) : [],
-    teamStatisticsCount: teamStatistics.length,
-    teamWiseBreakdownCount: teamWiseBreakdown.length,
-    hasTeamData,
-    teamInfo,
-    rawData: statisticsData
-  });
+  // console.log('🔍 TeamVisitStatistics Debug:', {
+  //   loading,
+  //   error,
+  //   hasData: !!statisticsData,
+  //   statisticsDataKeys: statisticsData ? Object.keys(statisticsData) : [],
+  //   teamStatisticsCount: teamStatistics.length,
+  //   teamWiseBreakdownCount: teamWiseBreakdown.length,
+  //   hasTeamData,
+  //   teamInfo,
+  //   rawData: statisticsData
+  // });
 
   // Handle refresh from parent component
   useEffect(() => {
@@ -237,7 +237,7 @@ export default function TeamVisitStatistics({ userEmail, refreshKey, onViewAgent
   }
 
   if (loading) {
-    console.log('🔄 TeamVisitStatistics: Still loading...', { loading, error, statisticsData, hasData: !!statisticsData });
+    // console.log('🔄 TeamVisitStatistics: Still loading...', { loading, error, statisticsData, hasData: !!statisticsData });
     return (
       <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
         <div className="animate-pulse">
@@ -256,7 +256,7 @@ export default function TeamVisitStatistics({ userEmail, refreshKey, onViewAgent
   }
 
   if (error) {
-    console.log('❌ TeamVisitStatistics: Error occurred', { error, statisticsData });
+    // console.log('❌ TeamVisitStatistics: Error occurred', { error, statisticsData });
     return (
       <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
         <div className="text-center py-8">
@@ -303,12 +303,12 @@ export default function TeamVisitStatistics({ userEmail, refreshKey, onViewAgent
 
   const teamMembersOnly = teamStatistics.filter((a: any) => !a.error && a.agent_name !== teamInfo?.team_lead)
 
-  console.log('🔍 TeamVisitStatistics Debug:', {
-    userRole: userProfile?.role,
-    isTeamLead,
-    hasOnViewAgentStats: !!onViewAgentStats,
-    teamMembersCount: teamMembersOnly.length
-  });
+  // console.log('🔍 TeamVisitStatistics Debug:', {
+  //   userRole: userProfile?.role,
+  //   isTeamLead,
+  //   hasOnViewAgentStats: !!onViewAgentStats,
+  //   teamMembersCount: teamMembersOnly.length
+  // });
 
   return (
     <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">

@@ -97,7 +97,7 @@ export default function AdminAgentStatistics({ userEmail, onRefresh }: AdminAgen
       setLoading(true)
       setError(null)
       
-      console.log('📊 Loading organization-wide agent statistics for admin:', userEmail)
+      // console.log('📊 Loading organization-wide agent statistics for admin:', userEmail)
       
       // Use the dedicated admin endpoint for organization statistics
       const apiUrl = '';  // Use relative paths for same-origin requests
@@ -119,8 +119,8 @@ export default function AdminAgentStatistics({ userEmail, onRefresh }: AdminAgen
         setAllAgentStatistics(result.agent_statistics || [])
         setAgentWiseBreakdown(result.agent_wise_breakdown || [])
         setOrganizationSummary(result.organization_summary)
-        console.log('✅ Organization statistics loaded:', result.agent_statistics)
-        console.log('✅ Agent-wise breakdown loaded:', result.agent_wise_breakdown)
+        // console.log('✅ Organization statistics loaded:', result.agent_statistics)
+        // console.log('✅ Agent-wise breakdown loaded:', result.agent_wise_breakdown)
       } else {
         setError('Failed to load organization statistics')
       }

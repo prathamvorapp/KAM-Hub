@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { convexAPI } from '../../../../lib/convex-api';
+// import { convexAPI } from '../../../../lib/convex-api'; // TODO: Implement analytics service
 import { authenticateRequest } from '@/lib/api-auth';
 import NodeCache from 'node-cache';
 
@@ -33,8 +33,19 @@ export async function GET(request: NextRequest) {
 
     console.log(`🔍 Getting churn analytics for user: ${user.email}, role: ${user.role}`);
 
+    // TODO: Implement analytics service
     // Get analytics data from Convex
-    const result = await convexAPI.getChurnAnalytics();
+    // const result = await convexAPI.getChurnAnalytics();
+    
+    // Temporary placeholder response
+    const result = {
+      overallStats: {
+        totalRecords: 0,
+        avgResponseTime: 0,
+        completionRate: 0
+      },
+      agentStats: []
+    };
 
     console.log(`📊 Analytics result: ${result.overallStats.totalRecords} total records`);
 
@@ -89,8 +100,17 @@ export async function POST(request: NextRequest) {
 
     console.log(`🔍 Getting agent response time details for: ${agentName}`);
 
+    // TODO: Implement analytics service
     // Get agent details from Convex
-    const result = await convexAPI.getAgentResponseTimeDetails(agentName);
+    // const result = await convexAPI.getAgentResponseTimeDetails(agentName);
+    
+    // Temporary placeholder response
+    const result = {
+      agentName,
+      recordsWithResponse: 0,
+      avgResponseTime: 0,
+      details: []
+    };
 
     console.log(`📊 Agent details result: ${result.recordsWithResponse} records with response`);
 

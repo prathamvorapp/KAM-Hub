@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { formatDateTimeSafely } from '@/utils/dateUtils';
-import { convexAPI } from '../lib/convex-api';
+import { apiClient } from '../lib/api-client';
 import { useAuth } from '../contexts/AuthContext';
 
 interface CallAttempt {
@@ -59,8 +59,8 @@ export const FollowUpPanel: React.FC<FollowUpPanelProps> = ({
         return;
       }
       
-      // Get follow-up status from Convex with user email for role-based filtering
-      const result = await convexAPI.getFollowUpStatus(rid, churnReason, userProfile.email);
+      // Get follow-up status with user email for role-based filtering
+      const result = await apiClient.getFollowUpStatus(rid, churnReason);
       
       if (result.success && result.data) {
         // Transform Convex data to match the expected format
@@ -114,13 +114,12 @@ export const FollowUpPanel: React.FC<FollowUpPanelProps> = ({
         return;
       }
       
-      // Record call attempt using Convex with user email for role-based filtering
-      const result = await convexAPI.recordCallAttempt({
+      // Record call attempt with user email for role-based filtering
+      const result = await apiClient.recordCallAttempt({
         rid, 
         call_response: 'No Response', // Default call response
         notes: notes.trim() || undefined,
-        churn_reason: churnReason || '',
-        email: userProfile.email
+        churn_reason: churnReason || ''
       });
       
       if (result.success) {

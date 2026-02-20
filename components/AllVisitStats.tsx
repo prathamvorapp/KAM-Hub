@@ -75,7 +75,7 @@ export default function AllVisitStats({ userEmail, refreshKey }: AllVisitStatsPr
         throw new Error('User email is required');
       }
 
-      console.log('📊 Loading all agent statistics for Admin:', email);
+      // console.log('📊 Loading all agent statistics for Admin:', email);
       
       // Use the admin statistics endpoint which returns all agents' stats in one call
       const response = await fetch('/api/data/visits/admin-statistics', {
@@ -87,7 +87,7 @@ export default function AllVisitStats({ userEmail, refreshKey }: AllVisitStatsPr
       }
       
       const data = await response.json();
-      console.log('📊 Admin statistics response:', data);
+      // console.log('📊 Admin statistics response:', data);
 
       if (!data.success) {
         throw new Error(data.error || 'Failed to fetch statistics');
@@ -99,7 +99,7 @@ export default function AllVisitStats({ userEmail, refreshKey }: AllVisitStatsPr
         throw new Error('No agent statistics found');
       }
 
-      console.log('✅ Loaded statistics for', agentStats.length, 'agents');
+      // console.log('✅ Loaded statistics for', agentStats.length, 'agents');
 
       // Map the data to ensure all fields are present with defaults
       const mappedStats = agentStats.map((agent: any) => ({
@@ -124,7 +124,7 @@ export default function AllVisitStats({ userEmail, refreshKey }: AllVisitStatsPr
       }));
 
       setAllAgentStatistics(mappedStats);
-      console.log('✅ All agent statistics loaded successfully');
+      // console.log('✅ All agent statistics loaded successfully');
     } catch (err: any) {
       console.error('❌ Error loading all agent statistics:', err);
       setError(err.message || 'Failed to load agent statistics');

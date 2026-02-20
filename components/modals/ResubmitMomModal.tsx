@@ -57,12 +57,12 @@ export default function ResubmitMomModal({
 
   // Initialize edited open points when modal opens or previousMomData changes
   React.useEffect(() => {
-    console.log('🔄 ResubmitMomModal: previousMomData changed:', previousMomData);
+    // console.log('🔄 ResubmitMomModal: previousMomData changed:', previousMomData);
     if (previousMomData?.open_points && previousMomData.open_points.length > 0) {
-      console.log('✅ ResubmitMomModal: Setting edited open points:', previousMomData.open_points);
+      // console.log('✅ ResubmitMomModal: Setting edited open points:', previousMomData.open_points);
       setEditedOpenPoints([...previousMomData.open_points]);
     } else {
-      console.log('⚠️ ResubmitMomModal: No previous open points to load');
+      // console.log('⚠️ ResubmitMomModal: No previous open points to load');
       setEditedOpenPoints([]);
     }
   }, [previousMomData]);

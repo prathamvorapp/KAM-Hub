@@ -52,13 +52,13 @@ export default function VisitStatistics({ userEmail, refreshKey }: VisitStatisti
       setLoading(true);
       setError(null);
       
-      console.log('📊 Loading visit statistics, bustCache:', bustCache, 'Attempt:', retryCount + 1);
+      // console.log('📊 Loading visit statistics, bustCache:', bustCache, 'Attempt:', retryCount + 1);
       
       // Get user profile to determine role
       const userProfileResponse = await api.getUserProfile(userEmail);
       if (userProfileResponse?.user) {
         setUserRole(userProfileResponse.user.role || '');
-        console.log('✅ User role loaded:', userProfileResponse.user.role);
+        // console.log('✅ User role loaded:', userProfileResponse.user.role);
       } else {
         console.warn('Could not fetch user profile for role detection. Using default role.');
         setUserRole('agent'); // Default to agent if profile not found
@@ -66,12 +66,12 @@ export default function VisitStatistics({ userEmail, refreshKey }: VisitStatisti
       
       const response = await api.getVisitStatistics(bustCache);
       
-      console.log('📊 Visit statistics API response:', response);
+      // console.log('📊 Visit statistics API response:', response);
       
       if (response && response.success && response.data) {
         setStatistics(response.data);
         setRetryCount(0);
-        console.log('✅ Visit statistics loaded successfully:', response.data);
+        // console.log('✅ Visit statistics loaded successfully:', response.data);
       } else {
         console.error('❌ Invalid response format:', response);
         throw new Error(response?.error || 'Invalid response format or data missing from API');
@@ -82,7 +82,7 @@ export default function VisitStatistics({ userEmail, refreshKey }: VisitStatisti
       if (err.message?.includes('timeout')) {
         setError('Statistics loading timed out. The system may be processing large amounts of data.');
         if (retryCount < 2) {
-          console.log('⏱️ Retrying statistics load in 3 seconds...');
+          // console.log('⏱️ Retrying statistics load in 3 seconds...');
           setTimeout(() => {
             setRetryCount(prev => prev + 1);
             loadStatistics();

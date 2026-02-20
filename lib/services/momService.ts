@@ -61,24 +61,24 @@ export const momService = {
       return { data: [], total: 0, page: 0, limit: 0, total_pages: 0 };
     }
 
-    console.log(`🔍 MOM Service - User Profile for ${userProfile.email}:`, userProfile);
+    // console.log(`🔍 MOM Service - User Profile for ${userProfile.email}:`, userProfile);
     
     const normalizedRole = userProfile.role?.toLowerCase().replace(/[_\s]/g, '');
     
     if (normalizedRole === 'agent') {
       query = query.eq('created_by', userProfile.email);
-      console.log(`👤 Agent filter - showing MOMs created by: ${userProfile.email}`);
+      // console.log(`👤 Agent filter - showing MOMs created by: ${userProfile.email}`);
     } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
       const teamName = userProfile.team_name || userProfile.teamName;
       if (teamName) {
         query = query.eq('team', teamName);
-        console.log(`👥 Team Lead filter - showing MOMs for team: ${teamName}`);
+        // console.log(`👥 Team Lead filter - showing MOMs for team: ${teamName}`);
       } else {
-        console.log(`⚠️ Team Lead ${userProfile.email} has no team_name assigned`);
+        // console.log(`⚠️ Team Lead ${userProfile.email} has no team_name assigned`);
         query = query.eq('created_by', 'NON_EXISTENT_EMAIL'); // Deny if no team
       }
     } else if (normalizedRole === 'admin') {
-      console.log(`👑 Admin - showing all MOMs`);
+      // console.log(`👑 Admin - showing all MOMs`);
     } else {
       console.warn(`⚠️ Unknown role: ${userProfile.role}, denying access to MOMs`);
       query = query.eq('created_by', 'NON_EXISTENT_EMAIL'); // Deny for unknown roles

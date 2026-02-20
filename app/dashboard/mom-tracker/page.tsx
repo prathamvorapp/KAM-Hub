@@ -70,28 +70,28 @@ function TicketsPageContent() {
     try {
       setLoading(true)
       
-      console.log('🔍 Loading MOM records for user:', userProfile.email); // Changed from user.email
-      console.log('🎯 Looking for visit_id:', visitId);
+      // console.log('🔍 Loading MOM records for user:', userProfile.email); // Changed from user.email
+      // console.log('🎯 Looking for visit_id:', visitId);
       
       // If we have a specific visit_id, try multiple search strategies
       if (visitId) {
         // Strategy 1: Search by visit_id directly
-        console.log('📋 Strategy 1: Searching by visit_id directly');
+        // console.log('📋 Strategy 1: Searching by visit_id directly');
         let response = await api.getMOM({
           search: visitId,
         });
         
         let records = response.data?.data || [];
-        console.log('📊 Strategy 1 results:', records.length, 'records found');
+        // console.log('📊 Strategy 1 results:', records.length, 'records found');
         
         // Strategy 2: If no results, get all MOMs and filter client-side
         if (records.length === 0) {
-          console.log('📋 Strategy 2: Getting all MOMs and filtering client-side');
+          // console.log('📋 Strategy 2: Getting all MOMs and filtering client-side');
           response = await api.getMOM({
           });
           
           const allRecords = response.data?.data || [];
-          console.log('📊 Total MOM records:', allRecords.length);
+          // console.log('📊 Total MOM records:', allRecords.length);
           
           // Filter by visit_id on client side
           records = allRecords.filter((mom: any) => {
@@ -99,17 +99,17 @@ function TicketsPageContent() {
                            mom.title?.includes(visitId) ||
                            mom.description?.includes(visitId);
             if (matches) {
-              console.log('✅ Found matching MOM:', mom.ticket_id, 'for visit:', visitId);
+              // console.log('✅ Found matching MOM:', mom.ticket_id, 'for visit:', visitId);
             }
             return matches;
           });
           
-          console.log('📊 Strategy 2 results:', records.length, 'records found');
+          // console.log('📊 Strategy 2 results:', records.length, 'records found');
         }
         
         // Strategy 3: If still no results, also load visit details to get more context
         if (records.length === 0) {
-          console.log('📋 Strategy 3: Loading visit details for context');
+          // console.log('📋 Strategy 3: Loading visit details for context');
           try {
             const visitResponse = await api.getVisits({ 
               search: visitId 
@@ -118,12 +118,12 @@ function TicketsPageContent() {
             const visit: any = visits.find((v: any) => v.visit_id === visitId);
             
             if (visit) {
-              console.log('✅ Found visit details:', visit);
+              // console.log('✅ Found visit details:', visit);
               setVisitDetails(visit);
               
               // Try searching by brand name as fallback
               if (visit.brand_name) {
-                console.log('📋 Strategy 3b: Searching by brand name:', visit.brand_name);
+                // console.log('📋 Strategy 3b: Searching by brand name:', visit.brand_name);
                 const brandResponse = await api.getMOM({
                   search: visit.brand_name,
                 });
@@ -136,7 +136,7 @@ function TicketsPageContent() {
                 
                 if (visitMOMs.length > 0) {
                   records = visitMOMs;
-                  console.log('📊 Strategy 3b results:', records.length, 'records found by brand');
+                  // console.log('📊 Strategy 3b results:', records.length, 'records found by brand');
                 }
               }
             }
@@ -159,9 +159,9 @@ function TicketsPageContent() {
         if (records.length > 0) {
           const visitMOM: any = records.find((mom: any) => mom.visit_id === visitId) || records[0];
           setSelectedMOM(visitMOM);
-          console.log('🎯 Selected MOM:', visitMOM.ticket_id);
+          // console.log('🎯 Selected MOM:', visitMOM.ticket_id);
         } else {
-          console.log('⚠️ No MOM records found for visit:', visitId);
+          // console.log('⚠️ No MOM records found for visit:', visitId);
         }
         
       } else {
@@ -187,7 +187,7 @@ function TicketsPageContent() {
         }
         
         setMomRecords(filteredRecords);
-        console.log('📊 Normal search results:', filteredRecords.length, 'records found');
+        // console.log('📊 Normal search results:', filteredRecords.length, 'records found');
       }
       
     } catch (error) {
@@ -200,7 +200,7 @@ function TicketsPageContent() {
   // Load visit details for context
   const loadVisitDetails = async (visitId: string) => {
     try {
-      console.log('🔍 Loading visit details for:', visitId);
+      // console.log('🔍 Loading visit details for:', visitId);
       
       // Try multiple strategies to find the visit
       const response = await api.getVisits({ 
@@ -209,7 +209,7 @@ function TicketsPageContent() {
       
       // Fix: getVisits returns { data: { page: [], isDone, continueCursor } }
       const visits = response.data?.page || [];
-      console.log('📊 Found visits:', visits.length);
+      // console.log('📊 Found visits:', visits.length);
       
       // Look for exact match first
       let visit: any = visits.find((v: any) => v.visit_id === visitId);
@@ -225,10 +225,10 @@ function TicketsPageContent() {
       }
       
       if (visit) {
-        console.log('✅ Found visit details:', visit);
+        // console.log('✅ Found visit details:', visit);
         setVisitDetails(visit);
       } else {
-        console.log('⚠️ No visit details found for:', visitId);
+        // console.log('⚠️ No visit details found for:', visitId);
       }
     } catch (error) {
       console.error('❌ Failed to load visit details:', error);

@@ -132,16 +132,16 @@ export default function HealthChecksPage() {
         const brandsData = await brandsRes.json()
         const progressData = await progressRes.json()
         
-        console.log('🔍 [Health Check] Brands API Response:', {
-          success: brandsData.success,
-          dataLength: brandsData.data?.length,
-          error: brandsData.error,
-          statusCode: brandsRes.status
-        })
+        // console.log('🔍 [Health Check] Brands API Response:', {
+        //   success: brandsData.success,
+        //   dataLength: brandsData.data?.length,
+        //   error: brandsData.error,
+        //   statusCode: brandsRes.status
+        // })
         
         if (brandsData.success) {
-          console.log('📊 Brands for assessment sample:', brandsData.data.slice(0, 2))
-          console.log('📊 Total brands received:', brandsData.data.length)
+          // console.log('📊 Brands for assessment sample:', brandsData.data.slice(0, 2))
+          // console.log('📊 Total brands received:', brandsData.data.length)
           setBrandsForAssessment(brandsData.data)
           setFilteredBrands(brandsData.data)
         } else {
@@ -181,7 +181,7 @@ export default function HealthChecksPage() {
   const handleClearCache = async () => {
     try {
       setClearingCache(true)
-      console.log('🗑️ Clearing cache...')
+      // console.log('🗑️ Clearing cache...')
       
       const response = await fetch('/api/data/health-checks/clear-cache', {
         method: 'POST'
@@ -190,7 +190,7 @@ export default function HealthChecksPage() {
       const data = await response.json()
       
       if (data.success) {
-        console.log('✅ Cache cleared successfully')
+        // console.log('✅ Cache cleared successfully')
         // Reload data immediately
         await loadData()
       } else {

@@ -68,7 +68,7 @@ export default function LoginPage() {
 
     try {
       setLoading(true)
-      console.log('🔐 [Login] Starting login process...')
+      // console.log('🔐 [Login] Starting login process...')
       
       const result = await signIn(cleanEmail, cleanPassword)
 
@@ -86,7 +86,7 @@ export default function LoginPage() {
         return
       }
       
-      console.log('✅ [Login] Sign in successful, redirecting...')
+      // console.log('✅ [Login] Sign in successful, redirecting...')
       
       // Get redirect path from URL or default to churn page (not empty dashboard)
       const searchParams = new URLSearchParams(window.location.search)

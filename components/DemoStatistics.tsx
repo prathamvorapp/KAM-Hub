@@ -34,10 +34,10 @@ export default function DemoStatistics() {
         setLoading(true);
       }
       const response = await api.getDemoStatistics();
-      console.log('📊 Demo statistics response:', response);
+      // console.log('📊 Demo statistics response:', response);
       // Extract data from response if it's wrapped
       const statsData = response.data || response;
-      console.log('📊 Demo statistics data:', statsData);
+      // console.log('📊 Demo statistics data:', statsData);
       setStats(statsData);
     } catch (error) {
       console.error("Error loading demo statistics:", error);
@@ -66,7 +66,7 @@ export default function DemoStatistics() {
   }
 
   if (!stats) {
-    console.log('⚠️ No stats available');
+    // console.log('⚠️ No stats available');
     return (
       <div className="text-center py-8">
         <p className="text-white/60">No demo statistics available</p>
@@ -74,7 +74,7 @@ export default function DemoStatistics() {
     );
   }
 
-  console.log('📊 Rendering stats:', stats);
+  // console.log('📊 Rendering stats:', stats);
   const conversionRate = stats.total > 0 ? Math.round((stats.converted / stats.total) * 100) : 0;
   const completionRate = stats.total > 0 ? Math.round(((stats.converted + stats.notConverted) / stats.total) * 100) : 0;
 

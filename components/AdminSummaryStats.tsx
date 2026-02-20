@@ -59,7 +59,7 @@ export default function AdminSummaryStats({ userEmail, onViewDetails }: AdminSum
       
       if (result.success) {
         setSummary(result.summary)
-        console.log('✅ Organization summary loaded successfully')
+        // console.log('✅ Organization summary loaded successfully')
       } else {
         setError('Failed to load organization summary')
       }

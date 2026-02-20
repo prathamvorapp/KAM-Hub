@@ -91,7 +91,7 @@ export function AuthProvider({
         };
         
         setUserProfileState(newUserProfile);
-        console.log('✅ Client Sign in - User profile updated:', newUserProfile);
+        // console.log('✅ Client Sign in - User profile updated:', newUserProfile);
       }
       
       return { success: true }

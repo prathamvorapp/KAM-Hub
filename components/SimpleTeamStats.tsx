@@ -29,7 +29,7 @@ export default function SimpleTeamStats() {
       console.error('❌ Simple stats error:', error);
     },
     onSuccess: (data) => {
-      console.log('✅ Simple stats loaded:', data);
+      // console.log('✅ Simple stats loaded:', data);
     }
   });
 
@@ -127,7 +127,7 @@ export default function SimpleTeamStats() {
     });
   }
 
-  console.log('📊 Calculated totals:', totals);
+  // console.log('📊 Calculated totals:', totals);
 
   return (
     <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">

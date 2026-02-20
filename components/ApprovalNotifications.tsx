@@ -57,7 +57,7 @@ export default function ApprovalNotifications({ userEmail, userRole }: ApprovalN
         limit: 1000 // Increase limit to get all visits
       });
       
-      console.log('📋 ApprovalNotifications - Visits response:', visitsResponse);
+      // console.log('📋 ApprovalNotifications - Visits response:', visitsResponse);
       
       // Fix: getVisits returns { success: true, page: [], isDone, continueCursor }
       const allVisits = visitsResponse.page || [];
@@ -67,7 +67,7 @@ export default function ApprovalNotifications({ userEmail, userRole }: ApprovalN
         v.approval_status === 'Pending' || v.approval_status === 'pending'
       );
       
-      console.log('📊 ApprovalNotifications - Pending visits:', pendingVisits.length, 'out of', allVisits.length);
+      // console.log('📊 ApprovalNotifications - Pending visits:', pendingVisits.length, 'out of', allVisits.length);
       
       // Get MOM details for each pending visit to count open points
       let totalOpenPoints = 0;
@@ -77,7 +77,7 @@ export default function ApprovalNotifications({ userEmail, userRole }: ApprovalN
             search: visit.visit_id // Search by visit_id to find related MOM
           });
           
-          console.log('📋 ApprovalNotifications - MOM response for', visit.visit_id, ':', momResponse);
+          // console.log('📋 ApprovalNotifications - MOM response for', visit.visit_id, ':', momResponse);
           
           // Fix: getMOM returns { success: true, data: { data: [...] } }
           const moms = momResponse.data?.data || momResponse.data || [];
@@ -86,14 +86,14 @@ export default function ApprovalNotifications({ userEmail, userRole }: ApprovalN
           if (visitMOM && visitMOM.open_points) {
             const openPointsCount = visitMOM.open_points.filter((point: OpenPoint) => point.status === 'Open').length;
             totalOpenPoints += openPointsCount;
-            console.log('📊 ApprovalNotifications - Open points for', visit.brand_name, ':', openPointsCount);
+            // console.log('📊 ApprovalNotifications - Open points for', visit.brand_name, ':', openPointsCount);
           }
         } catch (error) {
           console.error('Error fetching MOM for visit:', visit.visit_id, error);
         }
       }
       
-      console.log('✅ ApprovalNotifications - Total pending:', pendingVisits.length, 'Total open points:', totalOpenPoints);
+      // console.log('✅ ApprovalNotifications - Total pending:', pendingVisits.length, 'Total open points:', totalOpenPoints);
       
       setPendingCount(pendingVisits.length);
       setTotalOpenPoints(totalOpenPoints);

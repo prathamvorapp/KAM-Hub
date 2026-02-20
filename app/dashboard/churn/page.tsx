@@ -135,7 +135,7 @@ function ChurnDataPageContent() {
     // If there's a search term, fetch stats for each category separately
     if (trimmedSearch !== '' && userProfile) {
       try {
-        console.log('🔍 Fetching stats for search:', trimmedSearch);
+        // console.log('🔍 Fetching stats for search:', trimmedSearch);
         
         // Fetch counts for each category in parallel
         const [newResponse, overdueResponse, followUpsResponse, completedResponse] = await Promise.all([
@@ -172,7 +172,7 @@ function ChurnDataPageContent() {
           completed: completedResponse.pagination?.total || 0
         };
         
-        console.log('📊 Calculated Stats from separate calls:', calculatedStats);
+        // console.log('📊 Calculated Stats from separate calls:', calculatedStats);
         setAllCategoryStats(calculatedStats)
       } catch (error) {
         console.error('Failed to fetch all category stats:', error)
@@ -203,7 +203,7 @@ function ChurnDataPageContent() {
       const isCompleted = isCompletedReason(churnReason);
 
       // Debug logging
-      console.log('🔍 Record:', record.rid, 'Churn Reason:', `"${churnReason}"`, 'Is Completed:', isCompleted, 'No Agent Response:', noResponse);
+      // console.log('🔍 Record:', record.rid, 'Churn Reason:', `"${churnReason}"`, 'Is Completed:', isCompleted, 'No Agent Response:', noResponse);
 
       // Completed
       if (isCompleted) {
@@ -223,7 +223,7 @@ function ChurnDataPageContent() {
       }
     });
 
-    console.log('📊 Calculated Stats:', { newCount, overdue, followUps, completed });
+    // console.log('📊 Calculated Stats:', { newCount, overdue, followUps, completed });
     return { newCount, overdue, followUps, completed };
   }
   
@@ -241,15 +241,15 @@ function ChurnDataPageContent() {
   }
 
   const loadData = async (page: number = 1, searchQuery?: string, filterType: string = 'all') => {
-    console.log('🔄 [loadData] Called with:', { page, searchQuery, filterType, hasUser: !!userProfile, hasUserProfile: !!userProfile })
+    // console.log('🔄 [loadData] Called with:', { page, searchQuery, filterType, hasUser: !!userProfile, hasUserProfile: !!userProfile })
     
     if (!userProfile) {
-      console.log('❌ [loadData] No user or userProfile, cannot load data')
+      // console.log('❌ [loadData] No user or userProfile, cannot load data')
       setLoading(false) // Clear loading state
       return
     }
 
-    console.log('🔄 [loadData] Setting loading to true')
+    // console.log('🔄 [loadData] Setting loading to true')
     setLoading(true)
     
     // Add timeout to prevent infinite loading
@@ -274,7 +274,7 @@ function ChurnDataPageContent() {
         convexParams.search = finalSearchParam.trim()
       }
       
-      console.log('🔄 Loading churn data from Convex for:', userProfile.email, 'with filter:', filterType)
+      // console.log('🔄 Loading churn data from Convex for:', userProfile.email, 'with filter:', filterType)
       
       // Load data from Convex instead of Google Sheets API
       const churnResponse = await api.getChurnData(convexParams).catch(err => {
@@ -282,13 +282,13 @@ function ChurnDataPageContent() {
         throw err
       })
       
-      console.log('🔍 Churn Response Structure:', churnResponse);
-      console.log('🔍 Actual Data:', churnResponse.data);
-      console.log('🔍 Categorization:', churnResponse.data?.categorization);
+      // console.log('🔍 Churn Response Structure:', churnResponse);
+      // console.log('🔍 Actual Data:', churnResponse.data);
+      // console.log('🔍 Categorization:', churnResponse.data?.categorization);
       
-      console.log('✅ Convex responses received:', {
-        churn: churnResponse.data?.data?.length || 0
-      })
+      // console.log('✅ Convex responses received:', {
+      //   churn: churnResponse.data?.data?.length || 0
+      // })
       
       // Load completed follow-ups count (calculate from records)
       try {
@@ -346,7 +346,7 @@ function ChurnDataPageContent() {
       }
       
       // Use backend categorization directly - don't recalculate on frontend
-      console.log('📊 Using backend categorization:', churnResponse.categorization);
+      // console.log('📊 Using backend categorization:', churnResponse.categorization);
       
       // Backend now returns pre-filtered data, so just use it directly
       setRecords(churnResponse.data || [])
@@ -376,7 +376,7 @@ function ChurnDataPageContent() {
       alert(`Failed to load churn data: ${error?.message || error}`)
     } finally {
       clearTimeout(timeoutId) // Clear the timeout
-      console.log('✅ Setting loading to false')
+      // console.log('✅ Setting loading to false')
       // Use setTimeout to ensure state update happens after any pending updates
       setTimeout(() => {
         setLoading(false)
@@ -385,30 +385,30 @@ function ChurnDataPageContent() {
   }
 
   useEffect(() => {
-    console.log('🔄 [Churn Page] useEffect triggered', {
-      hasUser: !!userProfile, // Corrected check
-      hasUserProfile: !!userProfile,
-      userEmail: userProfile?.email, // Corrected access
-      activeFilter
-    })
+    // console.log('🔄 [Churn Page] useEffect triggered', {
+    //   hasUser: !!userProfile, // Corrected check
+    //   hasUserProfile: !!userProfile,
+    //   userEmail: userProfile?.email, // Corrected access
+    //   activeFilter
+    // })
     
     const checkAuth = async () => {
       try {
-        console.log('🔍 [Churn Page] Checking authentication...')
+        // console.log('🔍 [Churn Page] Checking authentication...')
         
         // No authLoading state anymore, rely on userProfile presence
         if (!userProfile) {
-          console.log('❌ [Churn Page] No user profile found, redirecting to login')
+          // console.log('❌ [Churn Page] No user profile found, redirecting to login')
           router.push('/login')
           return
         }
 
-        console.log('✅ [Churn Page] User profile found:', userProfile.email, 'Starting data load...')
+        // console.log('✅ [Churn Page] User profile found:', userProfile.email, 'Starting data load...')
         
         // Load data and ensure loading state is cleared even on error
         try {
           await loadData(1, undefined, activeFilter)
-          console.log('✅ [Churn Page] Data load completed')
+          // console.log('✅ [Churn Page] Data load completed')
         } catch (error) {
           console.error('❌ [Churn Page] Failed to load data:', error)
           setLoading(false) // Ensure loading is cleared
@@ -424,7 +424,7 @@ function ChurnDataPageContent() {
             setIsModalOpen(true)
           } else {
             // If record not found in current page, search for it
-            console.log(`Looking for RID ${ridParam} in all records...`)
+            // console.log(`Looking for RID ${ridParam} in all records...`)
           }
         }
       } catch (error) {
@@ -459,15 +459,15 @@ function ChurnDataPageContent() {
   }
 
   const handleRidClick = (record: ChurnRecord) => {
-    console.log('🔍 RID clicked:', record.rid, record.restaurant_name)
-    console.log('📋 Record data:', record)
+    // console.log('🔍 RID clicked:', record.rid, record.restaurant_name)
+    // console.log('📋 Record data:', record)
     
     // Show immediate feedback
     
     try {
       setSelectedRecord(record)
       setIsModalOpen(true)
-      console.log('✅ Modal should be opening...')
+      // console.log('✅ Modal should be opening...')
     } catch (error: any) {
       console.error('❌ Error in handleRidClick:', error)
       alert(`Error opening modal for RID ${record.rid}: ${error?.message || 'Unknown error'}`)
@@ -482,7 +482,7 @@ function ChurnDataPageContent() {
       await api.updateChurnReason(selectedRecord.rid, reason, remarks, mailSentConfirmation)
       
       // Show success message (you can add a toast notification here)
-      console.log(`✅ Updated churn reason for RID ${selectedRecord.rid} via Convex`)
+      // console.log(`✅ Updated churn reason for RID ${selectedRecord.rid} via Convex`)
       
       // Close the modal immediately to prevent showing stale data
       setIsModalOpen(false)
@@ -538,14 +538,14 @@ function ChurnDataPageContent() {
     
     // Debug logging for specific RIDs
     if (record.rid === '343861' || record.rid === '343097') {
-      console.log(`🔍 DEBUG RID ${record.rid}:`, {
-        churn_reason: churnReason,
-        next_reminder_time: record.next_reminder_time,
-        follow_up_status: record.follow_up_status,
-        is_follow_up_active: record.is_follow_up_active,
-        call_attempts: record.call_attempts?.length || 0,
-        current_time: new Date().toISOString()
-      });
+      // console.log(`🔍 DEBUG RID ${record.rid}:`, {
+      //   churn_reason: churnReason,
+      //   next_reminder_time: record.next_reminder_time,
+      //   follow_up_status: record.follow_up_status,
+      //   is_follow_up_active: record.is_follow_up_active,
+      //   call_attempts: record.call_attempts?.length || 0,
+      //   current_time: new Date().toISOString()
+      // });
     }
     
     // First check if churn reason indicates completed status using centralized helper
@@ -563,13 +563,13 @@ function ChurnDataPageContent() {
         if (reminderTime > now) {
           // Still waiting for reminder time - should be INACTIVE
           if (record.rid === '343861' || record.rid === '343097') {
-            console.log(`🔍 RID ${record.rid} should be INACTIVE - waiting for reminder`);
+            // console.log(`🔍 RID ${record.rid} should be INACTIVE - waiting for reminder`);
           }
           return { active: false, label: 'Inactive', color: 'bg-gray-100 text-gray-800' }
         } else {
           // Reminder time has passed - should be ACTIVE
           if (record.rid === '343861' || record.rid === '343097') {
-            console.log(`🔍 RID ${record.rid} should be ACTIVE - reminder time passed`);
+            // console.log(`🔍 RID ${record.rid} should be ACTIVE - reminder time passed`);
           }
           return { active: true, label: 'Active', color: 'bg-green-100 text-green-800' }
         }
@@ -579,13 +579,13 @@ function ChurnDataPageContent() {
       if (!record.call_attempts || record.call_attempts.length === 0) {
         // New record without calls - should be ACTIVE
         if (record.rid === '343861' || record.rid === '343097') {
-          console.log(`🔍 RID ${record.rid} should be ACTIVE - new record without calls`);
+          // console.log(`🔍 RID ${record.rid} should be ACTIVE - new record without calls`);
         }
         return { active: true, label: 'Active', color: 'bg-green-100 text-green-800' }
       } else {
         // Has call attempts but no reminder time - might be an old record, default to ACTIVE
         if (record.rid === '343861' || record.rid === '343097') {
-          console.log(`🔍 RID ${record.rid} should be ACTIVE - has calls but no reminder time`);
+          // console.log(`🔍 RID ${record.rid} should be ACTIVE - has calls but no reminder time`);
         }
         return { active: true, label: 'Active', color: 'bg-green-100 text-green-800' }
       }
@@ -1026,7 +1026,7 @@ function ChurnDataPageContent() {
         <ChurnReasonModal
           isOpen={isModalOpen}
           onClose={() => {
-            console.log('🔄 Closing modal for RID:', selectedRecord.rid)
+            // console.log('🔄 Closing modal for RID:', selectedRecord.rid)
             setIsModalOpen(false)
             setSelectedRecord(null)
           }}

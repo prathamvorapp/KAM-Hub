@@ -157,7 +157,7 @@ export const healthCheckService = {
       updated_at: now,
     };
     
-    console.log('📝 Inserting health check:', insertData);
+    // console.log('📝 Inserting health check:', insertData);
     
     const { error: insertError } = await getSupabaseAdmin()
       .from('health_checks')
@@ -376,7 +376,7 @@ export const healthCheckService = {
     const normalizedRole = userProfile.role.toLowerCase().replace(/[_\s]/g, '');
     const teamName = userProfile.team_name || userProfile.teamName;
 
-    console.log(`📊 [getBrandsForAssessment] User: ${userProfile.email}, Role: ${normalizedRole}, Month: ${month}`);
+    // console.log(`📊 [getBrandsForAssessment] User: ${userProfile.email}, Role: ${normalizedRole}, Month: ${month}`);
 
     // Get all brands for this user/team
     let brandsQuery = getSupabaseAdmin()
@@ -416,19 +416,19 @@ export const healthCheckService = {
       throw brandsError;
     }
     
-    console.log(`📊 [getBrandsForAssessment] Total brands for user: ${allBrands?.length || 0}`);
+    // console.log(`📊 [getBrandsForAssessment] Total brands for user: ${allBrands?.length || 0}`);
     
     if (!allBrands || allBrands.length === 0) {
-      console.log(`⚠️ [getBrandsForAssessment] No brands found for user`);
+      // console.log(`⚠️ [getBrandsForAssessment] No brands found for user`);
       return [];
     }
     
     if (allBrands.length > 0) {
-      console.log(`📊 [getBrandsForAssessment] Sample brand:`, {
-        brand_name: allBrands[0].brand_name,
-        kam_email_id: allBrands[0].kam_email_id,
-        zone: allBrands[0].zone
-      });
+      // console.log(`📊 [getBrandsForAssessment] Sample brand:`, {
+      //   brand_name: allBrands[0].brand_name,
+      //   kam_email_id: allBrands[0].kam_email_id,
+      //   zone: allBrands[0].zone
+      // });
     }
     
     // Get assessed brand names for this month - CRITICAL: Filter by KAM email for agents
@@ -454,10 +454,10 @@ export const healthCheckService = {
       throw assessedError;
     }
     
-    console.log(`📊 [getBrandsForAssessment] Assessed checks this month: ${assessedChecks?.length || 0}`);
+    // console.log(`📊 [getBrandsForAssessment] Assessed checks this month: ${assessedChecks?.length || 0}`);
     
     if (assessedChecks && assessedChecks.length > 0) {
-      console.log(`📊 [getBrandsForAssessment] Sample assessed check:`, assessedChecks[0]);
+      // console.log(`📊 [getBrandsForAssessment] Sample assessed check:`, assessedChecks[0]);
     }
     
     // Create a map of assessed brands by KAM email for precise matching
@@ -469,7 +469,7 @@ export const healthCheckService = {
       assessedBrandsMap.set(key, true);
     });
     
-    console.log(`📊 [getBrandsForAssessment] Assessed brands map size: ${assessedBrandsMap.size}`);
+    // console.log(`📊 [getBrandsForAssessment] Assessed brands map size: ${assessedBrandsMap.size}`);
     
     // Filter out already assessed brands
     const brandsForAssessment = allBrands.filter(brand => {
@@ -479,32 +479,32 @@ export const healthCheckService = {
       const isAssessed = assessedBrandsMap.has(key);
       
       if (isAssessed) {
-        console.log(`🔍 [getBrandsForAssessment] Brand already assessed: ${brand.brand_name} by ${kamEmail}`);
+        // console.log(`🔍 [getBrandsForAssessment] Brand already assessed: ${brand.brand_name} by ${kamEmail}`);
       }
       
       return !isAssessed;
     });
     
-    console.log(`📊 [getBrandsForAssessment] Brands pending assessment: ${brandsForAssessment.length}`);
+    // console.log(`📊 [getBrandsForAssessment] Brands pending assessment: ${brandsForAssessment.length}`);
     
     if (brandsForAssessment.length > 0) {
-      console.log(`📊 [getBrandsForAssessment] Sample pending brand:`, {
-        brand_name: brandsForAssessment[0].brand_name,
-        kam_email_id: brandsForAssessment[0].kam_email_id
-      });
+      // console.log(`📊 [getBrandsForAssessment] Sample pending brand:`, {
+      //   brand_name: brandsForAssessment[0].brand_name,
+      //   kam_email_id: brandsForAssessment[0].kam_email_id
+      // });
     } else if (allBrands.length > 0) {
-      console.log(`⚠️ [getBrandsForAssessment] All brands filtered out. Debugging...`);
-      console.log(`📊 [getBrandsForAssessment] First brand from master_data:`, {
-        brand_name: allBrands[0].brand_name,
-        kam_email_id: allBrands[0].kam_email_id,
-        normalized: allBrands[0].brand_name?.trim().toLowerCase()
-      });
+      // console.log(`⚠️ [getBrandsForAssessment] All brands filtered out. Debugging...`);
+      // console.log(`📊 [getBrandsForAssessment] First brand from master_data:`, {
+      //   brand_name: allBrands[0].brand_name,
+      //   kam_email_id: allBrands[0].kam_email_id,
+      //   normalized: allBrands[0].brand_name?.trim().toLowerCase()
+      // });
       if (assessedChecks && assessedChecks.length > 0) {
-        console.log(`📊 [getBrandsForAssessment] First assessed check:`, {
-          brand_name: assessedChecks[0].brand_name,
-          kam_email: assessedChecks[0].kam_email,
-          normalized: assessedChecks[0].brand_name?.trim().toLowerCase()
-        });
+        // console.log(`📊 [getBrandsForAssessment] First assessed check:`, {
+        //   brand_name: assessedChecks[0].brand_name,
+        //   kam_email: assessedChecks[0].kam_email,
+        //   normalized: assessedChecks[0].brand_name?.trim().toLowerCase()
+        // });
       }
     }
     

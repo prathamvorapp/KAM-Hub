@@ -121,13 +121,13 @@ export default function VisitManagementPage() {
 
   const loadData = useCallback(async (search = '', visitsSearch = '', shouldRefreshStats = false) => {
     if (!userProfile) { // Simplified check
-      console.log('❌ [Visits] No userProfile, cannot load data');
+      // console.log('❌ [Visits] No userProfile, cannot load data');
       return;
     }
     
     // Prevent concurrent loads
     if (loadingRef.current) {
-      console.log('⏳ [Visits] Load already in progress, skipping...')
+      // console.log('⏳ [Visits] Load already in progress, skipping...')
       return
     }
 
@@ -139,7 +139,7 @@ export default function VisitManagementPage() {
       setIsSearching(!!search);
       setIsVisitsSearching(!!visitsSearch);
 
-      console.log('🔄 [Visits] Loading data for user:', userProfile.email, 'search:', search, 'visitsSearch:', visitsSearch, 'shouldRefreshStats:', shouldRefreshStats);
+      // console.log('🔄 [Visits] Loading data for user:', userProfile.email, 'search:', search, 'visitsSearch:', visitsSearch, 'shouldRefreshStats:', shouldRefreshStats);
 
       const visitsParams: { search: string; email?: string; teamName?: string } = {
         search: visitsSearch,
@@ -161,7 +161,7 @@ export default function VisitManagementPage() {
         api.getVisits(visitsParams)
       ]);
       
-      console.log('✅ [Visits] Data loaded successfully');
+      // console.log('✅ [Visits] Data loaded successfully');
       
       // Handle all brands response
       if (brandsResponse.data && brandsResponse.data.data) {
@@ -203,7 +203,7 @@ export default function VisitManagementPage() {
         setDisplayedBrands(mappedBrands.slice(0, brandsPerChunk));
       }
       
-      console.log('🔍 [Visits] Raw visits response from API:', visitsResponse); // ADDED LOG
+      // console.log('🔍 [Visits] Raw visits response from API:', visitsResponse); // ADDED LOG
       
       // Handle visits response - check multiple possible response structures
       let visitsData = [];
@@ -229,7 +229,7 @@ export default function VisitManagementPage() {
       // Only refresh statistics if explicitly requested (e.g., after creating/updating visits)
       if (shouldRefreshStats) {
         setRefreshKey(prev => prev + 1); // Trigger statistics refresh
-        console.log('📊 [Visits] Refreshing visit statistics');
+        // console.log('📊 [Visits] Refreshing visit statistics');
       }
     } catch (error) {
       console.error("❌ [Visits] Failed to load data:", error);
@@ -253,7 +253,7 @@ export default function VisitManagementPage() {
     const nextCount = visibleBrandsCount + brandsPerChunk;
     setVisibleBrandsCount(nextCount);
     setDisplayedBrands(allBrands.slice(0, nextCount));
-    console.log(`📊 Loading more brands: showing ${Math.min(nextCount, allBrands.length)} of ${allBrands.length}`);
+    // console.log(`📊 Loading more brands: showing ${Math.min(nextCount, allBrands.length)} of ${allBrands.length}`);
   }, [allBrands, visibleBrandsCount, brandsPerChunk]);
 
   // Infinite scroll effect - horizontal scrolling
@@ -332,7 +332,7 @@ export default function VisitManagementPage() {
     if (userProfile) { // Check for userProfile presence
       loadData('', '', true); // Initial load should refresh stats
     } else { // No user profile, redirect to login
-      console.log('❌ No userProfile, redirecting to login');
+      // console.log('❌ No userProfile, redirecting to login');
       router.push('/login');
     }
     
@@ -449,7 +449,7 @@ export default function VisitManagementPage() {
     }
 
     try {
-      console.log('📝 Submitting MOM for visit:', selectedVisitForMom.visit_id);
+      // console.log('📝 Submitting MOM for visit:', selectedVisitForMom.visit_id);
       
       // Submit the enhanced MOM with open points
       const result = await api.submitVisitMOM({
@@ -465,7 +465,7 @@ export default function VisitManagementPage() {
         throw new Error(result.error || 'Failed to submit MOM');
       }
 
-      console.log('✅ MOM submitted successfully with approval workflow triggered');
+      // console.log('✅ MOM submitted successfully with approval workflow triggered');
       
       handleCloseMomModal();
       await loadData('', '', true); // Refresh stats after submitting MOM
@@ -488,34 +488,34 @@ export default function VisitManagementPage() {
     if (visit) {
       try {
         // Fetch previous MOM data for this visit
-        console.log('🔍 Fetching previous MOM data for visit:', visitId);
+        // console.log('🔍 Fetching previous MOM data for visit:', visitId);
         
         // Get all MOM records for the user (without search filter first)
         const momResponse = await api.getMOM({
           limit: 1000 // Get more records to ensure we find the visit MOM
         });
         
-        console.log('📋 All MOM Response:', momResponse);
+        // console.log('📋 All MOM Response:', momResponse);
         
         // Find the MOM record for this specific visit
         const visitMOM = momResponse.data.data.find((mom: any) => {
-          console.log('🔍 Checking MOM:', { mom_visit_id: mom.visit_id, target_visit_id: visitId });
+          // console.log('🔍 Checking MOM:', { mom_visit_id: mom.visit_id, target_visit_id: visitId });
           return mom.visit_id === visitId;
         });
         
-        console.log('🎯 Found visitMOM:', visitMOM);
+        // console.log('🎯 Found visitMOM:', visitMOM);
         
         if (visitMOM && visitMOM.open_points && visitMOM.open_points.length > 0) {
-          console.log('✅ Found previous MOM with open points:', visitMOM.open_points);
+          // console.log('✅ Found previous MOM with open points:', visitMOM.open_points);
           setPreviousMomData({
             open_points: visitMOM.open_points,
             meeting_notes: visitMOM.notes
           });
         } else {
-          console.log('⚠️ No previous MOM data found for visit:', visitId);
-          console.log('   - visitMOM exists:', !!visitMOM);
-          console.log('   - has open_points:', !!visitMOM?.open_points);
-          console.log('   - open_points length:', visitMOM?.open_points?.length);
+          // console.log('⚠️ No previous MOM data found for visit:', visitId);
+          // console.log('   - visitMOM exists:', !!visitMOM);
+          // console.log('   - has open_points:', !!visitMOM?.open_points);
+          // console.log('   - open_points length:', visitMOM?.open_points?.length);
           setPreviousMomData(null);
         }
       } catch (error) {
@@ -624,14 +624,14 @@ export default function VisitManagementPage() {
           team_name: string;
         }> = [];
 
-        console.log('📋 Loading agents for backdated visit. User role:', userProfile?.role);
+        // console.log('📋 Loading agents for backdated visit. User role:', userProfile?.role);
 
         if (normalizedRole === 'teamlead') {
           // Team Leads see all agents in their team
-          console.log('👥 Fetching team members for team:', userProfile?.teamName);
+          // console.log('👥 Fetching team members for team:', userProfile?.teamName);
           const teamMembers = await api.getTeamMembers(userProfile?.teamName || '');
           
-          console.log('📊 Team members response:', teamMembers);
+          // console.log('📊 Team members response:', teamMembers);
           
           if (teamMembers.success && teamMembers.data) {
             agents = teamMembers.data
@@ -645,11 +645,11 @@ export default function VisitManagementPage() {
                 team_name: member.team_name
               }));
             
-            console.log('✅ Filtered agents:', agents);
+            // console.log('✅ Filtered agents:', agents);
           }
         } else if (normalizedRole === 'admin') {
           // Admins see all active agents
-          console.log('👥 Fetching all active agents');
+          // console.log('👥 Fetching all active agents');
           const allAgents = await api.getAllActiveAgents();
           
           if (allAgents.success && allAgents.data) {
@@ -659,18 +659,18 @@ export default function VisitManagementPage() {
               team_name: agent.team_name || 'Unknown'
             }));
             
-            console.log('✅ All agents:', agents);
+            // console.log('✅ All agents:', agents);
           }
         }
 
         setAvailableAgents(agents);
-        console.log('✅ Available agents set:', agents.length);
+        // console.log('✅ Available agents set:', agents.length);
       } catch (error) {
         console.error('❌ Error loading agents:', error);
         setAvailableAgents([]);
       }
     } else {
-      console.log('⚠️ User role not authorized for backdated visits:', userProfile?.role);
+      // console.log('⚠️ User role not authorized for backdated visits:', userProfile?.role);
     }
     
     setIsBackdatedModalOpen(true);
@@ -883,11 +883,11 @@ export default function VisitManagementPage() {
                 >
                   <div className="flex gap-4" style={{ minWidth: 'min-content' }}>
                     {(() => {
-                      console.log(`🎨 VISITS PAGE RENDER - Rendering ${displayedBrands.length} brands:`, displayedBrands.map(b => b.brandName));
+                      // console.log(`🎨 VISITS PAGE RENDER - Rendering ${displayedBrands.length} brands:`, displayedBrands.map(b => b.brandName));
                       return displayedBrands.map(brand => {
                         const brandVisitData = visitsByBrand[brand.brandName] || { scheduled: 0, done: 0, total: 2};
                         const isQuotaMet = brandVisitData.scheduled >= brandVisitData.total;
-                        console.log(`🏢 Rendering brand: ${brand.brandName}, visits: ${brandVisitData.scheduled}/${brandVisitData.total}`);
+                        // console.log(`🏢 Rendering brand: ${brand.brandName}, visits: ${brandVisitData.scheduled}/${brandVisitData.total}`);
                         return (
                           <div 
                             key={brand._id.toString()} 

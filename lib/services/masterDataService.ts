@@ -42,13 +42,13 @@ export const masterDataService = {
       return { data: [], total: 0, page: 0, limit: 0, total_pages: 0 };
     }
 
-    console.log(`🔍 Master Data - User Profile for ${userProfile.email}:`, userProfile);
+    // console.log(`🔍 Master Data - User Profile for ${userProfile.email}:`, userProfile);
     
     const normalizedRole = userProfile.role?.toLowerCase().replace(/\s+/g, '');
     
     if (normalizedRole === 'agent') {
       query = query.eq('kam_email_id', userProfile.email); // Filter by agent's email
-      console.log(`👤 Agent filter - showing brands for email: ${userProfile.email}`);
+      // console.log(`👤 Agent filter - showing brands for email: ${userProfile.email}`);
     } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
       if (userProfile.team_name) {
         const { data: teamMembers } = await getSupabaseAdmin()
@@ -58,7 +58,7 @@ export const masterDataService = {
           .in('role', ['agent', 'Agent']) as { data: Array<{ email: string }> | null; error: any };
         
         const agentEmails = teamMembers?.map(m => m.email) || [];
-        console.log(`👥 Team Lead filter - showing brands for team ${userProfile.team_name}:`, agentEmails);
+        // console.log(`👥 Team Lead filter - showing brands for team ${userProfile.team_name}:`, agentEmails);
         if (agentEmails.length > 0) {
           query = query.in('kam_email_id', agentEmails);
         } else {
@@ -70,15 +70,15 @@ export const masterDataService = {
         query = query.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
       }
     } else if (normalizedRole === 'admin') {
-      console.log(`👑 Admin - showing all brands`);
+      // console.log(`👑 Admin - showing all brands`);
       // No filter for admin
     } else {
-      console.log(`⚠️ Unknown role: ${userProfile.role}, denying access to master data`);
+      // console.log(`⚠️ Unknown role: ${userProfile.role}, denying access to master data`);
       query = query.eq('kam_email_id', 'NON_EXISTENT_EMAIL'); // Deny for unknown roles
     }
     
     const { data: allRecords, count } = await query as { data: MasterData[] | null; count: number | null };
-    console.log(`📊 Master Data query returned ${allRecords?.length || 0} records`);
+    // console.log(`📊 Master Data query returned ${allRecords?.length || 0} records`);
     let records = allRecords || [];
     
     // Apply search filter
@@ -121,7 +121,7 @@ export const masterDataService = {
 
     if (normalizedRole === 'admin') {
       canAccess = true;
-      console.log(`👑 Admin ${userProfile.email} - fetching brands for agent: ${agentEmail}`);
+      // console.log(`👑 Admin ${userProfile.email} - fetching brands for agent: ${agentEmail}`);
       query = query.eq('kam_email_id', agentEmail); // Admin can specify any agentEmail
     } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
       // Team Lead can only fetch brands for agents within their team
@@ -135,20 +135,20 @@ export const masterDataService = {
         const agentEmails = teamMembers?.map(m => m.email) || [];
         if (agentEmails.includes(agentEmail)) {
           canAccess = true;
-          console.log(`👥 Team Lead ${userProfile.email} - fetching brands for team member: ${agentEmail}`);
+          // console.log(`👥 Team Lead ${userProfile.email} - fetching brands for team member: ${agentEmail}`);
           query = query.eq('kam_email_id', agentEmail);
         } else {
-          console.log(`❌ Team Lead ${userProfile.email} attempted to fetch brands for unauthorized agent: ${agentEmail}`);
+          // console.log(`❌ Team Lead ${userProfile.email} attempted to fetch brands for unauthorized agent: ${agentEmail}`);
         }
       }
     } else if (normalizedRole === 'agent') {
       // Agent can only fetch their own brands
       if (userProfile.email === agentEmail) {
         canAccess = true;
-        console.log(`👤 Agent ${userProfile.email} - fetching their own brands`);
+        // console.log(`👤 Agent ${userProfile.email} - fetching their own brands`);
         query = query.eq('kam_email_id', agentEmail);
       } else {
-        console.log(`❌ Agent ${userProfile.email} attempted to fetch brands for another agent: ${agentEmail}`);
+        // console.log(`❌ Agent ${userProfile.email} attempted to fetch brands for another agent: ${agentEmail}`);
       }
     }
     
@@ -164,7 +164,7 @@ export const masterDataService = {
       return [];
     }
     
-    console.log(`✅ Found ${brands?.length || 0} brands for ${agentEmail}`);
+    // console.log(`✅ Found ${brands?.length || 0} brands for ${agentEmail}`);
     return brands || [];
   },
 
