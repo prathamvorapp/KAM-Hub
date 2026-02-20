@@ -22,14 +22,14 @@ export default function ForgotPasswordPage() {
     try {
       const response = await api.forgotPassword(email)
       
-      if (response.data.success) {
+      if (response.success) {
         setSuccess(true)
       } else {
-        setError(response.data.message || 'Failed to send reset email')
+        setError(response.message || 'Failed to send reset email')
       }
     } catch (error: any) {
       console.error('Forgot password error:', error)
-      setError(error.response?.data?.detail || 'Failed to send reset email. Please try again.')
+      setError('Failed to send reset email. Please try again.')
     } finally {
       setLoading(false)
     }

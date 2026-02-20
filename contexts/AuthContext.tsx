@@ -84,10 +84,10 @@ export function AuthProvider({
         const newUserProfile: UserProfile = {
           id: data.user.id,
           email: data.user.email!,
-          fullName: profileData?.full_name || data.user.user_metadata.full_name || 'User',
-          role: profileData?.role || 'agent',
-          teamName: profileData?.team_name || undefined,
-          permissions: getRolePermissions(profileData?.role || 'agent'),
+          fullName: (profileData as any)?.full_name || (data.user.user_metadata as any)?.full_name || 'User',
+          role: (profileData as any)?.role || 'agent',
+          teamName: (profileData as any)?.team_name || undefined,
+          permissions: getRolePermissions((profileData as any)?.role || 'agent'),
         };
         
         setUserProfileState(newUserProfile);

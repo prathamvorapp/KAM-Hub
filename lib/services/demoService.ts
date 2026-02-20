@@ -105,7 +105,7 @@ export const demoService = {
           .select('email')
           .eq('team_name', teamName)
           .in('role', ['agent', 'Agent']);
-        const agentEmails = teamMembers?.map(m => m.email) || [];
+        const agentEmails = teamMembers?.map((m: any) => m.email) || [];
         return agentEmails.includes(brandData.kam_email_id);
       }
       return false;

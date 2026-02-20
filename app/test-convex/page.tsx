@@ -12,7 +12,7 @@ export default function TestConvexPage() {
     const testConvex = async () => {
       try {
         setLoading(true)
-        const result = await api.getChurnStatistics("admin@petpooja.com")
+        const result = await api.getChurnStatistics()
         setChurnStats(result.data)
       } catch (err: any) {
         setError(err.message || 'Failed to connect to Convex')

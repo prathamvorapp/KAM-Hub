@@ -11,12 +11,12 @@ export async function GET(
 ) {
   try {
     const { module: moduleName } = await params;
-    const module = moduleName as ModuleName;
+    const moduleType = moduleName as ModuleName;
     
-    if (!MODULE_SCHEMAS[module]) {
+    if (!MODULE_SCHEMAS[moduleType]) {
       return NextResponse.json({
         success: false,
-        error: `Module '${module}' not found`
+        error: `Module '${moduleType}' not found`
       }, { status: 404 });
     }
 
@@ -69,7 +69,7 @@ export async function GET(
     let total = 0;
     
     try {
-      switch (module) {
+      switch (moduleType) {
         case 'visits':
           const visitsResult = await visitService.getVisits({
             userProfile: user as any, // Pass the entire user object
@@ -120,7 +120,7 @@ export async function GET(
           total = 0;
       }
     } catch (serviceError) {
-      console.error(`❌ Service error for ${module}:`, serviceError);
+      console.error(`❌ Service error for ${moduleType}:`, serviceError);
       
       // Fallback to demo data if service fails - remove demo data for security reasons
       // The service should throw an error if authorization fails, not return fake data.
@@ -132,7 +132,7 @@ export async function GET(
     return NextResponse.json({
       data: moduleData,
       total: total,
-      message: total > 0 ? `${module} data loaded from Supabase` : `${module} module - no data available`,
+      message: total > 0 ? `${moduleType} data loaded from Supabase` : `${moduleType} module - no data available`,
       filters_applied: filters
     });
   } catch (error) {
@@ -151,12 +151,12 @@ export async function POST(
 ) {
   try {
     const { module: moduleName } = await params;
-    const module = moduleName as ModuleName;
+    const moduleType = moduleName as ModuleName;
     
-    if (!MODULE_SCHEMAS[module]) {
+    if (!MODULE_SCHEMAS[moduleType]) {
       return NextResponse.json({
         success: false,
-        error: `Module '${module}' not found`
+        error: `Module '${moduleType}' not found`
       }, { status: 404 });
     }
 
@@ -172,7 +172,7 @@ export async function POST(
     const body = await request.json();
     
     // Handle visit creation
-    if (module === 'visits') {
+    if (moduleType === 'visits') {
       const visitData = {
         visit_id: uuidv4(), // Generate UUID
         brand_id: body.brand_id,
@@ -197,7 +197,7 @@ export async function POST(
 
     return NextResponse.json({
       success: false,
-      error: `Create ${module} not yet implemented`
+      error: `Create ${moduleType} not yet implemented`
     }, { status: 501 });
   } catch (error) {
     console.error('[Module POST] Error:', error);
@@ -215,12 +215,12 @@ export async function PUT(
 ) {
   try {
     const { module: moduleName } = await params;
-    const module = moduleName as ModuleName;
+    const moduleType = moduleName as ModuleName;
     
-    if (!MODULE_SCHEMAS[module]) {
+    if (!MODULE_SCHEMAS[moduleType]) {
       return NextResponse.json({
         success: false,
-        error: `Module '${module}' not found`
+        error: `Module '${moduleType}' not found`
       }, { status: 404 });
     }
 
@@ -235,7 +235,7 @@ export async function PUT(
 
     return NextResponse.json({
       success: false,
-      error: `Update ${module} not yet implemented`
+      error: `Update ${moduleType} not yet implemented`
     }, { status: 501 });
   } catch (error) {
     console.error('[Module PUT] Error:', error);
@@ -253,12 +253,12 @@ export async function DELETE(
 ) {
   try {
     const { module: moduleName } = await params;
-    const module = moduleName as ModuleName;
+    const moduleType = moduleName as ModuleName;
     
-    if (!MODULE_SCHEMAS[module]) {
+    if (!MODULE_SCHEMAS[moduleType]) {
       return NextResponse.json({
         success: false,
-        error: `Module '${module}' not found`
+        error: `Module '${moduleType}' not found`
       }, { status: 404 });
     }
 
@@ -281,7 +281,7 @@ export async function DELETE(
 
     return NextResponse.json({
       success: false,
-      error: `Delete ${module} not yet implemented`
+      error: `Delete ${moduleType} not yet implemented`
     }, { status: 501 });
   } catch (error) {
     console.error('[Module DELETE] Error:', error);

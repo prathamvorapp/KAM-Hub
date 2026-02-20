@@ -1,24 +1,38 @@
-import DOMPurify from 'isomorphic-dompurify';
+// DOMPurify is only available in browser context for Next.js
+// For server-side sanitization, we use basic string operations
 
 /**
  * Sanitize HTML content to prevent XSS attacks
+ * Server-side implementation using regex
  */
 export function sanitizeHTML(dirty: string): string {
-  return DOMPurify.sanitize(dirty, {
-    ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'p', 'br'],
-    ALLOWED_ATTR: ['href', 'target'],
-    ALLOW_DATA_ATTR: false,
-  });
+  if (typeof window !== 'undefined') {
+    // Client-side: use DOMPurify if available
+    try {
+      const DOMPurify = require('dompurify');
+      return DOMPurify.sanitize(dirty, {
+        ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'p', 'br'],
+        ALLOWED_ATTR: ['href', 'target'],
+        ALLOW_DATA_ATTR: false,
+      });
+    } catch {
+      // Fallback to regex
+    }
+  }
+  
+  // Server-side: basic HTML sanitization
+  return dirty
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+    .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
+    .replace(/on\w+\s*=\s*[^\s>]*/gi, '');
 }
 
 /**
  * Sanitize plain text (remove all HTML)
  */
 export function sanitizeText(text: string): string {
-  return DOMPurify.sanitize(text, {
-    ALLOWED_TAGS: [],
-    ALLOWED_ATTR: [],
-  });
+  return text.replace(/<[^>]*>/g, '');
 }
 
 /**

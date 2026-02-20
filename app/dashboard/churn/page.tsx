@@ -142,28 +142,24 @@ function ChurnDataPageContent() {
           api.getChurnData({
             page: 1,
             limit: 1,
-            email: userProfile.email,
             filter: 'newCount',
             search: trimmedSearch
           }),
           api.getChurnData({
             page: 1,
             limit: 1,
-            email: userProfile.email,
             filter: 'overdue',
             search: trimmedSearch
           }),
           api.getChurnData({
             page: 1,
             limit: 1,
-            email: userProfile.email,
             filter: 'followUps',
             search: trimmedSearch
           }),
           api.getChurnData({
             page: 1,
             limit: 1,
-            email: userProfile.email,
             filter: 'completed',
             search: trimmedSearch
           })
@@ -270,7 +266,6 @@ function ChurnDataPageContent() {
       const convexParams: any = {
         page, 
         limit: 1000, // Increased to show all records
-        email: userProfile.email,
         filter: filterType // Pass filter to backend
       }
       
@@ -484,7 +479,7 @@ function ChurnDataPageContent() {
 
     try {
       // Update via Convex instead of API
-      await api.updateChurnReason(selectedRecord.rid, reason, remarks, mailSentConfirmation, userProfile.email)
+      await api.updateChurnReason(selectedRecord.rid, reason, remarks, mailSentConfirmation)
       
       // Show success message (you can add a toast notification here)
       console.log(`✅ Updated churn reason for RID ${selectedRecord.rid} via Convex`)
@@ -616,8 +611,8 @@ function ChurnDataPageContent() {
 
   // Check if user can upload CSV (BO Team or Admin)
   const canUploadCSV = userProfile?.role === 'admin' || 
-                      userProfile?.team_name?.toLowerCase() === 'bo' ||
-                      userProfile?.team_name?.toLowerCase() === 'bo team'
+                      userProfile?.teamName?.toLowerCase() === 'bo' ||
+                      userProfile?.teamName?.toLowerCase() === 'bo team'
 
 
 

@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-auth';
-import { brandsCache } from '../brands-for-assessment/route';
-import { progressCache } from '../progress/route';
-import { statsCache } from '../statistics/route';
+import { clearAllHealthCheckCaches } from '@/lib/cache/health-check-cache';
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,9 +14,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Clear all health check related caches
-    brandsCache.flushAll();
-    progressCache.flushAll();
-    statsCache.flushAll();
+    clearAllHealthCheckCaches();
 
     console.log(`🗑️ [Cache Clear] All health check caches cleared by ${user.email}`);
 

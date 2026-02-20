@@ -38,9 +38,9 @@ export const FollowUpNotifications: React.FC<FollowUpNotificationsProps> = ({
         return;
       }
       
-      // Get overdue and active follow-ups from Convex with user email for role-based filtering
-      const overdueResult = await api.getOverdueFollowUps(undefined, userProfile.email);
-      const activeResult = await api.getActiveFollowUps(undefined, userProfile.email);
+      // Get overdue and active follow-ups from Convex
+      const overdueResult = await api.getOverdueFollowUps();
+      const activeResult = await api.getActiveFollowUps();
       
       // Combine and format the data
       const overdueReminders = (overdueResult.data || []).map((record: any) => ({

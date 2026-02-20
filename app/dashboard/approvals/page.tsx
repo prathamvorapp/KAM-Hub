@@ -78,7 +78,7 @@ export default function ApprovalsPage() {
       setLoading(true);
 
       if (userProfile.role === 'Team Lead' || userProfile.role === 'team_lead') {
-        console.log('👥 [APPROVALS] Team Lead loading pending visits for:', userProfile.email, 'Team:', userProfile.team_name);
+        console.log('👥 [APPROVALS] Team Lead loading pending visits for:', userProfile.email, 'Team:', userProfile.teamName);
         
         const visitsResponse = await api.getVisits({
           // Don't filter by search - we'll filter by approval_status instead

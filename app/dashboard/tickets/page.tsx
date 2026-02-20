@@ -8,16 +8,16 @@ import { Ticket, MessageSquare, Clock, CheckCircle } from 'lucide-react'
 
 export default function TicketsPage() {
   const router = useRouter()
-  const { user, userProfile, loading: authLoading } = useAuth()
+  const { userProfile } = useAuth()
 
   // Redirect to login if not authenticated
   useEffect(() => {
-    if (!authLoading && !user) {
+    if (!userProfile) {
       router.push('/login')
     }
-  }, [user, authLoading, router])
+  }, [userProfile, router])
 
-  if (authLoading) {
+  if (!userProfile) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center">
         <div className="text-white text-xl">Loading...</div>
@@ -25,7 +25,7 @@ export default function TicketsPage() {
     )
   }
 
-  if (!user || !userProfile) {
+  if (!userProfile) {
     return null // Will redirect to login
   }
 

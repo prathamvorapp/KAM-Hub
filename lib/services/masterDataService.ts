@@ -259,9 +259,9 @@ export const masterDataService = {
     };
     
     records?.forEach(record => {
-      stats.byZone[record.zone] = (stats.byZone[record.zone] || 0) + 1;
-      stats.byState[record.brand_state] = (stats.byState[record.brand_state] || 0) + 1;
-      stats.byKAM[record.kam_name] = (stats.byKAM[record.kam_name] || 0) + 1;
+      if (record.zone) stats.byZone[record.zone] = (stats.byZone[record.zone] || 0) + 1;
+      if (record.brand_state) stats.byState[record.brand_state] = (stats.byState[record.brand_state] || 0) + 1;
+      if (record.kam_name) stats.byKAM[record.kam_name] = (stats.byKAM[record.kam_name] || 0) + 1;
       stats.totalOutlets += record.outlet_counts || 0;
     });
     

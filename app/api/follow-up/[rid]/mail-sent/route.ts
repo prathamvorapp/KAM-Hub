@@ -33,7 +33,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Authorization check
     // Assuming 'kam' field in churn_records stores the email of the KAM
-    const authCheck = canAccessResource(user, record.kam, record.team_name); 
+    const authCheck = canAccessResource(user, (record as any).kam, (record as any).team_name); 
     if (!authCheck) {
       return unauthorizedResponse('You do not have permission to mark mail as sent for this churn record.');
     }

@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 export default function AuthTest() {
   const [testResults, setTestResults] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
-  const { user, signIn } = useAuth();
+  const { userProfile, signIn } = useAuth();
 
   // Test the robust API hook
   const {
@@ -17,7 +17,7 @@ export default function AuthTest() {
     loading: teamLoading,
     error: teamError,
     retry: teamRetry
-  } = useTeamStatistics(user?.email, {
+  } = useTeamStatistics(userProfile?.email, {
     autoLoad: false, // Don't auto-load for testing
     onError: (error) => addResult(`❌ Hook Error: ${error}`),
     onSuccess: (data) => addResult(`✅ Hook Success: Data loaded`)
@@ -153,13 +153,13 @@ export default function AuthTest() {
         <h2 className="text-lg font-semibold mb-2">Current Status</h2>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <strong>User:</strong> {user ? user.email : 'Not logged in'}
+            <strong>User:</strong> {userProfile ? userProfile.email : 'Not logged in'}
           </div>
           <div>
-            <strong>Role:</strong> {user ? user.role : 'N/A'}
+            <strong>Role:</strong> {userProfile ? userProfile.role : 'N/A'}
           </div>
           <div>
-            <strong>Team:</strong> {user ? user.team_name : 'N/A'}
+            <strong>Team:</strong> {userProfile ? userProfile.teamName : 'N/A'}
           </div>
           <div>
             <strong>Auth Status:</strong> {authHandler.isAuthenticated() ? '✅ Authenticated' : '❌ Not Authenticated'}

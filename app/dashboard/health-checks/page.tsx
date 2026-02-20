@@ -213,7 +213,7 @@ export default function HealthChecksPage() {
       setIsSubmitting(true)
       
       // Get KAM name from user profile
-      const kamName = userProfile?.full_name || 'Unknown';
+      const kamName = userProfile?.fullName || 'Unknown';
       
       // Get brand_id from the selected brand object
       const brandId = selectedBrand?.id || selectedBrand?._id || selectedBrand?.brand_id || null;
@@ -229,7 +229,7 @@ export default function HealthChecksPage() {
           kam_name: kamName,
           kam_email: selectedBrand?.kam_email_id || userProfile?.email, // Changed from user?.email
           zone: selectedBrand?.zone || 'Unknown',
-          team_name: userProfile?.team_name || null, // Changed from user?.team_name
+          team_name: userProfile?.teamName || null, // Changed from user?.team_name
           health_status: assessmentData.health_status,
           brand_nature: assessmentData.brand_nature,
           remarks: assessmentData.remarks || null,
@@ -296,7 +296,7 @@ export default function HealthChecksPage() {
           }}
           brand={{
             brandName: selectedBrand.brand_name,
-            kamName: userProfile?.full_name || '',
+            kamName: userProfile?.fullName || '',
             zone: selectedBrand.zone || 'N/A',
           }}
           onSubmit={handleAssessmentSubmit}

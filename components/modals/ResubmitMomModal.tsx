@@ -55,8 +55,6 @@ export default function ResubmitMomModal({
   const [csvData, setCsvData] = useState<any[]>([]);
   const [editedOpenPoints, setEditedOpenPoints] = useState<OpenPoint[]>([]);
 
-  if (!isOpen) return null;
-
   // Initialize edited open points when modal opens or previousMomData changes
   React.useEffect(() => {
     console.log('🔄 ResubmitMomModal: previousMomData changed:', previousMomData);
@@ -68,6 +66,8 @@ export default function ResubmitMomModal({
       setEditedOpenPoints([]);
     }
   }, [previousMomData]);
+
+  if (!isOpen) return null;
 
   const addOpenPoint = () => {
     const newPoint: OpenPoint = {

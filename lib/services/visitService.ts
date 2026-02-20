@@ -336,7 +336,7 @@ export const visitService = {
       }
 
       // Enrich visits with correct agent names
-      const agentIds = [...new Set(visits?.map(v => v.agent_id).filter(Boolean) || [])];
+      const agentIds = [...new Set(visits?.map((v: any) => v.agent_id).filter(Boolean) || [])];
       let agentNameMap = new Map<string, string>();
 
       if (agentIds.length > 0) {
@@ -345,10 +345,10 @@ export const visitService = {
           .select('email, full_name')
           .in('email', agentIds);
         
-        agentNameMap = new Map(profiles?.map(p => [p.email, p.full_name]) || []);
+        agentNameMap = new Map(profiles?.map((p: any) => [p.email, p.full_name]) || []);
       }
 
-      const enrichedVisits = visits?.map(visit => ({
+      const enrichedVisits = visits?.map((visit: any) => ({
         ...visit,
         agent_name: agentNameMap.get(visit.agent_id) || visit.agent_name || 'Unknown Agent',
       })) || [];
@@ -412,13 +412,13 @@ export const visitService = {
     } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
       // Team Lead can create visits for themselves or their team members
       const teamName = userProfile.team_name || userProfile.teamName;
-      if (data.agent_id !== userProfile.email) {
+      if (data.agent_id !== userProfile.email && teamName) {
         const { data: teamMembers } = await getSupabaseAdmin()
           .from('user_profiles')
           .select('email')
           .eq('team_name', teamName)
           .in('role', ['agent', 'Agent']);
-        const teamMemberEmails = teamMembers?.map(m => m.email) || [];
+        const teamMemberEmails = teamMembers?.map((m: any) => m.email) || [];
         if (!teamMemberEmails.includes(data.agent_id)) {
           throw new Error(`Access denied: Team Lead ${userProfile.email} cannot create visit for agent ${data.agent_id} outside their team`);
         }
@@ -431,7 +431,7 @@ export const visitService = {
 
     const visitData = {
       ...data,
-      team_name: agentProfile?.team_name || null, // Populate team_name
+      team_name: (agentProfile as any)?.team_name || null, // Populate team_name
       visit_status: data.visit_status || "Scheduled",
       created_at: now,
       updated_at: now,
@@ -853,13 +853,13 @@ export const visitService = {
     const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
     if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
       const teamName = userProfile.team_name || userProfile.teamName;
-      if (data.agent_id !== userProfile.email) { // If creating for someone else
+      if (data.agent_id !== userProfile.email && teamName) { // If creating for someone else
         const { data: teamMembers } = await getSupabaseAdmin()
           .from('user_profiles')
           .select('email')
           .eq('team_name', teamName)
           .in('role', ['agent', 'Agent']);
-        const teamMemberEmails = teamMembers?.map(m => m.email) || [];
+        const teamMemberEmails = teamMembers?.map((m: any) => m.email) || [];
         if (!teamMemberEmails.includes(data.agent_id)) {
           throw new Error(`Access denied: Team Lead ${userProfile.email} cannot schedule backdated visit for agent ${data.agent_id} outside their team`);
         }

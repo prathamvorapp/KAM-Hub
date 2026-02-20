@@ -69,7 +69,7 @@ export default function RobustStatsLoader({
             <strong>Debug Info:</strong>
             <br />User: {userProfile?.email || 'Not logged in'}
             <br />Role: {userProfile?.role || 'N/A'}
-            <br />Team: {userProfile?.teamName || userProfile?.team_name || 'N/A'}
+            <br />Team: {userProfile?.teamName || 'N/A'}
           </div>
         )}
       </div>

@@ -54,7 +54,6 @@ export default function ApprovalNotifications({ userEmail, userRole }: ApprovalN
   const loadPendingApprovals = async () => {
     try {
       const visitsResponse = await api.getVisits({
-        email: userEmail,
         limit: 1000 // Increase limit to get all visits
       });
       
@@ -75,7 +74,6 @@ export default function ApprovalNotifications({ userEmail, userRole }: ApprovalN
       for (const visit of pendingVisits) {
         try {
           const momResponse = await api.getMOM({
-            email: userEmail,
             search: visit.visit_id // Search by visit_id to find related MOM
           });
           

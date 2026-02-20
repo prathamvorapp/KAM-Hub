@@ -80,7 +80,7 @@ type SortField = 'name' | 'progress' | 'completed' | 'pending' | 'brands'
 type SortOrder = 'asc' | 'desc'
 
 export default function TeamVisitStatistics({ userEmail, refreshKey, onViewAgentStats }: TeamVisitStatisticsProps) {
-  const { user, userProfile } = useAuth();
+  const { userProfile } = useAuth();
   const [sortField, setSortField] = useState<SortField>('progress')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
@@ -95,10 +95,10 @@ export default function TeamVisitStatistics({ userEmail, refreshKey, onViewAgent
 
 
   useEffect(() => {
-    if (userProfile?.email && userProfile?.team_name) {
-      loadTeamStatistics(userProfile.email, userProfile.team_name);
+    if (userProfile?.email && userProfile?.teamName) {
+      loadTeamStatistics(userProfile.email, userProfile.teamName);
     }
-  }, [userProfile?.email, userProfile?.team_name, refreshKey]);
+  }, [userProfile?.email, userProfile?.teamName, refreshKey]);
 
   const loadTeamStatistics = async (email: string, teamName: string) => { // Accept email and teamName as parameters
     setLoading(true);
@@ -128,14 +128,14 @@ export default function TeamVisitStatistics({ userEmail, refreshKey, onViewAgent
 
 
   const refresh = () => {
-    if (userProfile?.email && userProfile?.team_name) {
-      loadTeamStatistics(userProfile.email, userProfile.team_name);
+    if (userProfile?.email && userProfile?.teamName) {
+      loadTeamStatistics(userProfile.email, userProfile.teamName);
     }
   };
 
   const retry = () => {
-    if (userProfile?.email && userProfile?.team_name) {
-      loadTeamStatistics(userProfile.email, userProfile.team_name);
+    if (userProfile?.email && userProfile?.teamName) {
+      loadTeamStatistics(userProfile.email, userProfile.teamName);
     }
   };
 
@@ -166,8 +166,8 @@ export default function TeamVisitStatistics({ userEmail, refreshKey, onViewAgent
 
   // Handle refresh from parent component
   useEffect(() => {
-    if (refreshKey !== undefined) {
-      loadTeamStatistics();
+    if (refreshKey !== undefined && userProfile?.email && userProfile?.teamName) {
+      loadTeamStatistics(userProfile.email, userProfile.teamName);
     }
   }, [refreshKey]);
 

@@ -1,22 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-auth';
 import { healthCheckService } from '@/lib/services';
-import NodeCache from 'node-cache';
-
-export const brandsCache = new NodeCache({ stdTTL: 300 }); // Increased from 60 to 300 seconds (5 min)
-
-// Helper function to clear cache for a specific user and month
-export function clearBrandsCache(email: string, month: string) {
-  const cacheKey = `brands_for_assessment_${email}_${month}`;
-  brandsCache.del(cacheKey);
-  console.log(`🗑️ Cleared brands cache for ${email} - ${month}`);
-}
-
-// Clear all cache
-export function clearAllBrandsCache() {
-  brandsCache.flushAll();
-  console.log(`🗑️ Cleared all brands cache`);
-}
+import { brandsCache } from '@/lib/cache/health-check-cache';
 
 export async function GET(request: NextRequest) {
   try {

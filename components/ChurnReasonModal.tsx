@@ -90,12 +90,7 @@ export default function ChurnReasonModal({
       const { api } = await import('@/lib/api')
       const { useAuth } = await import('@/contexts/AuthContext')
       
-      // Get user email for role-based filtering
-      const userEmail = typeof window !== 'undefined' ? 
-        localStorage.getItem('user_email') || 
-        sessionStorage.getItem('user_email') : null;
-      
-      const response = await api.getFollowUpStatus(rid, currentReason || '', userEmail || undefined)
+      const response = await api.getFollowUpStatus(rid, currentReason || '')
       
       if (response.success && response.data) {
         const data = response.data

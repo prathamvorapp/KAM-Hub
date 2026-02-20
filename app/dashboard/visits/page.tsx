@@ -147,9 +147,9 @@ export default function VisitManagementPage() {
 
       // Add email and teamName to visitsParams if the user is a Team Lead
       const isTeamLead = userProfile?.role?.toLowerCase().includes('team') || userProfile?.role?.toLowerCase().includes('lead');
-      if (isTeamLead && userProfile?.team_name) {
+      if (isTeamLead && userProfile?.teamName) {
         visitsParams.email = userProfile.email; // Pass current user's email
-        visitsParams.teamName = userProfile.team_name; // Pass team name
+        visitsParams.teamName = userProfile.teamName; // Pass team name
       } else if (userProfile?.role?.toLowerCase() === 'agent') {
         visitsParams.email = userProfile.email; // Agents only see their own visits
       }
@@ -387,7 +387,7 @@ export default function VisitManagementPage() {
         brand_name: selectedBrandForSchedule.brandName,
         agent_id: userProfile.email,
         agent_name: userProfile.fullName || 'Unknown Agent',
-        team_name: userProfile.team_name,
+        team_name: userProfile.teamName,
         scheduled_date: visitDate,
         visit_status: 'Scheduled',
         visit_year: currentYear,
@@ -454,7 +454,7 @@ export default function VisitManagementPage() {
       // Submit the enhanced MOM with open points
       const result = await api.submitVisitMOM({
         visit_id: selectedVisitForMom.visit_id,
-        created_by: userProfile.email,
+        created_by: userProfile?.email || '',
         brand_name: selectedVisitForMom.brand_name,
         agent_name: selectedVisitForMom.agent_name || userProfile?.fullName || 'Unknown Agent',
         open_points: formData.open_points,
@@ -492,7 +492,6 @@ export default function VisitManagementPage() {
         
         // Get all MOM records for the user (without search filter first)
         const momResponse = await api.getMOM({
-          email: userProfile.email, // Updated
           limit: 1000 // Get more records to ensure we find the visit MOM
         });
         
@@ -540,7 +539,7 @@ export default function VisitManagementPage() {
 
     try {
       // First resubmit the MOM to reset its status
-      await api.resubmitMoM(selectedVisitForResubmit.visit_id, userProfile.email); // Updated
+      await api.resubmitMoM(selectedVisitForResubmit.visit_id); // Updated
       
       // Sanitize open_points: Remove created_at and updated_at fields that Convex doesn't expect
       const sanitizedOpenPoints = formData.open_points.map(point => {
@@ -599,8 +598,7 @@ export default function VisitManagementPage() {
       await api.rescheduleVisit(
         selectedVisitForReschedule.visit_id,
         newDate,
-        reason,
-        userProfile.email // Updated
+        reason
       );
       
       handleCloseRescheduleModal();
@@ -630,8 +628,8 @@ export default function VisitManagementPage() {
 
         if (normalizedRole === 'teamlead') {
           // Team Leads see all agents in their team
-          console.log('👥 Fetching team members for team:', userProfile?.team_name);
-          const teamMembers = await api.getTeamMembers(userProfile?.team_name || '');
+          console.log('👥 Fetching team members for team:', userProfile?.teamName);
+          const teamMembers = await api.getTeamMembers(userProfile?.teamName || '');
           
           console.log('📊 Team members response:', teamMembers);
           
@@ -1280,7 +1278,7 @@ export default function VisitManagementPage() {
       onClose={handleCloseBackdatedModal}
       onSchedule={handleBackdatedVisitSubmit}
       userRole={userProfile?.role || 'Agent'}
-      userTeam={userProfile?.team_name}
+      userTeam={userProfile?.teamName}
       availableBrands={allBrands.map(brand => ({
         brandId: brand._id.toString(),
         brandName: brand.brandName,

@@ -43,16 +43,16 @@ interface ChurnAnalyticsData {
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658', '#FF7C7C']
 
 export default function ChurnAnalyticsDashboard() {
-  const { user, userProfile } = useAuth()
+  const { userProfile } = useAuth()
   const [analyticsData, setAnalyticsData] = useState<ChurnAnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (user?.email) {
+    if (userProfile?.email) {
       fetchAnalytics()
     }
-  }, [user?.email])
+  }, [userProfile?.email])
 
   const fetchAnalytics = async () => {
     try {

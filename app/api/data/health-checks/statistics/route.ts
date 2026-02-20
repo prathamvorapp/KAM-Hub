@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-auth';
 import { healthCheckService } from '@/lib/services';
-import NodeCache from 'node-cache';
-
-export const statsCache = new NodeCache({ stdTTL: 600 }); // Increased from 180 to 600 seconds (10 min)
+import { statsCache } from '@/lib/cache/health-check-cache';
 
 export async function GET(request: NextRequest) {
   try {

@@ -53,7 +53,7 @@ type SortField = 'name' | 'progress' | 'completed' | 'pending' | 'brands' | 'tea
 type SortOrder = 'asc' | 'desc'
 
 export default function AllVisitStats({ userEmail, refreshKey }: AllVisitStatsProps) {
-  const { user, userProfile } = useAuth();
+  const { userProfile } = useAuth();
   const [sortField, setSortField] = useState<SortField>('progress')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
@@ -70,7 +70,7 @@ export default function AllVisitStats({ userEmail, refreshKey }: AllVisitStatsPr
       setLoading(true);
       setError(null);
       
-      const email = userEmail || user?.email;
+      const email = userEmail || userProfile?.email;
       if (!email) {
         throw new Error('User email is required');
       }
@@ -135,7 +135,7 @@ export default function AllVisitStats({ userEmail, refreshKey }: AllVisitStatsPr
 
   useEffect(() => {
     loadAllAgentStatistics();
-  }, [userEmail, user?.email, refreshKey]);
+  }, [userEmail, userProfile?.email, refreshKey]);
 
   const refresh = () => {
     loadAllAgentStatistics();

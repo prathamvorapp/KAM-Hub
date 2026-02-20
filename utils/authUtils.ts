@@ -34,9 +34,9 @@ export function normalizeUserProfile<T extends { team_name?: string; teamName?: 
   }
   
   // Handle fullName vs full_name
-  if (!normalized.fullName && (normalized as any).full_name) {
-    normalized.fullName = (normalized as any).full_name;
-  } else if (!normalized.full_name && (normalized as any).fullName) {
+  if (!(normalized as any).fullName && (normalized as any).full_name) {
+    (normalized as any).fullName = (normalized as any).full_name;
+  } else if (!(normalized as any).full_name && (normalized as any).fullName) {
     (normalized as any).full_name = (normalized as any).fullName;
   }
   

@@ -102,14 +102,14 @@ export const healthCheckService = {
 
     // If Team Lead, ensure it's for their team members
     const teamName = userProfile.team_name || userProfile.teamName;
-    if (isTeamLead && !isAdmin) { // Admins bypass this check
+    if (isTeamLead && !isAdmin && teamName) { // Admins bypass this check
         // Fetch team members of the Team Lead
         const { data: teamMembers } = await getSupabaseAdmin()
             .from('user_profiles')
             .select('email')
             .eq('team_name', teamName)
             .in('role', ['agent', 'Agent']);
-        const teamMemberEmails = teamMembers?.map(m => m.email) || [];
+        const teamMemberEmails = teamMembers?.map((m: any) => m.email) || [];
 
         if (!teamMemberEmails.includes(data.kam_email) && data.kam_email !== userProfile.email) {
             throw new Error(`Access denied: Team Lead ${userProfile.email} can only create health checks for their team members.`);
@@ -134,8 +134,8 @@ export const healthCheckService = {
         .single();
       
       if (targetUserProfile) {
-        finalKamName = targetUserProfile.full_name;
-        finalTeamName = targetUserProfile.team_name;
+        finalKamName = (targetUserProfile as any).full_name;
+        finalTeamName = (targetUserProfile as any).team_name;
       }
     }
     

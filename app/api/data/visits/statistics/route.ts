@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const requestedEmail = searchParams.get('email');
     const bustCache = searchParams.get('bustCache') === 'true';
     
-    let statsUserProfile: UserProfile = user;
+    let statsUserProfile: UserProfile = user as any;
 
     if (requestedEmail && requestedEmail !== user.email) {
       const normalizedRole = user.role.toLowerCase().replace(/\s+/g, '_');
@@ -63,10 +63,16 @@ export async function GET(request: NextRequest) {
     let statistics: any;
     const normalizedStatsRole = statsUserProfile.role.toLowerCase().replace(/\s+/g, '_');
 
+    // Ensure fullName is set (required by visitService)
+    const profileWithFullName = {
+      ...statsUserProfile,
+      fullName: statsUserProfile.fullName || statsUserProfile.full_name || statsUserProfile.email
+    };
+
     if (normalizedStatsRole === 'agent') {
-      statistics = await visitService._getIndividualAgentStatistics(statsUserProfile);
+      statistics = await visitService._getIndividualAgentStatistics(profileWithFullName as any);
     } else if (normalizedStatsRole === 'team_lead' || normalizedStatsRole === 'teamlead' || normalizedStatsRole === 'admin') {
-      statistics = await visitService.getComprehensiveTeamVisitStatistics(statsUserProfile);
+      statistics = await visitService.getComprehensiveTeamVisitStatistics(profileWithFullName as any);
     } else {
       throw new Error(`Unsupported role for statistics: ${statsUserProfile.role}`);
     }

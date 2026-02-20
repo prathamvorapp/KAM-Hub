@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
     }
 
         // Call the refactored visitService to get statistics
-        const statistics = await visitService.getVisitStatistics(targetUserProfile as any);
+        const statistics = await visitService._getIndividualAgentStatistics(targetUserProfile as any);
         
         const response = {      success: true,
       data: statistics,
