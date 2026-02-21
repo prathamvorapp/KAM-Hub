@@ -152,20 +152,12 @@ export default function DemosPage() {
       setLoading(true);
       
       // Get brands from Master_Data table
-      // For admins, get all brands. For agents/team leads, get their assigned brands.
+      // Use getMasterData for all roles - it handles role-based filtering automatically
       let brandsData: Brand[] = [];
       
-      if (userProfile?.role?.toLowerCase() === 'admin') {
-        // Admin: Get all brands using getMasterData
-        const brandsResponse = await api.getMasterData(1, 10000); // Get all brands
-        brandsData = brandsResponse.data?.data || [];
-        // console.log('📊 DEMOS PAGE DEBUG - Admin fetching all brands:', brandsData.length);
-      } else {
-        // Agent/Team Lead: Get brands assigned to them
-        const brandsResponse = await api.getBrandsByAgentEmail(userProfile?.email || "");
-        brandsData = brandsResponse.data?.data || [];
-        // console.log('📊 DEMOS PAGE DEBUG - Agent/TL fetching assigned brands:', brandsData.length);
-      }
+      const brandsResponse = await api.getMasterData(1, 10000); // Get all brands with role-based filtering
+      brandsData = brandsResponse.data?.data || [];
+      console.log('📊 DEMOS PAGE - Fetching brands for user:', userProfile?.email, 'Role:', userProfile?.role, 'Brands count:', brandsData.length);
       
       // Get demos for the user based on their role
       let demosData: any[] = [];
