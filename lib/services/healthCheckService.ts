@@ -233,11 +233,15 @@ export const healthCheckService = {
       byAgent: [] as Array<{
         kam_email: string;
         kam_name: string;
+        team_name?: string;
         total: number;
+        totalBrands: number;
+        pendingAssessments: number;
         byHealthStatus: Record<string, number>;
         byBrandNature: Record<string, number>;
         criticalBrands: number;
         healthyBrands: number;
+        notConnected: number;
         connectivityRate: number;
       }>,
     };
@@ -273,21 +277,29 @@ export const healthCheckService = {
       if (agentProfiles && agentProfiles.length > 0) {
         const agentEmails = agentProfiles.map(a => a.email);
         
-        // Single query to get brand counts for all agents
-        const { data: brandCounts } = await getSupabaseAdmin()
-          .from('master_data')
-          .select('kam_email_id')
-          .in('kam_email_id', agentEmails) as { data: Array<{ kam_email_id: string }> | null; error: any };
+        console.log(`📊 [getHealthCheckStatistics] Fetching brands for ${agentEmails.length} agents`);
+        console.log(`📊 [getHealthCheckStatistics] Agent emails:`, agentEmails);
         
-        // Count brands per agent
-        brandCounts?.forEach(brand => {
-          const count = agentBrandCounts.get(brand.kam_email_id) || 0;
-          agentBrandCounts.set(brand.kam_email_id, count + 1);
-        });
+        // Fetch brand counts for each agent individually to avoid limit issues
+        for (const agentEmail of agentEmails) {
+          const { count, error: countError } = await getSupabaseAdmin()
+            .from('master_data')
+            .select('*', { count: 'exact', head: true })
+            .eq('kam_email_id', agentEmail);
+          
+          if (countError) {
+            console.error(`❌ [getHealthCheckStatistics] Error fetching brand count for ${agentEmail}:`, countError);
+          } else {
+            agentBrandCounts.set(agentEmail, count || 0);
+          }
+        }
+        
+        console.log(`📊 [getHealthCheckStatistics] Agent brand counts:`, Array.from(agentBrandCounts.entries()));
         
         // Initialize agent map
         agentProfiles.forEach(agent => {
           const totalBrands = agentBrandCounts.get(agent.email) || 0;
+          console.log(`📊 [getHealthCheckStatistics] Agent ${agent.email}: ${totalBrands} brands`);
           agentMap.set(agent.email, {
             kam_email: agent.email,
             kam_name: agent.full_name || (agent as any).fullName,
@@ -356,6 +368,16 @@ export const healthCheckService = {
       });
       
       stats.byAgent = Array.from(agentMap.values()).sort((a, b) => b.total - a.total);
+      
+      console.log(`📊 [getHealthCheckStatistics] Final stats:`, {
+        totalAgents: stats.byAgent.length,
+        sampleAgent: stats.byAgent[0] ? {
+          email: stats.byAgent[0].kam_email,
+          totalBrands: stats.byAgent[0].totalBrands,
+          total: stats.byAgent[0].total,
+          pending: stats.byAgent[0].pendingAssessments
+        } : null
+      });
     }
     
     return stats;
@@ -409,7 +431,8 @@ export const healthCheckService = {
       brandsQuery = brandsQuery.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
     }
     
-    const { data: allBrands, error: brandsError } = await brandsQuery as { data: any[] | null; error: any };
+    // FIX: Add explicit limit to avoid Supabase default 1000 row limit
+    const { data: allBrands, error: brandsError } = await brandsQuery.limit(10000) as { data: any[] | null; error: any };
     
     if (brandsError) {
       console.error(`❌ [getBrandsForAssessment] Error fetching brands:`, brandsError);
@@ -555,7 +578,8 @@ export const healthCheckService = {
       brandsQuery = brandsQuery.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
     }
     
-    const { count: totalBrands } = await brandsQuery;
+    // FIX: Add explicit limit to avoid Supabase default 1000 row limit
+    const { count: totalBrands } = await brandsQuery.limit(10000);
     
     // Get assessed brands for this month
     let assessedQuery = getSupabaseAdmin()

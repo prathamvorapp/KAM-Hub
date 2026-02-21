@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-auth';
 import { visitService } from '@/lib/services';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
-import NodeCache from 'node-cache';
-
-const adminStatsCache = new NodeCache({ stdTTL: 300 });
+import { adminStatsCache } from '@/lib/cache/health-check-cache';
 
 export async function GET(request: NextRequest) {
   try {

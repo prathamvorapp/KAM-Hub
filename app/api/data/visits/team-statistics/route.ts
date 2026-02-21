@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-auth';
 import { visitService } from '@/lib/services';
-import NodeCache from 'node-cache';
-
-const teamStatsCache = new NodeCache({ stdTTL: 300 });
+import { teamStatsCache } from '@/lib/cache/health-check-cache';
 
 async function handleRequest(request: NextRequest) {
   try {

@@ -77,7 +77,8 @@ export const masterDataService = {
       query = query.eq('kam_email_id', 'NON_EXISTENT_EMAIL'); // Deny for unknown roles
     }
     
-    const { data: allRecords, count } = await query as { data: MasterData[] | null; count: number | null };
+    // FIX: Add explicit limit to avoid Supabase default 1000 row limit
+    const { data: allRecords, count } = await query.limit(10000) as { data: MasterData[] | null; count: number | null };
     // console.log(`📊 Master Data query returned ${allRecords?.length || 0} records`);
     let records = allRecords || [];
     
@@ -157,7 +158,8 @@ export const masterDataService = {
       return [];
     }
 
-    const { data: brands, error } = await query;
+    // FIX: Add explicit limit to avoid Supabase default 1000 row limit
+    const { data: brands, error } = await query.limit(10000);
     
     if (error) {
       console.error(`❌ Error fetching brands for ${agentEmail}:`, error);
@@ -248,7 +250,8 @@ export const masterDataService = {
       query = query.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
     }
     
-    const { data: records } = await query as { data: MasterData[] | null; error: any };
+    // FIX: Add explicit limit to avoid Supabase default 1000 row limit
+    const { data: records } = await query.limit(10000) as { data: MasterData[] | null; error: any };
     
     const stats = {
       total_brands: records?.length || 0,
