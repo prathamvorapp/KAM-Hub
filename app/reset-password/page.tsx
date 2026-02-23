@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Lock, Eye, EyeOff, CheckCircle, ArrowLeft } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { createBrowserClient } from '@/lib/supabase-client'
 
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState('')
@@ -15,8 +16,36 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
+  const [hasValidToken, setHasValidToken] = useState(false)
   
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    // Check for error in URL (expired/invalid token)
+    const errorParam = searchParams.get('error')
+    const errorDescription = searchParams.get('error_description')
+    
+    if (errorParam) {
+      setError(errorDescription || 'Invalid or expired reset link. Please request a new one.')
+      return
+    }
+
+    // Check if user has a valid session from the reset link
+    const checkSession = async () => {
+      const supabase = createBrowserClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (session?.user) {
+        setHasValidToken(true)
+        setEmail(session.user.email || '')
+      } else {
+        setError('Invalid or expired reset link. Please request a new password reset.')
+      }
+    }
+
+    checkSession()
+  }, [searchParams])
 
   const validatePassword = (password: string) => {
     if (password.length < 8) {
@@ -55,6 +84,17 @@ export default function ResetPasswordPage() {
     }
 
     try {
+      // Use Supabase client to update password
+      const supabase = createBrowserClient()
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: password
+      })
+
+      if (updateError) {
+        throw updateError
+      }
+
+      // Also update in your backend if needed
       const response = await fetch('/api/auth/reset-password', {
         method: 'POST',
         headers: {
@@ -68,14 +108,16 @@ export default function ResetPasswordPage() {
 
       const data = await response.json()
 
-      if (data.success) {
+      if (data.success || !updateError) {
         setSuccess(true)
+        // Sign out after password reset
+        await supabase.auth.signOut()
       } else {
         setError(data.error || 'Failed to reset password')
       }
     } catch (error: any) {
       console.error('Password reset error:', error)
-      setError('An unexpected error occurred')
+      setError(error.message || 'An unexpected error occurred')
     } finally {
       setLoading(false)
     }
@@ -192,27 +234,27 @@ export default function ResetPasswordPage() {
               onSubmit={handleResetPassword}
               className="space-y-6"
             >
-              <motion.div
-                initial={{ x: -20, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: 0.5, duration: 0.5 }}
-              >
-                <label htmlFor="email" className="block text-sm font-medium text-white/90 mb-2">
-                  Email Address
-                </label>
-                <div className="relative group">
-                  <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/60 group-focus-within:text-blue-400 transition-colors" />
-                  <input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="input-3d w-full pl-12 pr-4 py-4 text-white placeholder-white/50"
-                    placeholder="Enter your email"
-                    required
-                  />
-                </div>
-              </motion.div>
+              {email && (
+                <motion.div
+                  initial={{ x: -20, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  transition={{ delay: 0.5, duration: 0.5 }}
+                >
+                  <label htmlFor="email" className="block text-sm font-medium text-white/90 mb-2">
+                    Email Address
+                  </label>
+                  <div className="relative group">
+                    <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/60" />
+                    <input
+                      id="email"
+                      type="email"
+                      value={email}
+                      disabled
+                      className="input-3d w-full pl-12 pr-4 py-4 text-white/70 placeholder-white/50 bg-white/5 cursor-not-allowed"
+                    />
+                  </div>
+                </motion.div>
+              )}
 
               <motion.div
                 initial={{ x: -20, opacity: 0 }}
@@ -306,25 +348,34 @@ export default function ResetPasswordPage() {
                 </motion.div>
               )}
 
-              <motion.button
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.9, duration: 0.5 }}
-                type="submit"
-                disabled={loading}
-                className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                {loading ? (
-                  <div className="flex items-center justify-center space-x-2">
-                    <div className="w-5 h-5 loading-3d"></div>
-                    <span>Resetting Password...</span>
-                  </div>
-                ) : (
-                  'Reset Password'
-                )}
-              </motion.button>
+              {hasValidToken ? (
+                <motion.button
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.9, duration: 0.5 }}
+                  type="submit"
+                  disabled={loading}
+                  className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  {loading ? (
+                    <div className="flex items-center justify-center space-x-2">
+                      <div className="w-5 h-5 loading-3d"></div>
+                      <span>Resetting Password...</span>
+                    </div>
+                  ) : (
+                    'Reset Password'
+                  )}
+                </motion.button>
+              ) : (
+                <Link
+                  href="/forgot-password"
+                  className="w-full btn-primary inline-flex items-center justify-center"
+                >
+                  Request New Reset Link
+                </Link>
+              )}
             </motion.form>
 
             {/* Footer */}
