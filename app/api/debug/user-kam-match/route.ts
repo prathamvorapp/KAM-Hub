@@ -5,7 +5,10 @@ import { authenticateRequest, hasRole, unauthorizedResponse } from '@/lib/api-au
 import { UserService } from '../../../../lib/services/userService'; // New import
 import { UserRole } from '@/lib/models/user'; // New import
 
-const userService = new UserService(); // Instantiate userService
+const userService = new UserService();
+
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'; // Instantiate userService
 
 export async function GET(request: NextRequest) {
   // Protect in production

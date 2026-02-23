@@ -9,6 +9,10 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { Database } from './supabase-types';
 
+// Force dynamic rendering for all routes using this module
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 // Server-side Supabase client (for use in API routes and server components)
 export async function createServerSupabaseClient() {
   const cookieStore = await cookies();

@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { isCompletedReason } from '@/lib/constants/churnReasons';
 import { authenticateRequest, hasRole, unauthorizedResponse } from '@/lib/api-auth';
-import { UserRole } from '@/lib/models/user'; // Assuming UserRole enum is needed
+import { UserRole } from '@/lib/models/user';
+
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'; // Assuming UserRole enum is needed
 
 export async function POST(request: NextRequest) {
   try {

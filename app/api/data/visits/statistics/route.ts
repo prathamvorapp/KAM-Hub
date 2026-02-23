@@ -4,6 +4,9 @@ import { visitService, userService } from '@/lib/services';
 import NodeCache from 'node-cache';
 import { UserProfile } from '@/lib/models/user';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 const statisticsCache = new NodeCache({ stdTTL: 180 });
 
 export async function GET(request: NextRequest) {

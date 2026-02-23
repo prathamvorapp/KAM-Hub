@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-auth';
 import { UserService } from '../../../../lib/services/userService';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 const userService = new UserService();
 
 export async function GET(request: NextRequest) {

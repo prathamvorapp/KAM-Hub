@@ -4,6 +4,9 @@ import { visitService } from '@/lib/services';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 import NodeCache from 'node-cache';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 const teamSummaryCache = new NodeCache({ stdTTL: 300 });
 
 export async function GET(request: NextRequest) {

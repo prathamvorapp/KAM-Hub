@@ -3,6 +3,9 @@ import { authenticateRequest } from '@/lib/api-auth';
 import { churnService } from '@/lib/services';
 import NodeCache from 'node-cache';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 const followUpCache = new NodeCache({ stdTTL: 120 }); // 2 minute cache
 
 export async function GET(request: NextRequest) {

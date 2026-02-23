@@ -3,6 +3,9 @@ import { authenticateRequest } from '@/lib/api-auth';
 import { momService } from '@/lib/services';
 import NodeCache from 'node-cache';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 const momStatsCache = new NodeCache({ stdTTL: 180 });
 
 export async function GET(request: NextRequest) {

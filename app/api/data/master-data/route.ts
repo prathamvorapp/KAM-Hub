@@ -3,6 +3,9 @@ import { authenticateRequest } from '@/lib/api-auth';
 import { masterDataService } from '@/lib/services';
 import NodeCache from 'node-cache';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 // Cache for master data
 const masterDataCache = new NodeCache({ stdTTL: 600 }); // 10 minutes TTL
 

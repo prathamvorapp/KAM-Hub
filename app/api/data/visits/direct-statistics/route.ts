@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-auth'; // Import authenticateRequest
 import { visitService, userService } from '@/lib/services'; // Import visitService and userService
 import NodeCache from 'node-cache';
-import { UserProfile } from '@/lib/models/user'; // Assuming UserProfile interface from models
+import { UserProfile } from '@/lib/models/user';
+
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'; // Assuming UserProfile interface from models
 
 const statisticsCache = new NodeCache({ stdTTL: 180 });
 

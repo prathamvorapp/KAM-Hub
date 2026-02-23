@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr'; // Import createServerClient directly
 import { cookies } from 'next/headers'; // Import cookies
-import { Database } from '@/lib/supabase-types'; // Assuming you have this type definition
+import { Database } from '@/lib/supabase-types';
+
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'; // Assuming you have this type definition
 
 export async function POST(request: NextRequest) {
   let response: NextResponse<any> = NextResponse.json({ success: true, message: 'Logged out successfully' }); // Initialize a mutable response object

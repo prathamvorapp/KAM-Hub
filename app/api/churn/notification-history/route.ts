@@ -3,6 +3,9 @@ import { authenticateRequest, hasRole } from '@/lib/api-auth';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { UserRole } from '@/lib/models/user';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     // Authenticate

@@ -4,6 +4,9 @@ import { authenticateRequest, hasRole, unauthorizedResponse } from '@/lib/api-au
 import { UserService } from '../../../../lib/services/userService';
 import { UserRole } from '@/lib/models/user';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 const userService = new UserService();
 
 // Validation schema

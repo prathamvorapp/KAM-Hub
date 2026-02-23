@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { visitService } from '@/lib/services';
 import { authenticateRequest } from '@/lib/api-auth';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     // Authenticate request

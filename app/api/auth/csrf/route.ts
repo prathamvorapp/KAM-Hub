@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { generateCSRFToken } from '../../../../lib/csrf';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/auth/csrf
  * Returns a CSRF token for the client to use in subsequent requests

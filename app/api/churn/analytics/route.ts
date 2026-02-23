@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-auth';
 import NodeCache from 'node-cache';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 // Create cache instance with 3-minute TTL for analytics (same as other stats)
 const analyticsCache = new NodeCache({ stdTTL: 180 }); // 3 minutes TTL
 

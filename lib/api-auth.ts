@@ -22,6 +22,10 @@
 import { createServerSupabaseClient } from './supabase-server';
 import { NextRequest, NextResponse } from 'next/server';
 
+// Force dynamic rendering for routes using authentication
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export interface AuthenticatedUser {
   id: string;
   email: string;

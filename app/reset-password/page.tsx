@@ -34,6 +34,32 @@ export default function ResetPasswordPage() {
     // Check if user has a valid session from the reset link
     const checkSession = async () => {
       const supabase = createBrowserClient()
+      
+      // Handle the auth callback from the email link
+      const hashParams = new URLSearchParams(window.location.hash.substring(1))
+      const accessToken = hashParams.get('access_token')
+      const type = hashParams.get('type')
+      
+      if (accessToken && type === 'recovery') {
+        // Set the session from the token
+        const { data, error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: hashParams.get('refresh_token') || ''
+        })
+        
+        if (error) {
+          setError('Invalid or expired reset link. Please request a new password reset.')
+          return
+        }
+        
+        if (data.user) {
+          setHasValidToken(true)
+          setEmail(data.user.email || '')
+          return
+        }
+      }
+      
+      // Check existing session
       const { data: { session } } = await supabase.auth.getSession()
       
       if (session?.user) {

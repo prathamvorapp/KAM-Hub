@@ -3,6 +3,9 @@ import { authenticateRequest } from '@/lib/api-auth';
 import { visitService } from '@/lib/services';
 import { teamStatsCache } from '@/lib/cache/health-check-cache';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 async function handleRequest(request: NextRequest) {
   try {
     const { user, error } = await authenticateRequest(request);

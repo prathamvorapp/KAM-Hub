@@ -4,6 +4,9 @@ import { churnService } from '@/lib/services';
 import { authenticateRequest } from '@/lib/api-auth';
 import NodeCache from 'node-cache';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 // Create cache instances (similar to backend)
 const churnDataCache = new NodeCache({ stdTTL: 60 }); // 1 minute TTL
 const statisticsCache = new NodeCache({ stdTTL: 180 }); // 3 minutes TTL

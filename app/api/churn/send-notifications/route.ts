@@ -4,6 +4,9 @@ import { churnService } from '@/lib/services';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { UserRole } from '@/lib/models/user';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     // Authenticate

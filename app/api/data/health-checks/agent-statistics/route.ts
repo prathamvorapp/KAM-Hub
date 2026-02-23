@@ -3,6 +3,9 @@ import { authenticateRequest } from '@/lib/api-auth';
 import { healthCheckService } from '@/lib/services';
 import { agentStatsCache } from '@/lib/cache/health-check-cache';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const { user, error } = await authenticateRequest(request);

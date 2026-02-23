@@ -3,6 +3,9 @@ import { authenticateRequest } from '@/lib/api-auth';
 import { demoService } from '@/lib/services';
 import { clearDemoStatsCache } from '@/lib/cache/demoCache';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const { user, error } = await authenticateRequest(request);

@@ -6,7 +6,10 @@ import { checkRateLimit, getClientIdentifier } from '../../../../lib/rate-limit'
 // import { createServerSupabaseClient } from '../../../../lib/supabase-server'; // No longer importing this
 import { createServerClient } from '@supabase/ssr'; // Import createServerClient directly from @supabase/ssr
 import { cookies } from 'next/headers'; // Import cookies directly for API route context
-import { Database } from '../../../../lib/supabase-types'; // Assuming you have this type definition
+import { Database } from '../../../../lib/supabase-types';
+
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'; // Assuming you have this type definition
 
 const userService = new UserService();
 

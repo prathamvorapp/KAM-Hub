@@ -12,6 +12,9 @@ import { authenticateRequest, hasRole, unauthorizedResponse } from '@/lib/api-au
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { isCompletedReason, isNoAgentResponse } from '@/lib/constants/churnReasons';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     // Authenticate

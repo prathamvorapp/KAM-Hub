@@ -4,6 +4,9 @@ import { UpdateChurnReasonSchema } from '../../../../lib/models/churn';
 import { churnService } from '@/lib/services';
 import NodeCache from 'node-cache';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 // Cache instances for invalidation
 const churnDataCache = new NodeCache({ stdTTL: 60 });
 const statisticsCache = new NodeCache({ stdTTL: 180 });

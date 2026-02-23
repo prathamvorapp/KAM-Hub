@@ -7,6 +7,9 @@ import { sanitizeInput, sanitizeFileName } from '../../../../lib/sanitize';
 import csv from 'csv-parser';
 import { Readable } from 'stream';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 // Parse CSV data from buffer with sanitization
 const parseCSVFromBuffer = (buffer: Buffer): Promise<any[]> => {
   return new Promise((resolve, reject) => {

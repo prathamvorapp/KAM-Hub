@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest, hasRole, unauthorizedResponse } from '@/lib/api-auth';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     // Authenticate

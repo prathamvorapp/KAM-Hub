@@ -3,7 +3,10 @@ import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { authenticateRequest, hasRole, unauthorizedResponse } from '@/lib/api-auth'; // Import auth helpers
 import { visitService, masterDataService, userService } from '@/lib/services'; // Import services
 import { UserRole, UserProfile } from '@/lib/models/user'; // Import UserRole and UserProfile
-import { requireDebugMode } from '@/lib/debug-protection'; // Keep debug protection
+import { requireDebugMode } from '@/lib/debug-protection';
+
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'; // Keep debug protection
 
 export async function GET(request: NextRequest) {
   // Protect in production (or if debug mode is disabled)

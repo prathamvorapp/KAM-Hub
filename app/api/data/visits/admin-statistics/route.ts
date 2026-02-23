@@ -4,6 +4,9 @@ import { visitService } from '@/lib/services';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { adminStatsCache } from '@/lib/cache/health-check-cache';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const { user, error } = await authenticateRequest(request);

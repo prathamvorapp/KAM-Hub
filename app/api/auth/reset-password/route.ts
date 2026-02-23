@@ -3,6 +3,9 @@ import { z } from 'zod';
 import { UserService } from '../../../../lib/services/userService';
 import { createServiceRoleClient } from '../../../../lib/supabase-server';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 const userService = new UserService();
 
 // Validation schema for forgot password (email only)
