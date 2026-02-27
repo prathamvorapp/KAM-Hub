@@ -193,32 +193,46 @@ export const demoService = {
       teamName: userProfile.team_name || userProfile.teamName
     });
     
-    let query = getSupabaseAdmin().from('demos').select('*');
+    // Fetch all demos in batches to avoid 1000 row limit
+    let allDemos: Demo[] = [];
+    let from = 0;
+    const batchSize = 1000;
+    let hasMore = true;
     
-    if (normalizedRole === "admin") {
-      console.log(`👑 [getDemosForAgent] Admin - fetching all demos`);
-      // Admin can see all demos
-    } else if (normalizedRole === "team_lead") {
-      const teamName = userProfile.team_name || userProfile.teamName;
-      if (teamName) {
-        console.log(`👥 [getDemosForAgent] Team Lead - fetching demos for team: ${teamName}`);
-        query = query.eq('team_name', teamName);
+    while (hasMore) {
+      let query = getSupabaseAdmin().from('demos').select('*', { count: 'exact' });
+      
+      if (normalizedRole === "admin") {
+        // Admin can see all demos
+      } else if (normalizedRole === "team_lead") {
+        const teamName = userProfile.team_name || userProfile.teamName;
+        if (teamName) {
+          query = query.eq('team_name', teamName);
+        } else {
+          query = query.eq('agent_id', 'NON_EXISTENT_EMAIL');
+        }
       } else {
-        console.log(`⚠️ [getDemosForAgent] Team Lead has no team assigned`);
-        query = query.eq('agent_id', 'NON_EXISTENT_EMAIL');
+        query = query.eq('agent_id', userProfile.email);
       }
-    } else {
-      console.log(`👤 [getDemosForAgent] Agent - fetching demos for: ${userProfile.email}`);
-      query = query.eq('agent_id', userProfile.email);
+      
+      const { data: batch, error } = await query.range(from, from + batchSize - 1) as { data: Demo[] | null; error: any };
+      
+      if (error) {
+        console.error(`❌ [getDemosForAgent] Error fetching demos batch:`, error);
+        break;
+      }
+      
+      if (batch && batch.length > 0) {
+        allDemos = allDemos.concat(batch);
+        from += batchSize;
+        hasMore = batch.length === batchSize;
+      } else {
+        hasMore = false;
+      }
     }
     
-    const { data: demos, error } = await query as { data: Demo[] | null; error: any };
-    
-    if (error) {
-      console.error(`❌ [getDemosForAgent] Error fetching demos:`, error);
-    }
-    
-    console.log(`📊 [getDemosForAgent] Found ${demos?.length || 0} demos`);
+    const demos = allDemos;
+    console.log(`📊 [getDemosForAgent] Found ${demos?.length || 0} demos (fetched in batches)`);
     
     const brandGroups = (demos || []).reduce((acc, demo) => {
       if (!acc[demo.brand_name]) {
@@ -580,25 +594,49 @@ export const demoService = {
     const userProfile = normalizeUserProfile(rawProfile);
     const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
     
-    let query = getSupabaseAdmin().from('demos').select('*');
+    // Fetch all demos in batches to avoid 1000 row limit
+    let allDemos: Demo[] = [];
+    let from = 0;
+    const batchSize = 1000;
+    let hasMore = true;
     
-    if (normalizedRole === "admin") {
-      // Admin sees all
-    } else if (normalizedRole === "team_lead") {
-      const teamName = userProfile.team_name || userProfile.teamName;
-      if (teamName) {
-        query = query.eq('team_name', teamName);
+    while (hasMore) {
+      let query = getSupabaseAdmin().from('demos').select('*', { count: 'exact' });
+      
+      if (normalizedRole === "admin") {
+        // Admin sees all
+      } else if (normalizedRole === "team_lead") {
+        const teamName = userProfile.team_name || userProfile.teamName;
+        if (teamName) {
+          query = query.eq('team_name', teamName);
+        } else {
+          query = query.eq('agent_id', 'NON_EXISTENT_EMAIL');
+        }
+      } else if (normalizedRole === "agent") {
+        query = query.eq('agent_id', userProfile.email);
       } else {
-        query = query.eq('agent_id', 'NON_EXISTENT_EMAIL');
+        console.warn(`⚠️ Unknown role: ${userProfile.role}, denying access to demo statistics`);
+        query = query.eq('agent_id', 'NON_EXISTENT_EMAIL'); // Deny for unknown roles
       }
-    } else if (normalizedRole === "agent") {
-      query = query.eq('agent_id', userProfile.email);
-    } else {
-      console.warn(`⚠️ Unknown role: ${userProfile.role}, denying access to demo statistics`);
-      query = query.eq('agent_id', 'NON_EXISTENT_EMAIL'); // Deny for unknown roles
+      
+      const { data: batch, error } = await query.range(from, from + batchSize - 1) as { data: Demo[] | null; error: any };
+      
+      if (error) {
+        console.error('Error fetching demos batch:', error);
+        break;
+      }
+      
+      if (batch && batch.length > 0) {
+        allDemos = allDemos.concat(batch);
+        from += batchSize;
+        hasMore = batch.length === batchSize;
+      } else {
+        hasMore = false;
+      }
     }
     
-    const { data: demos } = await query as { data: Demo[] | null; error: any };
+    const demos = allDemos;
+    console.log(`📊 [getDemoStatistics] Fetched ${demos.length} total demos`);
     
     const stats = {
       total: demos?.length || 0,

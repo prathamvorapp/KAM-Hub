@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 import DemoStatistics from "@/components/DemoStatistics";
@@ -104,6 +104,11 @@ export default function DemosPage() {
   const [searchInput, setSearchInput] = useState(""); // Separate state for input field
   const [itemsPerPage] = useState(12); // Show 12 brands per page
   const [isSearching, setIsSearching] = useState(false);
+
+  // Agent statistics view states
+  const [showAgentStats, setShowAgentStats] = useState(false);
+  const [agentStats, setAgentStats] = useState<any>(null);
+  const [loadingAgentStats, setLoadingAgentStats] = useState(false);
 
   useEffect(() => {
     if (userProfile) {
@@ -436,6 +441,36 @@ export default function DemosPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const loadAgentStatistics = async () => {
+    try {
+      setLoadingAgentStats(true);
+      const response = await api.getAgentDemoStatistics();
+      if (response.success) {
+        setAgentStats(response.data);
+      } else {
+        console.error('Failed to load agent statistics:', response.error);
+        alert('Failed to load agent statistics: ' + response.error);
+      }
+    } catch (error) {
+      console.error('Error loading agent statistics:', error);
+      alert('Error loading agent statistics');
+    } finally {
+      setLoadingAgentStats(false);
+    }
+  };
+
+  const toggleAgentStatsView = async () => {
+    if (!showAgentStats && !agentStats) {
+      await loadAgentStatistics();
+    }
+    setShowAgentStats(!showAgentStats);
+  };
+
+  const canViewAgentStats = () => {
+    const userRole = userProfile?.role?.toLowerCase().replace(/\s+/g, '_');
+    return userRole === 'team_lead' || userRole === 'admin';
+  };
+
   if (loading) {
     return (
       <DashboardLayout userProfile={userProfile}>
@@ -458,6 +493,216 @@ export default function DemosPage() {
         <div className="mb-8">
           <DemoStatistics />
         </div>
+
+        {/* Agent-wise Statistics Toggle (Team Lead & Admin only) */}
+        {canViewAgentStats() && (
+          <div className="mb-6">
+            <button
+              onClick={toggleAgentStatsView}
+              className="px-6 py-3 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors font-medium flex items-center space-x-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              <span>{showAgentStats ? 'Hide' : 'View'} Agent-wise Statistics</span>
+            </button>
+          </div>
+        )}
+
+        {/* Agent Statistics View */}
+        {showAgentStats && canViewAgentStats() && (
+          <div className="mb-8 bg-white rounded-lg shadow-md border p-6">
+            {loadingAgentStats ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
+              </div>
+            ) : agentStats ? (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-gray-900">Agent-wise Demo Statistics</h2>
+                  <button
+                    onClick={loadAgentStatistics}
+                    className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    Refresh
+                  </button>
+                </div>
+
+                {/* Overall Summary */}
+                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg p-6 border border-indigo-200">
+                  <h3 className="text-lg font-semibold text-indigo-900 mb-4">Overall Summary</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    <div className="bg-white rounded-lg p-4 shadow-sm">
+                      <div className="text-2xl font-bold text-indigo-600">{agentStats.summary.total_agents}</div>
+                      <div className="text-sm text-gray-600">Total Agents</div>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 shadow-sm">
+                      <div className="text-2xl font-bold text-blue-600">{agentStats.summary.total_brands}</div>
+                      <div className="text-sm text-gray-600">Total Brands</div>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 shadow-sm">
+                      <div className="text-2xl font-bold text-green-600">{agentStats.summary.brands_initiated}</div>
+                      <div className="text-sm text-gray-600">Brands Initiated</div>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 shadow-sm">
+                      <div className="text-2xl font-bold text-orange-600">{agentStats.summary.brands_not_initiated}</div>
+                      <div className="text-sm text-gray-600">Yet to Initiate</div>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 shadow-sm">
+                      <div className="text-2xl font-bold text-purple-600">{agentStats.summary.total_demos}</div>
+                      <div className="text-sm text-gray-600">Total Demos</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                    <div className="bg-white rounded-lg p-4 shadow-sm">
+                      <div className="text-2xl font-bold text-green-600">{agentStats.summary.total_converted}</div>
+                      <div className="text-sm text-gray-600">Converted</div>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 shadow-sm">
+                      <div className="text-2xl font-bold text-red-600">{agentStats.summary.total_not_converted}</div>
+                      <div className="text-sm text-gray-600">Not Converted</div>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 shadow-sm">
+                      <div className="text-2xl font-bold text-yellow-600">{agentStats.summary.total_pending}</div>
+                      <div className="text-sm text-gray-600">Pending</div>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 shadow-sm">
+                      <div className="text-2xl font-bold text-teal-600">{agentStats.summary.total_workflow_completed}</div>
+                      <div className="text-sm text-gray-600">Completed</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Agent-wise Breakdown */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Agent-wise Breakdown</h3>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agent</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Total Brands</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Initiated</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Yet to Initiate</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Total Demos</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Converted</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Not Converted</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Pending</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {agentStats.agent_statistics.map((agent: any, index: number) => (
+                          <React.Fragment key={agent.agent_email}>
+                            <tr className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                              <td className="px-4 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">{agent.agent_name}</div>
+                                <div className="text-xs text-gray-500">{agent.agent_email}</div>
+                              </td>
+                              <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">{agent.team_name || '-'}</td>
+                              <td className="px-4 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-900">{agent.total_brands}</td>
+                              <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-green-600 font-medium">{agent.brands_initiated}</td>
+                              <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-orange-600 font-medium">{agent.brands_not_initiated}</td>
+                              <td className="px-4 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-900">{agent.total_demos}</td>
+                              <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-green-600 font-medium">{agent.converted}</td>
+                              <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-red-600 font-medium">{agent.not_converted}</td>
+                              <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-yellow-600 font-medium">{agent.pending}</td>
+                              <td className="px-4 py-4 whitespace-nowrap text-center">
+                                <button
+                                  onClick={() => {
+                                    const agentRow = document.getElementById(`agent-details-${index}`);
+                                    if (agentRow) {
+                                      agentRow.classList.toggle('hidden');
+                                    }
+                                  }}
+                                  className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
+                                >
+                                  View Details
+                                </button>
+                              </td>
+                            </tr>
+                            {/* Details row directly below this agent */}
+                            <tr key={`details-${agent.agent_email}`} id={`agent-details-${index}`} className="hidden bg-indigo-50 border-l-4 border-indigo-500">
+                              <td colSpan={10} className="px-4 py-4">
+                                <div className="flex justify-between items-start mb-4">
+                                  <h4 className="text-md font-semibold text-indigo-900">Details for {agent.agent_name}</h4>
+                                  <button
+                                    onClick={() => {
+                                      const agentRow = document.getElementById(`agent-details-${index}`);
+                                      if (agentRow) {
+                                        agentRow.classList.add('hidden');
+                                      }
+                                    }}
+                                    className="text-gray-500 hover:text-gray-700 flex items-center space-x-1"
+                                  >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                    <span className="text-sm font-medium">Close</span>
+                                  </button>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                  {/* Status Breakdown */}
+                                  <div className="bg-white rounded-lg p-4 shadow-sm">
+                                    <h5 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+                                      <svg className="w-4 h-4 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                      </svg>
+                                      Status Breakdown
+                                    </h5>
+                                    <div className="space-y-2">
+                                      {Object.entries(agent.status_breakdown).length > 0 ? (
+                                        Object.entries(agent.status_breakdown).map(([status, count]: [string, any]) => (
+                                          <div key={status} className="flex justify-between items-center text-sm py-1 border-b border-gray-100 last:border-0">
+                                            <span className="text-gray-700">{status}</span>
+                                            <span className="font-medium text-indigo-600">{count}</span>
+                                          </div>
+                                        ))
+                                      ) : (
+                                        <p className="text-sm text-gray-500 italic">No status data available</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Product Breakdown */}
+                                  <div className="bg-white rounded-lg p-4 shadow-sm">
+                                    <h5 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+                                      <svg className="w-4 h-4 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                      </svg>
+                                      Product Breakdown
+                                    </h5>
+                                    <div className="space-y-2">
+                                      {Object.entries(agent.product_breakdown).length > 0 ? (
+                                        Object.entries(agent.product_breakdown).map(([product, count]: [string, any]) => (
+                                          <div key={product} className="flex justify-between items-center text-sm py-1 border-b border-gray-100 last:border-0">
+                                            <span className="text-gray-700">{product}</span>
+                                            <span className="font-medium text-indigo-600">{count}</span>
+                                          </div>
+                                        ))
+                                      ) : (
+                                        <p className="text-sm text-gray-500 italic">No product data available</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          </React.Fragment>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                No statistics available
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Search and Filter Section */}
         <div className="mb-6 bg-white rounded-lg shadow-sm border p-4">

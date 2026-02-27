@@ -687,6 +687,19 @@ export const apiClient = {
     }
   },
 
+  getAgentDemoStatistics: async () => {
+    try {
+      const response = await fetch(`/api/data/demos/agent-statistics`, {
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error getting agent demo statistics:', error);
+      return { success: false, error: 'Failed to get agent demo statistics' };
+    }
+  },
+
   // Authentication
   authenticateUser: async (email: string, password: string) => {
     try {
