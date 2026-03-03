@@ -13,7 +13,8 @@ import {
   ChevronRight,
   BarChart3,
   ThumbsUp,
-  ChevronUp
+  ChevronUp,
+  Building2
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -32,6 +33,7 @@ interface SidebarProps {
 
 const allModules = [
   { name: 'Dashboard', href: '/dashboard', icon: BarChart3, color: 'from-blue-500 to-cyan-500', roles: ['agent', 'team_lead', 'admin'] },
+  { name: 'CRM', href: '/dashboard/crm', icon: Building2, color: 'from-indigo-500 to-blue-500', roles: ['agent', 'team_lead', 'admin'] },
   { name: 'Churn Data', href: '/dashboard/churn', icon: TrendingDown, color: 'from-red-500 to-pink-500', roles: ['agent', 'team_lead', 'admin'] },
   { name: 'Visits', href: '/dashboard/visits', icon: MapPin, color: 'from-green-500 to-emerald-500', roles: ['agent', 'team_lead', 'admin'] },
   { name: 'Approvals', href: '/dashboard/approvals', icon: ThumbsUp, color: 'from-yellow-500 to-orange-500', roles: ['team_lead'] },
