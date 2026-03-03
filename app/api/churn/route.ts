@@ -33,15 +33,16 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '100');
     const search = searchParams.get('search') || undefined;
     const filter = searchParams.get('filter') || 'all';
+    const viewAll = searchParams.get('viewAll') === 'true'; // CRM view all parameter
 
     const queryData = ChurnQuerySchema.parse({ page, limit, search });
 
-    console.log(`🔍 [Churn API] Getting data for: ${userEmail}, role: ${userRole}, filter: ${filter}`);
+    console.log(`🔍 [Churn API] Getting data for: ${userEmail}, role: ${userRole}, filter: ${filter}, viewAll: ${viewAll}`);
 
     // IMPORTANT: Get fresh data first (don't use cache until after auto-fix)
     // Get churn data from Supabase with role-based filtering
     const result = await churnService.getChurnData({
-      userProfile: user, // Pass the entire user object as userProfile
+      userProfile: viewAll ? null : user, // Pass null to bypass role filtering
       page: queryData.page,
       limit: queryData.limit,
       search: queryData.search,

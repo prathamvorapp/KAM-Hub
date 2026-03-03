@@ -17,10 +17,8 @@ export async function GET(request: NextRequest) {
       }, { status: 401 });
     }
 
-    // Check admin role
-    if (!hasRole(user, ['admin'])) {
-      return unauthorizedResponse('Access denied - Admin only');
-    }
+    // Allow all authenticated users to access this endpoint (needed for CRM team filter)
+    // No role restriction
 
     const supabase = getSupabaseAdmin();
 

@@ -24,8 +24,9 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
     const bustCache = searchParams.get('_t'); // Cache buster from frontend
+    const viewAll = searchParams.get('viewAll') === 'true'; // CRM view all parameter
 
-    const cacheKey = `health_checks_${user.email}_${month}_${page}_${limit}`;
+    const cacheKey = `health_checks_${viewAll ? 'all' : user.email}_${month}_${page}_${limit}`;
     
     // Skip cache if cache buster is present
     if (!bustCache) {
@@ -38,10 +39,10 @@ export async function GET(request: NextRequest) {
       console.log(`🔄 Health checks cache bypassed due to cache buster`);
     }
 
-    console.log(`📊 Getting health checks for user: ${user.email}`);
+    console.log(`📊 Getting health checks for user: ${user.email}, viewAll: ${viewAll}`);
 
     const result = await healthCheckService.getHealthChecks({
-      userProfile: user, // Pass the entire user object as userProfile
+      userProfile: viewAll ? null : user, // Pass null to bypass role filtering
       month,
       page,
       limit

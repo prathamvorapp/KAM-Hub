@@ -32,35 +32,35 @@ interface Brand {
 export const healthCheckService = {
   // Get health checks with role-based filtering
   async getHealthChecks(params: {
-    userProfile: UserProfile; // email removed, userProfile required
+    userProfile: UserProfile | null; // Can be null for viewAll mode
     month?: string;
     page?: number;
     limit?: number;
   }) {
     const { userProfile: rawProfile, month, page = 1, limit = 100 } = params;
-    const userProfile = normalizeUserProfile(rawProfile);
+    const userProfile = rawProfile ? normalizeUserProfile(rawProfile) : null;
     
     let query = getSupabaseAdmin().from('health_checks').select('*', { count: 'exact' });
     
-    if (!userProfile) { // Deny if no userProfile
-      console.error(`❌ No user profile provided to getHealthChecks. Denying access.`);
-      return { data: [], total: 0, page: 0, limit: 0, total_pages: 0 };
-    }
-
-    const normalizedRole = userProfile.role?.toLowerCase().replace(/[_\s]/g, '');
-    
-    if (normalizedRole === 'agent') {
-      query = query.eq('kam_email', userProfile.email);
-    } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
-      const teamName = userProfile.team_name || userProfile.teamName;
-      if (teamName) {
-        query = query.eq('team_name', teamName);
-      }
-    } else if (normalizedRole === 'admin') {
-      // Admin sees all
+    // If userProfile is null, show all data (CRM viewAll mode)
+    if (!userProfile) {
+      console.log(`📊 [getHealthChecks] ViewAll mode - showing all records`);
     } else {
-      console.warn(`⚠️ Unknown role: ${userProfile.role}, denying access to health checks`);
-      query = query.eq('kam_email', 'NON_EXISTENT_EMAIL'); // Deny for unknown roles
+      const normalizedRole = userProfile.role?.toLowerCase().replace(/[_\s]/g, '');
+      
+      if (normalizedRole === 'agent') {
+        query = query.eq('kam_email', userProfile.email);
+      } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
+        const teamName = userProfile.team_name || userProfile.teamName;
+        if (teamName) {
+          query = query.eq('team_name', teamName);
+        }
+      } else if (normalizedRole === 'admin') {
+        // Admin sees all
+      } else {
+        console.warn(`⚠️ Unknown role: ${userProfile.role}, denying access to health checks`);
+        query = query.eq('kam_email', 'NON_EXISTENT_EMAIL'); // Deny for unknown roles
+      }
     }
     
     if (month) {

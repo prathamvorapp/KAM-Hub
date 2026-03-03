@@ -64,7 +64,7 @@ export default function CRMPage() {
     try {
       setHealthLoading(true)
       setHealthError(null)
-      const response = await fetch('/api/data/health-checks?limit=10000')
+      const response = await fetch('/api/data/health-checks?limit=10000&viewAll=true')
       const result = await response.json()
       if (!response.ok || !result.success) {
         throw new Error(result.error || 'Failed to fetch health checks')
@@ -81,7 +81,7 @@ export default function CRMPage() {
     try {
       setChurnLoading(true)
       setChurnError(null)
-      const response = await fetch('/api/churn?limit=10000')
+      const response = await fetch('/api/churn?limit=10000&viewAll=true')
       const result = await response.json()
       if (!response.ok || !result.success) {
         throw new Error(result.error || 'Failed to fetch churn data')

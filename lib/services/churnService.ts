@@ -62,7 +62,7 @@ function safeParseDate(dateStr: string): Date | null {
 export const churnService = {
   // Get churn data with role-based filtering and pagination
   async getChurnData(params: {
-    userProfile: UserProfile; // userProfile is now required
+    userProfile: UserProfile | null; // Can be null for viewAll mode
     page?: number;
     limit?: number;
     search?: string;
@@ -73,52 +73,46 @@ export const churnService = {
     console.log('🕵️‍♂️ DEBUG ChurnService.getChurnData - Incoming userProfile:', rawProfile);
     
     // Normalize userProfile for backward/forward compatibility
-    const userProfile = normalizeUserProfile(rawProfile);
+    const userProfile = rawProfile ? normalizeUserProfile(rawProfile) : null;
     
     let kamFilter: string[] | null = null; // null means no KAM filter (admin sees all)
     
+    // If userProfile is null, show all data (CRM viewAll mode)
     if (!userProfile) {
-      console.error(`❌ No user profile provided to getChurnData. Denying access.`);
-      return {
-        data: [],
-        total: 0,
-        missing_churn_reasons: 0,
-        categorization: { newCount: 0, overdue: 0, followUps: 0, completed: 0 },
-        page, limit, total_pages: 0, has_next: false, has_prev: false,
-        user_role: null, kam_filter: null
-      };
-    }
-    
-    console.log(`🔍 User Profile for ${userProfile.email}:`, userProfile);
-    
-    // Normalize role for comparison
-    const normalizedRole = userProfile.role?.toLowerCase().replace(/\s+/g, '');
-    console.log(`🔍 Normalized role: ${normalizedRole}`);
-
-    console.log(`🕵️‍♂️ DEBUG ChurnService.getChurnData - userProfile.fullName before agent filter check:`, userProfile.fullName);
-    
-    if (normalizedRole === 'agent') {
-      kamFilter = [userProfile.fullName];
-      console.log(`👤 Agent filter - showing records for KAM: ${userProfile.fullName}`);
-    } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
-      if (userProfile.team_name) {
-        const { data: teamMembers } = await getSupabaseAdmin()
-          .from('user_profiles')
-          .select('full_name')
-          .eq('team_name', userProfile.team_name)
-          .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
-        kamFilter = teamMembers?.map(m => m.full_name) || [];
-        console.log(`👥 Team Lead filter - showing records for team ${userProfile.team_name}:`, kamFilter);
-      } else {
-        console.log(`⚠️ Team Lead has no team_name, showing no records`);
-        kamFilter = [];
-      }
-    } else if (normalizedRole === 'admin') {
-      console.log(`👑 Admin - showing all records`);
-      kamFilter = null; // Admin sees all
+      console.log(`📊 [getChurnData] ViewAll mode - showing all records`);
+      kamFilter = null; // Show all
     } else {
-      console.log(`⚠️ Unknown role: ${userProfile.role}, treating as no filter (should ideally deny access)`);
-      kamFilter = []; // Default to no records for unknown roles for safety
+      console.log(`🔍 User Profile for ${userProfile.email}:`, userProfile);
+      
+      // Normalize role for comparison
+      const normalizedRole = userProfile.role?.toLowerCase().replace(/\s+/g, '');
+      console.log(`🔍 Normalized role: ${normalizedRole}`);
+
+      console.log(`🕵️‍♂️ DEBUG ChurnService.getChurnData - userProfile.fullName before agent filter check:`, userProfile.fullName);
+      
+      if (normalizedRole === 'agent') {
+        kamFilter = [userProfile.fullName];
+        console.log(`👤 Agent filter - showing records for KAM: ${userProfile.fullName}`);
+      } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
+        if (userProfile.team_name) {
+          const { data: teamMembers } = await getSupabaseAdmin()
+            .from('user_profiles')
+            .select('full_name')
+            .eq('team_name', userProfile.team_name)
+            .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
+          kamFilter = teamMembers?.map(m => m.full_name) || [];
+          console.log(`👥 Team Lead filter - showing records for team ${userProfile.team_name}:`, kamFilter);
+        } else {
+          console.log(`⚠️ Team Lead has no team_name, showing no records`);
+          kamFilter = [];
+        }
+      } else if (normalizedRole === 'admin') {
+        console.log(`👑 Admin - showing all records`);
+        kamFilter = null; // Admin sees all
+      } else {
+        console.log(`⚠️ Unknown role: ${userProfile.role}, treating as no filter (should ideally deny access)`);
+        kamFilter = []; // Default to no records for unknown roles for safety
+      }
     }
     
     let query = getSupabaseAdmin().from('churn_records').select('*', { count: 'exact' });
