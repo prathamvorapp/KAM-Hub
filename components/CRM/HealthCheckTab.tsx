@@ -94,9 +94,10 @@ export default function HealthCheckTab({ records, loading, error }: Props) {
   }, [startDateFilter, endDateFilter, kamFilter, zoneFilter, healthStatusFilter, natureFilter, teamFilter])
 
   const downloadCSV = () => {
-    const headers = ['Date', 'KAM Name', 'Zone', 'Health Status', 'Nature', 'Remarks']
+    const headers = ['Date', 'Brand Name', 'KAM Name', 'Zone', 'Health Status', 'Nature', 'Remarks']
     const csvData = filteredRecords.map(record => [
       record.assessment_date,
+      record.brand_name || '-',
       record.kam_name,
       record.zone,
       record.health_status,
@@ -267,6 +268,7 @@ export default function HealthCheckTab({ records, loading, error }: Props) {
             <thead>
               <tr className="border-b-2 border-gray-300 bg-gray-50">
                 <th className="text-left py-3 px-4 text-secondary-700 font-semibold">Date</th>
+                <th className="text-left py-3 px-4 text-secondary-700 font-semibold">Brand Name</th>
                 <th className="text-left py-3 px-4 text-secondary-700 font-semibold">KAM Name</th>
                 <th className="text-left py-3 px-4 text-secondary-700 font-semibold">Zone</th>
                 <th className="text-left py-3 px-4 text-secondary-700 font-semibold">Health Status</th>
@@ -276,11 +278,12 @@ export default function HealthCheckTab({ records, loading, error }: Props) {
             </thead>
             <tbody>
               {filteredRecords.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-8 text-secondary-600">No records found matching the selected filters</td></tr>
+                <tr><td colSpan={7} className="text-center py-8 text-secondary-600">No records found matching the selected filters</td></tr>
               ) : (
                 paginatedRecords.map((record, index) => (
                   <tr key={record.check_id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                     <td className="py-3 px-4 text-secondary-800">{new Date(record.assessment_date).toLocaleDateString()}</td>
+                    <td className="py-3 px-4 text-secondary-800">{record.brand_name || '-'}</td>
                     <td className="py-3 px-4 text-secondary-800">{record.kam_name}</td>
                     <td className="py-3 px-4 text-secondary-800">{record.zone}</td>
                     <td className="py-3 px-4"><span className={`px-3 py-1 rounded-full text-sm font-medium ${getHealthStatusColor(record.health_status)}`}>{record.health_status}</span></td>
