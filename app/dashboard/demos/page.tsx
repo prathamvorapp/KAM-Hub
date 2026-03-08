@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import DemoStatistics from "@/components/DemoStatistics";
 import DashboardLayout from "@/components/Layout/DashboardLayout";
 import Pagination from "@/components/Pagination";
+import BulkDemoForm from "@/components/BulkDemoForm";
 
 // Product constants
 const PRODUCTS = [
@@ -97,6 +98,7 @@ export default function DemosPage() {
   const [selectedDemo, setSelectedDemo] = useState<Demo | null>(null);
   const [activeStep, setActiveStep] = useState<string>("");
   const [formData, setFormData] = useState<any>({});
+  const [showBulkForm, setShowBulkForm] = useState(false);
   
   // Pagination and search states
   const [currentPage, setCurrentPage] = useState(1);
@@ -156,13 +158,34 @@ export default function DemosPage() {
     try {
       setLoading(true);
       
-      // Get brands from Master_Data table
-      // Use getMasterData for all roles - it handles role-based filtering automatically
-      let brandsData: Brand[] = [];
+      // Fetch ALL brands in chunks of 1000
+      let allBrands: Brand[] = [];
+      let page = 1;
+      let hasMore = true;
       
-      const brandsResponse = await api.getMasterData(1, 10000); // Get all brands with role-based filtering
-      brandsData = brandsResponse.data?.data || [];
-      console.log('📊 DEMOS PAGE - Fetching brands for user:', userProfile?.email, 'Role:', userProfile?.role, 'Brands count:', brandsData.length);
+      console.log('📊 DEMOS PAGE - Starting to fetch brands for user:', userProfile?.email, 'Role:', userProfile?.role);
+      
+      while (hasMore) {
+        const brandsResponse = await api.getMasterData(page, 1000); // Fetch 1000 per page
+        const fetchedBrands = brandsResponse.data?.data || [];
+        
+        if (fetchedBrands.length > 0) {
+          allBrands = [...allBrands, ...fetchedBrands];
+          console.log(`📊 DEMOS PAGE - Page ${page}: fetched ${fetchedBrands.length} brands (Total: ${allBrands.length})`);
+        }
+        
+        const totalPages = brandsResponse.data?.total_pages || 1;
+        hasMore = page < totalPages;
+        page++;
+        
+        // Safety limit
+        if (page > 100) {
+          console.warn('⚠️ Reached maximum page limit (100)');
+          break;
+        }
+      }
+      
+      console.log(`✅ DEMOS PAGE - Finished loading ${allBrands.length} brands`);
       
       // Get demos for the user based on their role
       let demosData: any[] = [];
@@ -177,7 +200,7 @@ export default function DemosPage() {
       }
       
       // Map brands with their demos
-      const brandsWithDemos: BrandWithDemos[] = brandsData.map((brand: Brand) => {
+      const brandsWithDemos: BrandWithDemos[] = allBrands.map((brand: Brand) => {
         // Find demos for this brand - try both id and _id for compatibility
         const brandDemoGroup = demosData.find((dg: any) => 
           dg.brandId === brand.id || dg.brandId === brand._id
@@ -469,6 +492,71 @@ export default function DemosPage() {
   const canViewAgentStats = () => {
     const userRole = userProfile?.role?.toLowerCase().replace(/\s+/g, '_');
     return userRole === 'team_lead' || userRole === 'admin';
+  };
+
+  const canResetDemo = () => {
+    const userRole = userProfile?.role?.toLowerCase().replace(/\s+/g, '_');
+    return userRole === 'team_lead' || userRole === 'admin';
+  };
+
+  const handleResetDemo = async (demo: Demo) => {
+    if (!canResetDemo()) {
+      alert("Only Team Leads and Admins can reset demos");
+      return;
+    }
+
+    const reason = prompt("Please provide a reason for resetting this demo:\n\n(This will reset the demo to Step 1 Pending state)");
+    if (!reason || !reason.trim()) {
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to reset ${demo.product_name} for ${demo.brand_name}?\n\nThis will clear all progress and return it to the initial state.`)) {
+      return;
+    }
+
+    try {
+      const response = await api.resetDemo(demo.demo_id, reason);
+      if (response.success) {
+        console.log('✅ Reset successful:', response.data);
+        alert(`Demo has been reset successfully!\n\nReset by: ${response.data.resetBy}\n\nThe page will now refresh to show the updated state.`);
+        // Force a hard reload to ensure fresh data
+        window.location.reload();
+      } else {
+        alert("Error resetting demo: " + response.error);
+      }
+    } catch (error) {
+      console.error("Error resetting demo:", error);
+      alert("Error resetting demo: " + (error as Error).message);
+    }
+  };
+
+  const handleBulkComplete = async (demo: Demo) => {
+    setSelectedDemo(demo);
+    setShowBulkForm(true);
+  };
+
+  const handleBulkFormSubmit = async (data: any) => {
+    if (!selectedDemo) return;
+
+    try {
+      const response = await api.bulkCompleteDemo(selectedDemo.demo_id, data);
+      if (response.success) {
+        alert(response.data.message);
+        setShowBulkForm(false);
+        setSelectedDemo(null);
+        await loadBrandsAndDemos();
+      } else {
+        alert("Error: " + response.error);
+      }
+    } catch (error) {
+      console.error("Error bulk completing demo:", error);
+      alert("Error: " + (error as Error).message);
+    }
+  };
+
+  const handleBulkFormCancel = () => {
+    setShowBulkForm(false);
+    setSelectedDemo(null);
   };
 
   if (loading) {
@@ -891,6 +979,21 @@ export default function DemosPage() {
                                 </div>
                                 
                                 <div className="flex items-center space-x-2">
+                                  {/* Bulk Complete Button - Only for Step 1 Pending */}
+                                  {demo && demo.current_status === "Step 1 Pending" && (
+                                    <button
+                                      onClick={() => handleBulkComplete(demo)}
+                                      className="px-3 py-1 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded text-sm hover:from-purple-600 hover:to-indigo-600 transition-colors flex items-center space-x-1"
+                                      title="Complete all 5 steps at once"
+                                    >
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                      </svg>
+                                      <span>Quick Complete</span>
+                                    </button>
+                                  )}
+
+                                  {/* Regular Step-by-Step Button */}
                                   {demo && canTakeAction(demo) && (
                                     <button
                                       onClick={() => {
@@ -903,6 +1006,7 @@ export default function DemosPage() {
                                     </button>
                                   )}
                                   
+                                  {/* Reschedule Button */}
                                   {demo && canRescheduleDemo(demo) && (
                                     <button
                                       onClick={() => handleRescheduleDemo(demo)}
@@ -913,6 +1017,20 @@ export default function DemosPage() {
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                       </svg>
                                       <span>Reschedule</span>
+                                    </button>
+                                  )}
+
+                                  {/* Reset Button - Team Lead and Admin only */}
+                                  {demo && canResetDemo() && demo.step1_completed_at && (
+                                    <button
+                                      onClick={() => handleResetDemo(demo)}
+                                      className="px-3 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition-colors flex items-center space-x-1"
+                                      title="Reset Demo to Initial State (Team Lead/Admin only)"
+                                    >
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                      </svg>
+                                      <span>Reset</span>
                                     </button>
                                   )}
                                 </div>
@@ -1292,6 +1410,17 @@ export default function DemosPage() {
               </div>
             )}
           </>
+        )}
+
+        {/* Bulk Demo Form Modal */}
+        {showBulkForm && selectedDemo && (
+          <BulkDemoForm
+            demo={selectedDemo}
+            onSubmit={handleBulkFormSubmit}
+            onCancel={handleBulkFormCancel}
+            products={PRODUCTS}
+            demoConductors={DEMO_CONDUCTORS}
+          />
         )}
       </div>
     </DashboardLayout>

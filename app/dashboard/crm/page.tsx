@@ -6,6 +6,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import DashboardLayout from '@/components/Layout/DashboardLayout'
 import HealthCheckTab from '@/components/CRM/HealthCheckTab'
 import ChurnTab from '@/components/CRM/ChurnTab'
+import VisitTab from '@/components/CRM/VisitTab'
+import DemoGiveTab from '@/components/CRM/DemoGiveTab'
 
 interface HealthCheckRecord {
   check_id: string
@@ -35,7 +37,7 @@ interface ChurnRecord {
 export default function CRMPage() {
   const { userProfile } = useAuth()
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<'health' | 'churn'>('health')
+  const [activeTab, setActiveTab] = useState<'health' | 'churn' | 'visits' | 'demogive'>('health')
   
   // Health Check States
   const [healthRecords, setHealthRecords] = useState<HealthCheckRecord[]>([])
@@ -130,6 +132,26 @@ export default function CRMPage() {
               >
                 📉 Churn Data
               </button>
+              <button
+                onClick={() => setActiveTab('visits')}
+                className={`px-6 py-3 font-medium transition-colors ${
+                  activeTab === 'visits'
+                    ? 'border-b-2 border-primary-600 text-primary-600'
+                    : 'text-secondary-600 hover:text-secondary-800'
+                }`}
+              >
+                🚗 Visit Tracking
+              </button>
+              <button
+                onClick={() => setActiveTab('demogive')}
+                className={`px-6 py-3 font-medium transition-colors ${
+                  activeTab === 'demogive'
+                    ? 'border-b-2 border-primary-600 text-primary-600'
+                    : 'text-secondary-600 hover:text-secondary-800'
+                }`}
+              >
+                🎯 Demo Give
+              </button>
             </div>
 
             {activeTab === 'health' && (
@@ -146,6 +168,14 @@ export default function CRMPage() {
                 loading={churnLoading}
                 error={churnError}
               />
+            )}
+
+            {activeTab === 'visits' && (
+              <VisitTab userProfile={userProfile} />
+            )}
+
+            {activeTab === 'demogive' && (
+              <DemoGiveTab />
             )}
           </div>
         </div>

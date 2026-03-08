@@ -5,6 +5,7 @@
 
 export { churnService } from './churnService';
 export { visitService } from './visitService';
+export { visitServiceEnhanced } from './visitServiceEnhanced';
 export { demoService, PRODUCTS, DEMO_CONDUCTORS } from './demoService';
 export { healthCheckService } from './healthCheckService';
 export { momService } from './momService';

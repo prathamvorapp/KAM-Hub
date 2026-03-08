@@ -424,6 +424,23 @@ export const apiClient = {
     }
   },
 
+  // Submit visit MOM with demos (enhanced version)
+  submitVisitMOMWithDemos: async (momData: any) => {
+    try {
+      const response = await fetch(`/api/data/visits/${momData.visit_id}/mom-with-demos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(momData)
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error submitting visit MOM with demos:', error);
+      return { success: false, error: 'Failed to submit MOM with demos' };
+    }
+  },
+
   // Submit MoM (update MOM shared status)
   submitMoM: async (params: { visit_id: string; mom_shared: string }) => {
     try {
@@ -697,6 +714,48 @@ export const apiClient = {
     } catch (error) {
       console.error('Error getting agent demo statistics:', error);
       return { success: false, error: 'Failed to get agent demo statistics' };
+    }
+  },
+
+  // Reset demo (Team Lead and Admin only)
+  resetDemo: async (demoId: string, resetReason: string) => {
+    try {
+      const response = await fetch(`/api/data/demos/${demoId}/reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ resetReason })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Error resetting demo:', error);
+      return { success: false, error: 'Failed to reset demo' };
+    }
+  },
+
+  // Bulk complete demo (all 5 steps at once)
+  bulkCompleteDemo: async (demoId: string, data: {
+    isApplicable: boolean;
+    nonApplicableReason?: string;
+    usageStatus?: string;
+    scheduledDate?: string;
+    scheduledTime?: string;
+    conductedBy?: string;
+    completionNotes?: string;
+    conversionStatus?: string;
+    nonConversionReason?: string;
+  }) => {
+    try {
+      const response = await fetch(`/api/data/demos/${demoId}/bulk-complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(data)
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Error bulk completing demo:', error);
+      return { success: false, error: 'Failed to bulk complete demo' };
     }
   },
 

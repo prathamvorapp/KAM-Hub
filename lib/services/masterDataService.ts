@@ -33,7 +33,7 @@ export const masterDataService = {
     page?: number;
     limit?: number;
   }) {
-    const { userProfile, search, page = 1, limit = 999999 } = params;
+    const { userProfile, search, page = 1, limit = 1000 } = params; // Changed default limit to 1000
     
     let query = getSupabaseAdmin().from('master_data').select('*', { count: 'exact' });
     
@@ -58,16 +58,13 @@ export const masterDataService = {
           .in('role', ['agent', 'Agent']) as { data: Array<{ email: string }> | null; error: any };
         
         const agentEmails = teamMembers?.map(m => m.email) || [];
-        // console.log(`👥 Team Lead filter - showing brands for team ${userProfile.team_name}:`, agentEmails);
-        if (agentEmails.length > 0) {
-          query = query.in('kam_email_id', agentEmails);
-        } else {
-          // If no agents in team, return no records
-          query = query.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
-        }
+        // Include Team Lead's own email to show brands directly assigned to them
+        const allEmails = [...agentEmails, userProfile.email];
+        // console.log(`👥 Team Lead filter - showing brands for team ${userProfile.team_name} + Team Lead:`, allEmails);
+        query = query.in('kam_email_id', allEmails);
       } else {
-        // Team Lead with no team_name, return no records
-        query = query.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
+        // Team Lead with no team_name, show only their own brands
+        query = query.eq('kam_email_id', userProfile.email);
       }
     } else if (normalizedRole === 'admin') {
       // console.log(`👑 Admin - showing all brands`);
@@ -77,33 +74,38 @@ export const masterDataService = {
       query = query.eq('kam_email_id', 'NON_EXISTENT_EMAIL'); // Deny for unknown roles
     }
     
-    // FIX: Add explicit limit to avoid Supabase default 1000 row limit
-    const { data: allRecords, count } = await query.limit(10000) as { data: MasterData[] | null; count: number | null };
-    // console.log(`📊 Master Data query returned ${allRecords?.length || 0} records`);
-    let records = allRecords || [];
-    
-    // Apply search filter
+    // Apply search filter at DATABASE level (not in-memory)
     if (search) {
       const searchTerm = search.toLowerCase();
-      records = records.filter(record => 
-        record.brand_name.toLowerCase().includes(searchTerm) ||
-        record.kam_name.toLowerCase().includes(searchTerm) ||
-        record.kam_email_id.toLowerCase().includes(searchTerm) ||
-        record.zone.toLowerCase().includes(searchTerm) ||
-        (record.brand_email_id && record.brand_email_id.toLowerCase().includes(searchTerm))
-      );
+      query = query.or(`brand_name.ilike.%${searchTerm}%,kam_name.ilike.%${searchTerm}%,kam_email_id.ilike.%${searchTerm}%,zone.ilike.%${searchTerm}%,brand_email_id.ilike.%${searchTerm}%`);
+      console.log(`🔍 Applying database search filter: "${search}"`);
     }
     
-    const total = records.length;
+    // Apply pagination at DATABASE level BEFORE executing
     const startIndex = (page - 1) * limit;
-    const paginatedRecords = records.slice(startIndex, startIndex + limit);
+    const endIndex = startIndex + limit - 1;
+    
+    // Execute query with pagination and count
+    const { data: records, error, count: totalCount } = await query.range(startIndex, endIndex);
+    
+    if (error) {
+      console.error('❌ Error fetching master data:', error);
+      return { data: [], total: 0, page, limit, total_pages: 0 };
+    }
+    
+    const total = totalCount || 0;
+    const paginatedRecords = records || [];
+    const totalPages = Math.ceil(total / limit);
+    
+    console.log(`📊 Total records matching criteria: ${total}`);
+    console.log(`📄 Pagination: page=${page}, limit=${limit}, range=[${startIndex}, ${endIndex}], total_pages=${totalPages}, returning ${paginatedRecords.length} records`);
     
     return {
       data: paginatedRecords,
       total,
       page,
       limit,
-      total_pages: Math.ceil(total / limit),
+      total_pages: totalPages,
     };
   },
 
@@ -235,13 +237,12 @@ export const masterDataService = {
           .in('role', ['agent', 'Agent']) as { data: Array<{ email: string }> | null; error: any };
         
         const agentEmails = teamMembers?.map(m => m.email) || [];
-        if (agentEmails.length > 0) {
-          query = query.in('kam_email_id', agentEmails);
-        } else {
-          query = query.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
-        }
+        // Include Team Lead's own email to show brands directly assigned to them
+        const allEmails = [...agentEmails, userProfile.email];
+        query = query.in('kam_email_id', allEmails);
       } else {
-        query = query.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
+        // Team Lead with no team_name, show only their own brands
+        query = query.eq('kam_email_id', userProfile.email);
       }
     } else if (normalizedRole === 'admin') {
       // Admin sees all

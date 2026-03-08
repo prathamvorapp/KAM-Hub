@@ -61,18 +61,59 @@ export const visitService = {
     visitQuery = visitQuery.eq('visit_year', currentYearStr);
     visitQuery = visitQuery.eq('agent_id', agentProfile.email);
 
-    // Fetch brands directly with email filter
-    const { data: agentBrands } = await getSupabaseAdmin()
-      .from('master_data')
-      .select('*')
-      .eq('kam_email_id', agentProfile.email)
-      .limit(10000);
+    // Fetch brands directly with email filter using pagination
+    let agentBrands: any[] = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
     
-    brandFilter = agentBrands?.map((brand: any) => brand.brand_name) || [];
+    while (hasMore) {
+      const { data: pageData, error: brandsError } = await getSupabaseAdmin()
+        .from('master_data')
+        .select('*')
+        .eq('kam_email_id', agentProfile.email)
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+      
+      if (brandsError) {
+        console.error(`❌ Error fetching brands for ${agentProfile.email}:`, brandsError);
+        throw new Error(`Failed to fetch brands: ${brandsError.message}`);
+      }
+      
+      if (pageData && pageData.length > 0) {
+        agentBrands = [...agentBrands, ...pageData];
+        hasMore = pageData.length === pageSize;
+        page++;
+      } else {
+        hasMore = false;
+      }
+    }
     
-    const { data: allVisits } = await visitQuery;
+    brandFilter = agentBrands.map((brand: any) => brand.brand_name) || [];
     
-    const visits = allVisits || [];
+    // Fetch all visits using pagination
+    let allVisits: any[] = [];
+    page = 0;
+    hasMore = true;
+    
+    while (hasMore) {
+      const { data: pageData, error: visitsError } = await visitQuery
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+      
+      if (visitsError) {
+        console.error(`❌ Error fetching visits for ${agentProfile.email}:`, visitsError);
+        throw new Error(`Failed to fetch visits: ${visitsError.message}`);
+      }
+      
+      if (pageData && pageData.length > 0) {
+        allVisits = [...allVisits, ...pageData];
+        hasMore = pageData.length === pageSize;
+        page++;
+      } else {
+        hasMore = false;
+      }
+    }
+    
+    const visits = allVisits;
     const total_brands = brandFilter.length;
     const nonCancelledVisits = visits.filter((v: any) => v.visit_status !== 'Cancelled'); 
     

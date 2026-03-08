@@ -431,15 +431,40 @@ export const healthCheckService = {
       brandsQuery = brandsQuery.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
     }
     
-    // FIX: Add explicit limit to avoid Supabase default 1000 row limit
-    const { data: allBrands, error: brandsError } = await brandsQuery.limit(10000) as { data: any[] | null; error: any };
+    // Fetch ALL brands using proper pagination (no Supabase limit)
+    let allBrands: any[] = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
     
-    if (brandsError) {
-      console.error(`❌ [getBrandsForAssessment] Error fetching brands:`, brandsError);
-      throw brandsError;
+    while (hasMore) {
+      const start = page * pageSize;
+      const end = start + pageSize - 1;
+      
+      const { data: pageBrands, error: brandsError } = await brandsQuery
+        .range(start, end);
+      
+      if (brandsError) {
+        console.error(`❌ [getBrandsForAssessment] Error fetching brands page ${page}:`, brandsError);
+        throw brandsError;
+      }
+      
+      if (pageBrands && pageBrands.length > 0) {
+        allBrands = [...allBrands, ...pageBrands];
+        hasMore = pageBrands.length === pageSize;
+        page++;
+      } else {
+        hasMore = false;
+      }
+      
+      // Safety limit
+      if (page > 100) {
+        console.warn('⚠️ [getBrandsForAssessment] Reached maximum page limit (100)');
+        break;
+      }
     }
     
-    // console.log(`📊 [getBrandsForAssessment] Total brands for user: ${allBrands?.length || 0}`);
+    console.log(`📊 [getBrandsForAssessment] Total brands fetched: ${allBrands.length} (in ${page} pages)`);
     
     if (!allBrands || allBrands.length === 0) {
       // console.log(`⚠️ [getBrandsForAssessment] No brands found for user`);

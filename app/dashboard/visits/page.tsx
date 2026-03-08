@@ -14,7 +14,7 @@ import DashboardLayout from '@/components/Layout/DashboardLayout'
 import ScheduleVisitModal from '@/components/modals/ScheduleVisitModal'
 import RescheduleVisitModal from '@/components/modals/RescheduleVisitModal'
 import BackdatedVisitModal from '@/components/modals/BackdatedVisitModal'
-import EnhancedSubmitMomModal from '@/components/modals/EnhancedSubmitMomModal' // Enhanced MOM modal with CSV support
+import EnhancedSubmitMomModalWithDemos from '@/components/modals/EnhancedSubmitMomModalWithDemos' // Enhanced MOM modal with demos
 import ResubmitMomModal from '@/components/modals/ResubmitMomModal' // Resubmission modal
 import { PlusCircle, Calendar, CheckCircle, XCircle, Clock, ThumbsUp, RotateCcw, CalendarPlus } from 'lucide-react'
 
@@ -37,6 +37,7 @@ export interface Visit {
   _id: Id<"visits">;
   visit_id: string; // The string ID used in mutations
   brand_name: string;
+  brand_id?: string; // Optional - will be looked up from master_data if not present
   agent_id?: string; // Agent ID (email)
   agent_name?: string; // Agent name for MOM submission
   scheduled_date: string;
@@ -87,7 +88,13 @@ export default function VisitManagementPage() {
   const [isVisitsSearching, setIsVisitsSearching] = useState(false);
   const [visitsSearchTimeout, setVisitsSearchTimeout] = useState<NodeJS.Timeout | null>(null);
   
-  const brandsPerChunk = 10; // Load 10 brands at a time
+  // Pagination state for fetching brands in chunks
+  const [isFetchingMoreBrands, setIsFetchingMoreBrands] = useState(false);
+  const [hasMoreBrands, setHasMoreBrands] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  
+  const brandsPerChunk = 10; // Load 10 brands at a time for display
+  const brandsPerFetch = 1000; // Fetch 1000 brands per API call
 
   // Schedule Modal State
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
@@ -119,55 +126,13 @@ export default function VisitManagementPage() {
 
   const currentYear = new Date().getFullYear().toString();
 
-  const loadData = useCallback(async (search = '', visitsSearch = '', shouldRefreshStats = false) => {
-    if (!userProfile) { // Simplified check
-      // console.log('❌ [Visits] No userProfile, cannot load data');
-      return;
-    }
-    
-    // Prevent concurrent loads
-    if (loadingRef.current) {
-      // console.log('⏳ [Visits] Load already in progress, skipping...')
-      return
-    }
-
-    loadingRef.current = true
-
+  // Fetch brands in chunks of 1000
+  const fetchBrandsChunk = useCallback(async (page: number, search = '') => {
     try {
-      setLoading(true);
-      setVisitStatsLoading(shouldRefreshStats); // Only show stats loading if we're refreshing stats
-      setIsSearching(!!search);
-      setIsVisitsSearching(!!visitsSearch);
-
-      // console.log('🔄 [Visits] Loading data for user:', userProfile.email, 'search:', search, 'visitsSearch:', visitsSearch, 'shouldRefreshStats:', shouldRefreshStats);
-
-      const visitsParams: { search: string; email?: string; teamName?: string } = {
-        search: visitsSearch,
-      };
-
-      // Add email and teamName to visitsParams if the user is a Team Lead
-      const isTeamLead = userProfile?.role?.toLowerCase().includes('team') || userProfile?.role?.toLowerCase().includes('lead');
-      if (isTeamLead && userProfile?.teamName) {
-        visitsParams.email = userProfile.email; // Pass current user's email
-        visitsParams.teamName = userProfile.teamName; // Pass team name
-      } else if (userProfile?.role?.toLowerCase() === 'agent') {
-        visitsParams.email = userProfile.email; // Agents only see their own visits
-      }
-      // Admins should see all visits, so no email/teamName filter needed for them
-
-
-      const [brandsResponse, visitsResponse] = await Promise.all([
-        api.getMasterData(1, 999999, search), // Fetch all brands
-        api.getVisits(visitsParams)
-      ]);
+      const response = await api.getMasterData(page, brandsPerFetch, search);
       
-      // console.log('✅ [Visits] Data loaded successfully');
-      
-      // Handle all brands response
-      if (brandsResponse.data && brandsResponse.data.data) {
-        const fetchedBrands = brandsResponse.data.data || [];
-        
-        // Map the snake_case API response to camelCase Brand interface
+      if (response.data && response.data.data) {
+        const fetchedBrands = response.data.data || [];
         const mappedBrands: Brand[] = fetchedBrands.map((brand: any) => ({
           _id: brand.id || brand._id,
           brandName: brand.brand_name || brand.brandName,
@@ -175,86 +140,160 @@ export default function VisitManagementPage() {
           zone: brand.zone
         }));
         
-        // Store all brands
-        setAllBrands(mappedBrands);
-        setTotalBrands(mappedBrands.length);
+        const totalPages = response.data.total_pages || 1;
         
-        // Display first chunk
-        setVisibleBrandsCount(brandsPerChunk);
-        setDisplayedBrands(mappedBrands.slice(0, brandsPerChunk));
-      } else {
-        // Fallback for old API response format
-        const brandsData = Array.isArray(brandsResponse.data) ? brandsResponse.data as any[] : [];
-        
-        // Map the snake_case API response to camelCase Brand interface
-        const mappedBrands: Brand[] = brandsData.map((brand: any) => ({
-          _id: brand.id || brand._id,
-          brandName: brand.brand_name || brand.brandName,
-          kamEmailId: brand.kam_email_id || brand.kamEmailId,
-          zone: brand.zone
-        }));
-        
-        // Store all brands
-        setAllBrands(mappedBrands);
-        setTotalBrands(mappedBrands.length);
-        
-        // Display first chunk
-        setVisibleBrandsCount(brandsPerChunk);
-        setDisplayedBrands(mappedBrands.slice(0, brandsPerChunk));
+        return {
+          brands: mappedBrands,
+          total: response.data.total || 0,
+          totalPages: totalPages,
+          currentPage: response.data.page || page,
+          hasMore: page < totalPages
+        };
       }
       
-      // console.log('🔍 [Visits] Raw visits response from API:', visitsResponse); // ADDED LOG
+      return { brands: [], total: 0, totalPages: 0, currentPage: page, hasMore: false };
+    } catch (error) {
+      console.error('❌ Error fetching brands chunk:', error);
+      return { brands: [], total: 0, totalPages: 0, currentPage: page, hasMore: false };
+    }
+  }, [brandsPerFetch]);
+
+  // Fetch all brands in chunks
+  const fetchAllBrands = useCallback(async (search = '') => {
+    setIsFetchingMoreBrands(true);
+    let page = 1;
+    let allFetchedBrands: Brand[] = [];
+    let totalCount = 0;
+
+    try {
+      // Fetch first page to get total pages
+      const firstResult = await fetchBrandsChunk(page, search);
+      
+      if (firstResult.brands.length > 0) {
+        allFetchedBrands = firstResult.brands;
+        totalCount = firstResult.total;
+        console.log(`📊 Page 1: ${firstResult.brands.length} brands, Total: ${totalCount}, Pages: ${firstResult.totalPages}`);
+      }
+      
+      // If there are more pages, fetch them
+      if (firstResult.hasMore && firstResult.totalPages > 1) {
+        for (let p = 2; p <= firstResult.totalPages; p++) {
+          const result = await fetchBrandsChunk(p, search);
+          
+          if (result.brands.length > 0) {
+            allFetchedBrands = [...allFetchedBrands, ...result.brands];
+            console.log(`📊 Page ${p}: ${result.brands.length} brands (Total so far: ${allFetchedBrands.length})`);
+          }
+          
+          // Safety limit to prevent infinite loops
+          if (p > 100) {
+            console.warn('⚠️ Reached maximum page limit (100)');
+            break;
+          }
+        }
+      }
+
+      console.log(`✅ Finished loading ${allFetchedBrands.length} brands (expected: ${totalCount})`);
+      return { brands: allFetchedBrands, total: totalCount };
+    } catch (error) {
+      console.error('❌ Error in fetchAllBrands:', error);
+      return { brands: allFetchedBrands, total: allFetchedBrands.length };
+    } finally {
+      setIsFetchingMoreBrands(false);
+    }
+  }, [fetchBrandsChunk]);
+
+  const loadData = useCallback(async (search = '', visitsSearch = '', shouldRefreshStats = false) => {
+    if (!userProfile) {
+      return;
+    }
+    
+    // Prevent concurrent loads
+    if (loadingRef.current) {
+      return;
+    }
+
+    loadingRef.current = true;
+
+    try {
+      setLoading(true);
+      setVisitStatsLoading(shouldRefreshStats);
+      setIsSearching(!!search);
+      setIsVisitsSearching(!!visitsSearch);
+
+      const visitsParams: { search: string; email?: string; teamName?: string } = {
+        search: visitsSearch,
+      };
+
+      const isTeamLead = userProfile?.role?.toLowerCase().includes('team') || userProfile?.role?.toLowerCase().includes('lead');
+      if (isTeamLead && userProfile?.teamName) {
+        visitsParams.email = userProfile.email;
+        visitsParams.teamName = userProfile.teamName;
+      } else if (userProfile?.role?.toLowerCase() === 'agent') {
+        visitsParams.email = userProfile.email;
+      }
+
+      // Fetch brands in chunks and visits in parallel
+      const [brandsResult, visitsResponse] = await Promise.all([
+        fetchAllBrands(search),
+        api.getVisits(visitsParams)
+      ]);
+      
+      // Store all brands
+      setAllBrands(brandsResult.brands);
+      setTotalBrands(brandsResult.total || brandsResult.brands.length);
+      setCurrentPage(1);
+      setHasMoreBrands(false); // All brands are now loaded
+      
+      // Display first chunk
+      setVisibleBrandsCount(brandsPerChunk);
+      setDisplayedBrands(brandsResult.brands.slice(0, brandsPerChunk));
+      
+      // console.log('🔍 [Visits] Raw visits response from API:', visitsResponse);
       
       // Handle visits response - check multiple possible response structures
       let visitsData = [];
       if (visitsResponse.page) {
-        // Paginated format: { success: true, page: [...], isDone, continueCursor, total }
         visitsData = visitsResponse.page;
       } else if (visitsResponse.success && visitsResponse.data) {
-        // New API format: { success: true, data: [...] }
         visitsData = Array.isArray(visitsResponse.data) ? visitsResponse.data : [];
       } else if (visitsResponse.data?.page) {
-        // Nested paginated format: { data: { page: [...], isDone, continueCursor } }
         visitsData = visitsResponse.data.page;
       } else if (Array.isArray(visitsResponse.data)) {
-        // Direct array format
         visitsData = visitsResponse.data;
       }
       
       setVisits(visitsData);
+      setVisitStats({});
       
-      // Note: VisitStatistics component will load its own data via API
-      setVisitStats({}); // Set empty object to indicate data loading is complete
-      
-      // Only refresh statistics if explicitly requested (e.g., after creating/updating visits)
       if (shouldRefreshStats) {
-        setRefreshKey(prev => prev + 1); // Trigger statistics refresh
-        // console.log('📊 [Visits] Refreshing visit statistics');
+        setRefreshKey(prev => prev + 1);
       }
     } catch (error) {
       console.error("❌ [Visits] Failed to load data:", error);
-      setVisitStats(null); // Explicitly set to null on error
+      setVisitStats(null);
       
-      // Only refresh statistics if explicitly requested
       if (shouldRefreshStats) {
-        setRefreshKey(prev => prev + 1); // Trigger statistics refresh even on error
+        setRefreshKey(prev => prev + 1);
       }
     } finally {
       setLoading(false);
       setVisitStatsLoading(false);
       setIsSearching(false);
       setIsVisitsSearching(false);
-      loadingRef.current = false
+      loadingRef.current = false;
     }
-  }, [userProfile?.id, brandsPerChunk]); // Updated dependency array
+  }, [userProfile?.id, brandsPerChunk, fetchAllBrands]);
 
   // Load more brands when scrolling
   const loadMoreBrands = useCallback(() => {
+    if (isFetchingMoreBrands) return; // Prevent loading while already fetching
+    
     const nextCount = visibleBrandsCount + brandsPerChunk;
     setVisibleBrandsCount(nextCount);
     setDisplayedBrands(allBrands.slice(0, nextCount));
     // console.log(`📊 Loading more brands: showing ${Math.min(nextCount, allBrands.length)} of ${allBrands.length}`);
-  }, [allBrands, visibleBrandsCount, brandsPerChunk]);
+  }, [allBrands, visibleBrandsCount, brandsPerChunk, isFetchingMoreBrands]);
 
   // Infinite scroll effect - horizontal scrolling
   useEffect(() => {
@@ -442,6 +481,7 @@ export default function VisitManagementPage() {
       nextSteps: string;
     }>;
     meeting_summary?: string;
+    demos?: Array<any>; // Add demos support
   }) => {
     if (!selectedVisitForMom) {
       alert("Error: No visit selected for MOM submission.");
@@ -451,13 +491,20 @@ export default function VisitManagementPage() {
     try {
       // console.log('📝 Submitting MOM for visit:', selectedVisitForMom.visit_id);
       
-      // Submit the enhanced MOM with open points
-      const result = await api.submitVisitMOM({
+      // Use the enhanced API if demos are included
+      const apiMethod = formData.demos && formData.demos.length > 0 
+        ? api.submitVisitMOMWithDemos 
+        : api.submitVisitMOM;
+      
+      const result = await apiMethod({
         visit_id: selectedVisitForMom.visit_id,
         created_by: userProfile?.email || '',
         brand_name: selectedVisitForMom.brand_name,
         agent_name: selectedVisitForMom.agent_name || userProfile?.fullName || 'Unknown Agent',
         open_points: formData.open_points,
+        csv_topics: formData.csv_topics,
+        meeting_summary: formData.meeting_summary,
+        demos: formData.demos,
         mom_shared: "Yes", // ✅ FIX: Add mom_shared to trigger approval workflow
       });
 
@@ -470,7 +517,10 @@ export default function VisitManagementPage() {
       handleCloseMomModal();
       await loadData('', '', true); // Refresh stats after submitting MOM
       
-      alert('MOM submitted successfully! Waiting for Team Lead approval.');
+      const demoMessage = formData.demos && formData.demos.length > 0 
+        ? ` ${formData.demos.length} product demo(s) have been recorded. All 8 products have been initialized for this brand.` 
+        : '';
+      alert(`MOM submitted successfully! Waiting for Team Lead approval.${demoMessage}`);
     } catch (error: any) {
       console.error("Failed to submit MOM:", error);
       alert(`Error submitting MOM: ${error.message || error}`);
@@ -870,7 +920,21 @@ export default function VisitManagementPage() {
               )}
             </div>
 
-            {displayedBrands.length > 0 ? (
+            {loading || isFetchingMoreBrands ? (
+              <div className="text-center py-12">
+                <div className="flex flex-col items-center justify-center gap-4">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+                  <p className="text-gray-600">
+                    {isFetchingMoreBrands ? 'Loading all brands...' : 'Loading brands...'}
+                  </p>
+                  {isFetchingMoreBrands && allBrands.length > 0 && (
+                    <p className="text-sm text-gray-500">
+                      Loaded {allBrands.length} brands so far...
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : displayedBrands.length > 0 ? (
               <>
                 {/* Horizontal scrolling container */}
                 <div 
@@ -1200,11 +1264,12 @@ export default function VisitManagementPage() {
 
     {/* Render modals outside of DashboardLayout for proper positioning */}
     {selectedVisitForMom && ( // Render MOM modal only when a visit is selected
-      <EnhancedSubmitMomModal
+      <EnhancedSubmitMomModalWithDemos
         isOpen={isMomModalOpen}
         onClose={handleCloseMomModal}
         onSubmit={handleSubmitMom}
         visitId={selectedVisitForMom._id} // Pass the Convex Id
+        brandId={selectedVisitForMom.brand_id} // Pass brand ID for demo creation
         brandName={selectedVisitForMom.brand_name}
         agentName={selectedVisitForMom.agent_name || userProfile?.fullName || 'Unknown Agent'}
         visitCompletionDate={selectedVisitForMom.visit_date || selectedVisitForMom.scheduled_date} // Use visit_date if available, fallback to scheduled_date

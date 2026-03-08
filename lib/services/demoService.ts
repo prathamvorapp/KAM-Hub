@@ -662,4 +662,262 @@ export const demoService = {
     
     return stats;
   },
+  // Reset/Revert Demo (Team Lead and Admin only)
+  async resetDemo(params: {
+    demoId: string;
+    resetReason: string;
+  }, rawProfile: UserProfile) {
+    const userProfile = normalizeUserProfile(rawProfile);
+    const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
+
+    if (normalizedRole !== "team_lead" && normalizedRole !== "admin") {
+      throw new Error(`Access denied: User ${userProfile.email} (Role: ${userProfile.role}) is not authorized to reset demos`);
+    }
+
+    const { data: demo } = await getSupabaseAdmin()
+      .from('demos')
+      .select('*')
+      .eq('demo_id', params.demoId)
+      .single() as { data: Demo | null; error: any };
+
+    if (!demo) {
+      throw new Error("Demo not found");
+    }
+
+    if (normalizedRole === "team_lead") {
+      const teamName = userProfile.team_name || userProfile.teamName;
+      if (teamName !== demo.team_name) {
+        throw new Error(`Access denied: Team Lead ${userProfile.email} can only reset demos from their team`);
+      }
+    }
+
+    const now = new Date().toISOString();
+
+    // Store reset history (if column exists)
+    const resetHistory = demo.reset_history || [];
+    resetHistory.push({
+      reset_at: now,
+      reset_by: userProfile.email,
+      reset_by_role: userProfile.role,
+      reason: params.resetReason,
+      previous_state: {
+        current_status: demo.current_status,
+        workflow_completed: demo.workflow_completed,
+        is_applicable: demo.is_applicable,
+        usage_status: demo.usage_status,
+        demo_scheduled_date: demo.demo_scheduled_date,
+        demo_completed: demo.demo_completed,
+        conversion_status: demo.conversion_status,
+      }
+    });
+
+    // Prepare update object
+    const updateData: any = {
+      // Reset all workflow fields
+      is_applicable: null,
+      non_applicable_reason: null,
+      step1_completed_at: null,
+      usage_status: null,
+      step2_completed_at: null,
+      demo_scheduled_date: null,
+      demo_scheduled_time: null,
+      demo_rescheduled_count: 0,
+      demo_scheduling_history: [],
+      demo_completed: false,
+      demo_completed_date: null,
+      demo_conducted_by: null,
+      demo_completion_notes: null,
+      conversion_status: null,
+      non_conversion_reason: null,
+      conversion_decided_at: null,
+      current_status: "Step 1 Pending",
+      workflow_completed: false,
+      updated_at: now,
+    };
+
+    // Only add reset_history if the column exists in the demo object
+    if ('reset_history' in demo) {
+      updateData.reset_history = resetHistory;
+    }
+
+    // Reset to initial state
+    const { error: updateError } = await (getSupabaseAdmin()
+      .from('demos') as any)
+      .update(updateData)
+      .eq('demo_id', params.demoId);
+
+    if (updateError) {
+      console.error('❌ [resetDemo] Update failed:', updateError);
+      throw new Error(`Failed to reset demo: ${updateError.message}`);
+    }
+
+    console.log('✅ [resetDemo] Demo reset successfully:', {
+      demoId: params.demoId,
+      previousStatus: demo.current_status,
+      newStatus: 'Step 1 Pending',
+      resetBy: userProfile.email
+    });
+
+    return {
+      success: true,
+      resetBy: userProfile.email,
+      resetByRole: userProfile.role,
+      message: "Demo has been reset to initial state"
+    };
+  },
+
+  // Bulk Complete Demo Workflow (All 5 steps at once)
+  async bulkCompleteDemo(params: {
+    demoId: string;
+    // Step 1
+    isApplicable: boolean;
+    nonApplicableReason?: string;
+    // Step 2
+    usageStatus?: string;
+    // Step 3
+    scheduledDate?: string;
+    scheduledTime?: string;
+    // Step 4
+    conductedBy?: string;
+    completionNotes?: string;
+    // Step 5
+    conversionStatus?: string;
+    nonConversionReason?: string;
+  }, rawProfile: UserProfile) {
+    const userProfile = normalizeUserProfile(rawProfile);
+
+    const { data: demo } = await getSupabaseAdmin()
+      .from('demos')
+      .select('*')
+      .eq('demo_id', params.demoId)
+      .single() as { data: Demo | null; error: any };
+
+    if (!demo) {
+      throw new Error("Demo not found");
+    }
+
+    // Authorization check
+    const isAuthorized = await demoService._authorizeDemoAccess(demo, userProfile);
+    if (!isAuthorized) {
+      throw new Error(`Access denied: User ${userProfile.email} is not authorized to modify demo ${params.demoId}`);
+    }
+
+    // Validate that demo is in initial state
+    if (demo.step1_completed_at) {
+      throw new Error("Demo workflow already started. Use individual step updates or reset the demo first.");
+    }
+
+    const now = new Date().toISOString();
+    let finalStatus = "";
+    let workflowCompleted = false;
+
+    // Validate Step 1
+    if (!params.isApplicable) {
+      if (!params.nonApplicableReason) {
+        throw new Error("Reason required when marking as not applicable");
+      }
+      finalStatus = "Not Applicable";
+      workflowCompleted = true;
+
+      // Update with Step 1 only
+      await (getSupabaseAdmin()
+        .from('demos') as any)
+        .update({
+          is_applicable: params.isApplicable,
+          non_applicable_reason: params.nonApplicableReason,
+          step1_completed_at: now,
+          current_status: finalStatus,
+          workflow_completed: workflowCompleted,
+          updated_at: now,
+        })
+        .eq('demo_id', params.demoId);
+
+      return { success: true, finalStatus, message: "Demo marked as Not Applicable" };
+    }
+
+    // Validate Step 2
+    if (!params.usageStatus) {
+      throw new Error("Usage status is required when product is applicable");
+    }
+
+    if (params.usageStatus === "Already Using") {
+      finalStatus = "Already Using";
+      workflowCompleted = true;
+
+      // Update with Steps 1 & 2
+      await (getSupabaseAdmin()
+        .from('demos') as any)
+        .update({
+          is_applicable: params.isApplicable,
+          step1_completed_at: now,
+          usage_status: params.usageStatus,
+          step2_completed_at: now,
+          current_status: finalStatus,
+          workflow_completed: workflowCompleted,
+          updated_at: now,
+        })
+        .eq('demo_id', params.demoId);
+
+      return { success: true, finalStatus, message: "Demo marked as Already Using" };
+    }
+
+    // Validate Steps 3, 4, 5 for Demo Pending flow
+    if (!params.scheduledDate || !params.scheduledTime) {
+      throw new Error("Demo date and time are required");
+    }
+
+    if (!params.conductedBy) {
+      throw new Error("Demo conductor is required");
+    }
+
+    if (!DEMO_CONDUCTORS.includes(params.conductedBy as any)) {
+      throw new Error("Invalid demo conductor");
+    }
+
+    if (!params.conversionStatus) {
+      throw new Error("Conversion status is required");
+    }
+
+    if (params.conversionStatus === "Not Converted" && !params.nonConversionReason) {
+      throw new Error("Reason required when marking as not converted");
+    }
+
+    finalStatus = params.conversionStatus;
+    workflowCompleted = true;
+
+    // Update with all 5 steps
+    await (getSupabaseAdmin()
+      .from('demos') as any)
+      .update({
+        // Step 1
+        is_applicable: params.isApplicable,
+        step1_completed_at: now,
+        // Step 2
+        usage_status: params.usageStatus,
+        step2_completed_at: now,
+        // Step 3
+        demo_scheduled_date: params.scheduledDate,
+        demo_scheduled_time: params.scheduledTime,
+        // Step 4
+        demo_completed: true,
+        demo_completed_date: now,
+        demo_conducted_by: params.conductedBy,
+        demo_completion_notes: params.completionNotes,
+        // Step 5
+        conversion_status: params.conversionStatus,
+        non_conversion_reason: params.nonConversionReason,
+        conversion_decided_at: now,
+        // Final state
+        current_status: finalStatus,
+        workflow_completed: workflowCompleted,
+        updated_at: now,
+      })
+      .eq('demo_id', params.demoId);
+
+    return {
+      success: true,
+      finalStatus,
+      message: `Demo workflow completed with status: ${finalStatus}`
+    };
+  },
 };
