@@ -924,4 +924,102 @@ export const visitService = {
     if (error) throw error;
     return { success: true };
   },
+
+  // Transfer Brand Visits (Admin/Team Lead only)
+  async transferBrandVisits(params: {
+    brandId: string;
+    fromAgentEmail: string;
+    toAgentEmail: string;
+    toAgentName: string;
+    toTeamName?: string;
+    transferYear: string;
+    transferReason: string;
+    transferredBy: string;
+  }, rawProfile: UserProfile) {
+    const userProfile = normalizeUserProfile(rawProfile);
+    const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
+
+    // All authenticated users can transfer brand visits
+    console.log(`✅ [Visit Transfer] User ${userProfile.email} (${userProfile.role}) authorized to transfer visits`);
+
+    const now = new Date().toISOString();
+
+    // Get all visits for the brand in the specified year
+    const { data: visits, error: fetchError } = await getSupabaseAdmin()
+      .from('visits')
+      .select('*')
+      .eq('brand_id', params.brandId)
+      .eq('visit_year', params.transferYear);
+
+    if (fetchError) {
+      throw new Error(`Failed to fetch visits: ${fetchError.message}`);
+    }
+
+    if (!visits || visits.length === 0) {
+      console.log(`⚠️ No visits found for brand ${params.brandId} in year ${params.transferYear}`);
+      return {
+        success: true,
+        totalVisits: 0,
+        transferredCount: 0,
+        skippedCount: 0,
+        errorCount: 0,
+        message: `No visits to transfer for year ${params.transferYear}`
+      };
+    }
+
+    // ONLY transfer PENDING visits (not completed ones)
+    const pendingVisits = visits.filter((v: any) => v.visit_status !== 'Completed');
+    const completedVisits = visits.filter((v: any) => v.visit_status === 'Completed');
+
+    console.log(`🔄 Transferring ${pendingVisits.length} pending visits (${completedVisits.length} completed visits will stay with original KAM)`);
+
+    // Update each PENDING visit only
+    let successCount = 0;
+    let errorCount = 0;
+    let skippedCount = completedVisits.length;
+
+    for (const visit of pendingVisits) {
+      const visitRecord = visit as any;
+      const transferEntry = {
+        from_agent_id: params.fromAgentEmail,
+        to_agent_id: params.toAgentEmail,
+        transferred_at: now,
+        transferred_by: params.transferredBy,
+        reason: params.transferReason,
+        visit_status_at_transfer: visitRecord.visit_status,
+        was_completed: false
+      };
+
+      const updatedHistory = [...(visitRecord.transfer_history || []), transferEntry];
+
+      const { error: updateError } = await (getSupabaseAdmin()
+        .from('visits') as any)
+        .update({
+          agent_id: params.toAgentEmail,
+          agent_name: params.toAgentName,
+          team_name: params.toTeamName || visitRecord.team_name,
+          transfer_history: updatedHistory,
+          updated_at: now
+        })
+        .eq('visit_id', visitRecord.visit_id);
+
+      if (updateError) {
+        console.error(`❌ Failed to transfer visit ${visitRecord.visit_id}:`, updateError);
+        errorCount++;
+      } else {
+        successCount++;
+      }
+    }
+
+    console.log(`✅ Transfer complete: ${successCount} transferred, ${skippedCount} kept with original KAM, ${errorCount} errors`);
+
+    return {
+      success: errorCount === 0,
+      totalVisits: visits.length,
+      transferredCount: successCount,
+      skippedCount: skippedCount,
+      errorCount,
+      message: `Transferred ${successCount} pending visits. ${skippedCount} completed visits remain with ${params.fromAgentEmail}`
+    };
+  },
 };

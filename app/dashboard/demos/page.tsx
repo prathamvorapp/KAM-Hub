@@ -7,6 +7,7 @@ import DemoStatistics from "@/components/DemoStatistics";
 import DashboardLayout from "@/components/Layout/DashboardLayout";
 import Pagination from "@/components/Pagination";
 import BulkDemoForm from "@/components/BulkDemoForm";
+import { useRouter, useSearchParams } from "next/navigation";
 
 // Product constants
 const PRODUCTS = [
@@ -91,6 +92,8 @@ interface BrandWithDemos extends Brand {
 
 export default function DemosPage() {
   const { userProfile } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [brands, setBrands] = useState<BrandWithDemos[]>([]);
   const [filteredBrands, setFilteredBrands] = useState<BrandWithDemos[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,10 +103,13 @@ export default function DemosPage() {
   const [formData, setFormData] = useState<any>({});
   const [showBulkForm, setShowBulkForm] = useState(false);
   
-  // Pagination and search states
-  const [currentPage, setCurrentPage] = useState(1);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [searchInput, setSearchInput] = useState(""); // Separate state for input field
+  // Pagination and search states - Initialize from URL params
+  const [currentPage, setCurrentPage] = useState(() => {
+    const pageParam = searchParams.get('page');
+    return pageParam ? parseInt(pageParam, 10) : 1;
+  });
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('search') || "");
+  const [searchInput, setSearchInput] = useState(() => searchParams.get('search') || ""); // Separate state for input field
   const [itemsPerPage] = useState(12); // Show 12 brands per page
   const [isSearching, setIsSearching] = useState(false);
 
@@ -138,6 +144,7 @@ export default function DemosPage() {
   const handleSearch = () => {
     setIsSearching(true);
     setSearchTerm(searchInput);
+    updateURL(1, searchInput); // Reset to page 1 and update URL
     setTimeout(() => setIsSearching(false), 300);
   };
 
@@ -145,6 +152,18 @@ export default function DemosPage() {
   const handleClearSearch = () => {
     setSearchInput("");
     setSearchTerm("");
+    updateURL(1, ""); // Reset to page 1 and clear search in URL
+  };
+
+  // Update URL with current page and search params
+  const updateURL = (page: number, search: string) => {
+    const params = new URLSearchParams();
+    if (page > 1) params.set('page', page.toString());
+    if (search) params.set('search', search);
+    
+    const queryString = params.toString();
+    const newUrl = queryString ? `?${queryString}` : window.location.pathname;
+    router.push(newUrl, { scroll: false });
   };
 
   // Handle Enter key press in search input
@@ -461,6 +480,7 @@ export default function DemosPage() {
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
+    updateURL(page, searchTerm); // Update URL with new page
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 

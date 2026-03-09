@@ -18,14 +18,16 @@ export async function GET(request: NextRequest) {
     }
 
     // Allow all authenticated users to access this endpoint (needed for CRM team filter)
-    // No role restriction
+    // Returns all active users (Agents, Team Leads, and Admins) who can be assigned brands
+    // This is used in brand assignment and transfer operations
 
     const supabase = getSupabaseAdmin();
 
+    // Get all active users (agents, team leads, and admins) who can be assigned brands
     const { data: agents, error: dbError } = await supabase
       .from('user_profiles')
       .select('*')
-      .in('role', ['agent', 'Agent'])
+      .in('role', ['agent', 'Agent', 'team_lead', 'Team Lead', 'admin', 'Admin'])
       .eq('is_active', true)
       .order('full_name');
 

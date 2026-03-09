@@ -292,6 +292,8 @@ export const visitServiceEnhanced = {
       demoRecord.demo_completed_date = now;
       demoRecord.demo_conducted_by = demoData.demo_conducted_by || 'Agent';
       demoRecord.demo_completion_notes = demoData.demo_completion_notes || '';
+      demoRecord.completed_by_agent_id = agentId;
+      demoRecord.completed_by_agent_name = agentName;
     }
 
     // Step 5: Conversion (if provided)
@@ -375,6 +377,8 @@ export const visitServiceEnhanced = {
         updateData.demo_completed_date = now;
         updateData.demo_conducted_by = demoData.demo_conducted_by || 'Agent';
         updateData.demo_completion_notes = demoData.demo_completion_notes || '';
+        updateData.completed_by_agent_id = existingDemo.agent_id;
+        updateData.completed_by_agent_name = existingDemo.agent_name;
         updateData.current_status = 'Step 5 Pending';
       }
     }

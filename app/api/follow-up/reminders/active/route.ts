@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-auth';
 import { churnService } from '@/lib/services';
-import NodeCache from 'node-cache';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
-
-const followUpCache = new NodeCache({ stdTTL: 120 }); // 2 minute cache
+export const revalidate = 0; // Disable caching
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,19 +18,7 @@ export async function GET(request: NextRequest) {
       }, { status: 401 });
     }
 
-    const cacheKey = `active_followups_${user.email}`;
-    const cachedData = followUpCache.get(cacheKey);
-    
-    if (cachedData) {
-      console.log(`📈 Active follow-ups served from cache for: ${user.email}`);
-      return NextResponse.json(cachedData, {
-        headers: {
-          'Cache-Control': 'public, max-age=120, s-maxage=120',
-        }
-      });
-    }
-
-    console.log(`📊 Getting active follow-ups for user: ${user.email}`);
+    console.log(`📊 Getting active follow-ups for user: ${user.email}, fullName: ${user.fullName}, role: ${user.role}`);
 
     const result = await churnService.getActiveFollowUps(undefined, user);
 
@@ -41,11 +27,13 @@ export async function GET(request: NextRequest) {
       data: result
     };
 
-    followUpCache.set(cacheKey, response);
-
     return NextResponse.json(response, {
       headers: {
-        'Cache-Control': 'public, max-age=120, s-maxage=120',
+        // CRITICAL: Use 'private' for user-specific data to prevent CDN/shared caching
+        // This prevents one user's data from being served to another user
+        'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
       }
     });
 

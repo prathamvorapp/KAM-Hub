@@ -10,6 +10,7 @@ export { demoService, PRODUCTS, DEMO_CONDUCTORS } from './demoService';
 export { healthCheckService } from './healthCheckService';
 export { momService } from './momService';
 export { masterDataService } from './masterDataService';
+export { brandTransferService } from './brandTransferService';
 
 // UserService is a class, export an instance
 import { UserService } from './userService';

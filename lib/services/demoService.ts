@@ -463,6 +463,8 @@ export const demoService = {
         demo_completed_date: now,
         demo_conducted_by: params.conductedBy,
         demo_completion_notes: params.completionNotes,
+        completed_by_agent_id: demo.agent_id,
+        completed_by_agent_name: demo.agent_name,
         current_status: "Feedback Awaited",
         updated_at: now,
       })
@@ -903,6 +905,8 @@ export const demoService = {
         demo_completed_date: now,
         demo_conducted_by: params.conductedBy,
         demo_completion_notes: params.completionNotes,
+        completed_by_agent_id: demo.agent_id,
+        completed_by_agent_name: demo.agent_name,
         // Step 5
         conversion_status: params.conversionStatus,
         non_conversion_reason: params.nonConversionReason,
@@ -918,6 +922,94 @@ export const demoService = {
       success: true,
       finalStatus,
       message: `Demo workflow completed with status: ${finalStatus}`
+    };
+  },
+
+  // Transfer Brand Demos (Admin/Team Lead only)
+  async transferBrandDemos(params: {
+    brandId: string;
+    fromAgentEmail: string;
+    toAgentEmail: string;
+    toAgentName: string;
+    toTeamName?: string;
+    transferReason: string;
+    transferredBy: string;
+  }, rawProfile: UserProfile) {
+    const userProfile = normalizeUserProfile(rawProfile);
+    const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
+
+    // All authenticated users can transfer brand demos
+    console.log(`✅ [Demo Transfer] User ${userProfile.email} (${userProfile.role}) authorized to transfer demos`);
+
+    const now = new Date().toISOString();
+
+    // Get all demos for the brand
+    const { data: demos, error: fetchError } = await getSupabaseAdmin()
+      .from('demos')
+      .select('*')
+      .eq('brand_id', params.brandId);
+
+    if (fetchError) {
+      throw new Error(`Failed to fetch demos: ${fetchError.message}`);
+    }
+
+    if (!demos || demos.length === 0) {
+      throw new Error(`No demos found for brand ${params.brandId}`);
+    }
+
+    // ONLY transfer PENDING demos (not completed ones)
+    const pendingDemos = demos.filter((d: any) => !d.demo_completed && !d.workflow_completed);
+    const completedDemos = demos.filter((d: any) => d.demo_completed || d.workflow_completed);
+
+    console.log(`🔄 Transferring ${pendingDemos.length} pending demos (${completedDemos.length} completed demos will stay with original KAM)`);
+
+    // Update each PENDING demo only
+    let successCount = 0;
+    let errorCount = 0;
+    let skippedCount = completedDemos.length;
+
+    for (const demo of pendingDemos) {
+      const demoRecord = demo as any;
+      const transferEntry = {
+        from_agent_id: params.fromAgentEmail,
+        to_agent_id: params.toAgentEmail,
+        transferred_at: now,
+        transferred_by: params.transferredBy,
+        reason: params.transferReason,
+        demo_status_at_transfer: demoRecord.current_status,
+        was_completed: false
+      };
+
+      const updatedHistory = [...(demoRecord.transfer_history || []), transferEntry];
+
+      const { error: updateError } = await (getSupabaseAdmin()
+        .from('demos') as any)
+        .update({
+          agent_id: params.toAgentEmail,
+          agent_name: params.toAgentName,
+          team_name: params.toTeamName || demoRecord.team_name,
+          transfer_history: updatedHistory,
+          updated_at: now
+        })
+        .eq('demo_id', demoRecord.demo_id);
+
+      if (updateError) {
+        console.error(`❌ Failed to transfer demo ${demoRecord.demo_id}:`, updateError);
+        errorCount++;
+      } else {
+        successCount++;
+      }
+    }
+
+    console.log(`✅ Transfer complete: ${successCount} transferred, ${skippedCount} kept with original KAM, ${errorCount} errors`);
+
+    return {
+      success: errorCount === 0,
+      totalDemos: demos.length,
+      transferredCount: successCount,
+      skippedCount: skippedCount,
+      errorCount,
+      message: `Transferred ${successCount} pending demos. ${skippedCount} completed demos remain with ${params.fromAgentEmail}`
     };
   },
 };

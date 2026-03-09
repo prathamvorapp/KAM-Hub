@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useAuth } from '@/contexts/AuthContext'
+import DashboardLayout from '@/components/Layout/DashboardLayout'
 
 interface AgentStats {
   kam_email: string
@@ -26,6 +28,7 @@ interface HealthCheckStats {
 }
 
 export default function AdminHealthChecksPage() {
+  const { userProfile } = useAuth()
   const [stats, setStats] = useState<HealthCheckStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -72,9 +75,10 @@ export default function AdminHealthChecksPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="bg-white rounded-xl p-8 border border-gray-200 shadow-lg">
+    <DashboardLayout userProfile={userProfile}>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-white rounded-xl p-8 border border-gray-200 shadow-lg">
           <div className="flex justify-between items-center mb-8">
             <div>
               <h1 className="text-3xl font-bold text-secondary-800">📊 Health Check Statistics</h1>
@@ -248,5 +252,6 @@ export default function AdminHealthChecksPage() {
         </div>
       </div>
     </div>
+    </DashboardLayout>
   )
 }

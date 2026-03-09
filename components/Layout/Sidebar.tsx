@@ -40,6 +40,7 @@ const allModules = [
   { name: 'Demos', href: '/dashboard/demos', icon: Presentation, color: 'from-purple-500 to-violet-500', roles: ['agent', 'team_lead', 'admin'] },
   { name: 'Health Check-ups', href: '/dashboard/health-checks', icon: Heart, color: 'from-rose-500 to-red-500', roles: ['agent', 'team_lead', 'admin'] },
   { name: 'MOM Tracker', href: '/dashboard/mom-tracker', icon: Ticket, color: 'from-orange-500 to-amber-500', roles: ['agent', 'team_lead', 'admin'] },
+  { name: 'Brand Management', href: '/admin/transfer-brand', icon: Building2, color: 'from-blue-500 to-indigo-500', roles: ['agent', 'team_lead', 'admin'] },
 ]
 
 export default function Sidebar({ userProfile }: SidebarProps) {

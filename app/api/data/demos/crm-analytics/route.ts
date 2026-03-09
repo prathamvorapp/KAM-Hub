@@ -19,29 +19,18 @@ export async function GET(request: NextRequest) {
 
     const supabaseAdmin = getSupabaseAdmin();
     
-    // Fetch all demos with filters based on role in chunks
-    const normalizedRole = user.role.toLowerCase().replace(/\s+/g, '_');
-    
+    // Fetch all demos without role-based filtering (CRM page shows all data)
     let allDemos: any[] = [];
     let from = 0;
     const batchSize = 1000;
     let hasMore = true;
 
     while (hasMore) {
-      let query = supabaseAdmin
+      const query = supabaseAdmin
         .from('demos')
         .select('*');
 
-      if (normalizedRole === 'agent') {
-        query = query.eq('agent_id', user.email);
-      } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
-        const teamName = user.team_name || user.teamName;
-        if (teamName) {
-          query = query.eq('team_name', teamName);
-        }
-      }
-      // Admin sees all
-
+      // CRM page shows all data regardless of user role
       const { data: batch, error: demosError } = await query
         .range(from, from + batchSize - 1)
         .order('created_at', { ascending: false });
@@ -59,41 +48,18 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch master_data to get total brands per KAM (in chunks)
+    // Fetch master_data to get total brands per KAM (in chunks) - no role filtering
     let allMasterData: any[] = [];
     let masterFrom = 0;
     const masterBatchSize = 1000;
     let hasMasterMore = true;
 
     while (hasMasterMore) {
-      let masterDataQuery = supabaseAdmin
+      const masterDataQuery = supabaseAdmin
         .from('master_data')
         .select('kam_email_id, kam_name, id');
 
-      if (normalizedRole === 'agent') {
-        masterDataQuery = masterDataQuery.eq('kam_email_id', user.email);
-      } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
-        const teamName = user.team_name || user.teamName;
-        if (teamName) {
-          // Get team members first
-          const { data: teamMembers } = await supabaseAdmin
-            .from('user_profiles')
-            .select('email')
-            .eq('team_name', teamName)
-            .in('role', ['agent', 'Agent']);
-          
-          const agentEmails = teamMembers?.map((m: any) => m.email) || [];
-          if (agentEmails.length > 0) {
-            masterDataQuery = masterDataQuery.in('kam_email_id', agentEmails);
-          } else {
-            // No team members, break early
-            hasMasterMore = false;
-            continue;
-          }
-        }
-      }
-      // Admin sees all
-
+      // CRM page shows all data regardless of user role
       const { data: masterBatch, error: masterError } = await masterDataQuery
         .range(masterFrom, masterFrom + masterBatchSize - 1)
         .order('kam_email_id', { ascending: true });

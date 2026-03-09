@@ -777,6 +777,7 @@ export const churnService = {
       console.log(`👤 [getActiveFollowUps] User profile found:`, {
         email: userProfile.email,
         full_name: userProfile.fullName,
+        fullName: userProfile.fullName,
         role: userProfile.role,
         team_name: userProfile.team_name
       });
@@ -785,7 +786,7 @@ export const churnService = {
       
       if (normalizedRole === 'agent') {
         kamFilter = [userProfile.fullName]; // Changed
-        console.log(`🔒 [getActiveFollowUps] Agent filter applied - showing only records for: ${userProfile.fullName}`); // Changed
+        console.log(`🔒 [getActiveFollowUps] Agent filter applied - showing only records for KAM: "${userProfile.fullName}"`); // Changed
       } else if (normalizedRole === 'teamlead') {
         if (userProfile.team_name) {
           const { data: teamMembers } = await getSupabaseAdmin()
@@ -831,6 +832,12 @@ export const churnService = {
     
     console.log(`📊 [getActiveFollowUps] Found ${records?.length || 0} active records`);
     
+    // Log the KAM names in the results for debugging
+    if (records && records.length > 0) {
+      const uniqueKams = [...new Set(records.map(r => r.kam))];
+      console.log(`📋 [getActiveFollowUps] Unique KAMs in results:`, uniqueKams);
+    }
+    
     return records?.map(record => ({
       rid: record.rid,
       restaurant_name: record.restaurant_name,
@@ -855,6 +862,7 @@ export const churnService = {
       console.log(`👤 [getOverdueFollowUps] User profile found:`, {
         email: userProfile.email,
         full_name: userProfile.fullName,
+        fullName: userProfile.fullName,
         role: userProfile.role,
         team_name: userProfile.team_name
       });
@@ -863,7 +871,7 @@ export const churnService = {
       
       if (normalizedRole === 'agent') {
         kamFilter = [userProfile.fullName]; // Changed
-        console.log(`🔒 [getOverdueFollowUps] Agent filter applied - showing only records for: ${userProfile.fullName}`); // Changed
+        console.log(`🔒 [getOverdueFollowUps] Agent filter applied - showing only records for KAM: "${userProfile.fullName}"`); // Changed
       } else if (normalizedRole === 'teamlead') {
         if (userProfile.team_name) {
           const { data: teamMembers } = await getSupabaseAdmin()
@@ -910,6 +918,12 @@ export const churnService = {
     }
     
     console.log(`📊 [getOverdueFollowUps] Found ${records?.length || 0} overdue records`);
+    
+    // Log the KAM names in the results for debugging
+    if (records && records.length > 0) {
+      const uniqueKams = [...new Set(records.map(r => r.kam))];
+      console.log(`📋 [getOverdueFollowUps] Unique KAMs in results:`, uniqueKams);
+    }
     
     return records?.map(record => ({
       rid: record.rid,
