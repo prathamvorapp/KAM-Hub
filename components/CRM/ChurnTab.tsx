@@ -247,6 +247,33 @@ export default function ChurnTab({ records, loading, error }: Props) {
     document.body.removeChild(link)
   }
 
+  const downloadKAMSummaryCSV = () => {
+    const headers = ['KAM Name', 'Total Churn Count', 'Yet to Respond', 'Completed Count']
+    const csvData = kamSummary.map(kam => [
+      `"${kam.kamName.replace(/"/g, '""')}"`,
+      kam.totalChurn,
+      kam.yetToRespond,
+      kam.completed
+    ])
+    // Add totals row
+    csvData.push([
+      'Total',
+      kamSummaryTotals.totalChurn,
+      kamSummaryTotals.yetToRespond,
+      kamSummaryTotals.completed
+    ])
+    const csvContent = [headers.join(','), ...csvData.map(row => row.join(','))].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `kam_churn_summary_${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   const clearFilters = () => {
     setStartDateFilter('')
     setEndDateFilter('')
@@ -293,6 +320,18 @@ export default function ChurnTab({ records, loading, error }: Props) {
       .map(([kamName, data]) => ({ kamName, ...data }))
       .sort((a, b) => b.totalChurn - a.totalChurn)
   }, [filteredRecords])
+
+  // Calculate totals for KAM Summary
+  const kamSummaryTotals = useMemo(() => {
+    return kamSummary.reduce(
+      (acc, kam) => ({
+        totalChurn: acc.totalChurn + kam.totalChurn,
+        yetToRespond: acc.yetToRespond + kam.yetToRespond,
+        completed: acc.completed + kam.completed
+      }),
+      { totalChurn: 0, yetToRespond: 0, completed: 0 }
+    )
+  }, [kamSummary])
 
   // Monthly trend data (5-day intervals for current month)
   const monthlyTrendData = useMemo(() => {
@@ -629,7 +668,19 @@ export default function ChurnTab({ records, loading, error }: Props) {
 
       {/* KAM Summary Table */}
       <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-6 border border-indigo-200 mb-6">
-        <h3 className="text-xl font-bold text-secondary-800 mb-4">👤 KAM Churn Summary</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-bold text-secondary-800">👤 KAM Churn Summary</h3>
+          <button
+            onClick={downloadKAMSummaryCSV}
+            disabled={kamSummary.length === 0}
+            className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Export KAM Summary
+          </button>
+        </div>
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -649,14 +700,23 @@ export default function ChurnTab({ records, loading, error }: Props) {
                     </td>
                   </tr>
                 ) : (
-                  kamSummary.map((kam, index) => (
-                    <tr key={index} className="hover:bg-secondary-50 transition-colors">
-                      <td className="px-4 py-3 text-sm font-medium text-secondary-900">{kam.kamName}</td>
-                      <td className="px-4 py-3 text-sm text-center text-blue-600 font-semibold">{kam.totalChurn}</td>
-                      <td className="px-4 py-3 text-sm text-center text-orange-600 font-semibold">{kam.yetToRespond}</td>
-                      <td className="px-4 py-3 text-sm text-center text-green-600 font-semibold">{kam.completed}</td>
+                  <>
+                    {kamSummary.map((kam, index) => (
+                      <tr key={index} className="hover:bg-secondary-50 transition-colors">
+                        <td className="px-4 py-3 text-sm font-medium text-secondary-900">{kam.kamName}</td>
+                        <td className="px-4 py-3 text-sm text-center text-blue-600 font-semibold">{kam.totalChurn}</td>
+                        <td className="px-4 py-3 text-sm text-center text-orange-600 font-semibold">{kam.yetToRespond}</td>
+                        <td className="px-4 py-3 text-sm text-center text-green-600 font-semibold">{kam.completed}</td>
+                      </tr>
+                    ))}
+                    {/* Totals Row */}
+                    <tr className="bg-indigo-100 border-t-2 border-indigo-300 font-bold">
+                      <td className="px-4 py-3 text-sm font-bold text-secondary-900">Total</td>
+                      <td className="px-4 py-3 text-sm text-center text-blue-700 font-bold">{kamSummaryTotals.totalChurn}</td>
+                      <td className="px-4 py-3 text-sm text-center text-orange-700 font-bold">{kamSummaryTotals.yetToRespond}</td>
+                      <td className="px-4 py-3 text-sm text-center text-green-700 font-bold">{kamSummaryTotals.completed}</td>
                     </tr>
-                  ))
+                  </>
                 )}
               </tbody>
             </table>

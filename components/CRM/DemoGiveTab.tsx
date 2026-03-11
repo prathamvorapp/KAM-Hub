@@ -74,6 +74,69 @@ export default function DemoGiveTab() {
     return analytics.kamSummary
   }, [analytics])
 
+  // Define products list
+  const products = useMemo(() => {
+    if (!analytics) return []
+    return Object.keys(analytics.conversionByProduct).length > 0 
+      ? Object.keys(analytics.conversionByProduct)
+      : Object.keys(analytics.applicabilityByProduct)
+  }, [analytics])
+
+  // Calculate totals for KAM Demo Summary
+  const kamDemoSummaryTotals = useMemo(() => {
+    if (!analytics) return { totalBrands: 0, initiated: 0, yetToInitiate: 0, scheduledDemo: 0, demoDone: 0, pendingDemo: 0, converted: 0, notConverted: 0 }
+    return analytics.kamSummary.reduce(
+      (acc, kam) => ({
+        totalBrands: acc.totalBrands + kam.totalBrands,
+        initiated: acc.initiated + kam.initiated,
+        yetToInitiate: acc.yetToInitiate + kam.yetToInitiate,
+        scheduledDemo: acc.scheduledDemo + kam.scheduledDemo,
+        demoDone: acc.demoDone + kam.demoDone,
+        pendingDemo: acc.pendingDemo + kam.pendingDemo,
+        converted: acc.converted + kam.converted,
+        notConverted: acc.notConverted + kam.notConverted
+      }),
+      { totalBrands: 0, initiated: 0, yetToInitiate: 0, scheduledDemo: 0, demoDone: 0, pendingDemo: 0, converted: 0, notConverted: 0 }
+    )
+  }, [analytics])
+
+  // Calculate totals for KAM Product Summary
+  const kamProductSummaryTotals = useMemo(() => {
+    if (!analytics) return {}
+    const totals: Record<string, { notApplicable: number; demoPending: number; demoDone: number; converted: number; notConverted: number }> = {}
+    
+    products.forEach(product => {
+      totals[product] = { notApplicable: 0, demoPending: 0, demoDone: 0, converted: 0, notConverted: 0 }
+    })
+    
+    analytics.kamProductSummary.forEach(kam => {
+      products.forEach(product => {
+        const productData = kam.products[product] || { notApplicable: 0, demoPending: 0, demoDone: 0, converted: 0, notConverted: 0 }
+        totals[product].notApplicable += productData.notApplicable
+        totals[product].demoPending += productData.demoPending
+        totals[product].demoDone += productData.demoDone
+        totals[product].converted += productData.converted
+        totals[product].notConverted += productData.notConverted
+      })
+    })
+    
+    return totals
+  }, [analytics, products])
+
+  // Calculate totals for Product Summary
+  const productSummaryTotals = useMemo(() => {
+    if (!analytics) return { notApplicable: 0, demoDone: 0, converted: 0, notConverted: 0 }
+    return analytics.productSummary.reduce(
+      (acc, product) => ({
+        notApplicable: acc.notApplicable + product.notApplicable,
+        demoDone: acc.demoDone + product.demoDone,
+        converted: acc.converted + product.converted,
+        notConverted: acc.notConverted + product.notConverted
+      }),
+      { notApplicable: 0, demoDone: 0, converted: 0, notConverted: 0 }
+    )
+  }, [analytics])
+
   useEffect(() => {
     fetchAnalytics()
   }, [startDateFilter, endDateFilter, kamFilter, teamFilter])
@@ -150,10 +213,6 @@ export default function DemoGiveTab() {
       </div>
     )
   }
-
-  const products = Object.keys(analytics.conversionByProduct).length > 0 
-    ? Object.keys(analytics.conversionByProduct)
-    : Object.keys(analytics.applicabilityByProduct)
 
   const clearFilters = () => {
     setStartDateFilter('')
@@ -423,6 +482,19 @@ export default function DemoGiveTab() {
                     </td>
                   </tr>
                 ))}
+                {/* Totals Row */}
+                <tr className="bg-blue-100 border-t-2 border-blue-300 font-bold">
+                  <td className="px-4 py-3 text-sm font-bold text-secondary-900">Total</td>
+                  <td className="px-4 py-3 text-sm text-center text-secondary-700 font-bold">{kamDemoSummaryTotals.totalBrands}</td>
+                  <td className="px-4 py-3 text-sm text-center text-green-700 font-bold">{kamDemoSummaryTotals.initiated}</td>
+                  <td className="px-4 py-3 text-sm text-center text-orange-700 font-bold">{kamDemoSummaryTotals.yetToInitiate}</td>
+                  <td className="px-4 py-3 text-sm text-center text-blue-700 font-bold">{kamDemoSummaryTotals.scheduledDemo}</td>
+                  <td className="px-4 py-3 text-sm text-center text-green-700 font-bold">{kamDemoSummaryTotals.demoDone}</td>
+                  <td className="px-4 py-3 text-sm text-center text-orange-700 font-bold">{kamDemoSummaryTotals.pendingDemo}</td>
+                  <td className="px-4 py-3 text-sm text-center text-green-700 font-bold">{kamDemoSummaryTotals.converted}</td>
+                  <td className="px-4 py-3 text-sm text-center text-red-700 font-bold">{kamDemoSummaryTotals.notConverted}</td>
+                  <td className="px-4 py-3 text-sm text-center text-secondary-600">-</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -505,6 +577,22 @@ export default function DemoGiveTab() {
                     })}
                   </tr>
                 ))}
+                {/* Totals Row */}
+                <tr className="bg-purple-100 border-t-2 border-purple-300 font-bold">
+                  <td className="px-4 py-3 text-sm font-bold text-secondary-900">Total</td>
+                  {products.map(product => {
+                    const totals = kamProductSummaryTotals[product] || { notApplicable: 0, demoPending: 0, demoDone: 0, converted: 0, notConverted: 0 }
+                    return (
+                      <React.Fragment key={product}>
+                        <td className="px-2 py-3 text-sm text-center text-secondary-900 font-bold border-l border-gray-300">{totals.notApplicable}</td>
+                        <td className="px-2 py-3 text-sm text-center text-orange-700 font-bold">{totals.demoPending}</td>
+                        <td className="px-2 py-3 text-sm text-center text-blue-700 font-bold">{totals.demoDone}</td>
+                        <td className="px-2 py-3 text-sm text-center text-green-700 font-bold">{totals.converted}</td>
+                        <td className="px-2 py-3 text-sm text-center text-red-700 font-bold">{totals.notConverted}</td>
+                      </React.Fragment>
+                    )
+                  })}
+                </tr>
               </tbody>
             </table>
           </div>
@@ -545,6 +633,14 @@ export default function DemoGiveTab() {
                     <td className="px-4 py-3 text-sm text-center text-red-600 font-semibold">{product.notConverted}</td>
                   </tr>
                 ))}
+                {/* Totals Row */}
+                <tr className="bg-green-100 border-t-2 border-green-300 font-bold">
+                  <td className="px-4 py-3 text-sm font-bold text-secondary-900">Total</td>
+                  <td className="px-4 py-3 text-sm text-center text-secondary-700 font-bold">{productSummaryTotals.notApplicable}</td>
+                  <td className="px-4 py-3 text-sm text-center text-blue-700 font-bold">{productSummaryTotals.demoDone}</td>
+                  <td className="px-4 py-3 text-sm text-center text-green-700 font-bold">{productSummaryTotals.converted}</td>
+                  <td className="px-4 py-3 text-sm text-center text-red-700 font-bold">{productSummaryTotals.notConverted}</td>
+                </tr>
               </tbody>
             </table>
           </div>

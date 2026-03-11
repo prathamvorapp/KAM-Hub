@@ -85,17 +85,14 @@ export async function GET(request: NextRequest) {
     while (hasMasterMore) {
       let masterDataQuery = supabaseAdmin
         .from('master_data')
-        .select('kam_email_id, kam_name, id, team_name');
+        .select('kam_email_id, kam_name, id');
 
       // Apply KAM filter to master data
       if (kamFilter.length > 0) {
         masterDataQuery = masterDataQuery.in('kam_name', kamFilter);
       }
 
-      // Apply team filter to master data
-      if (teamFilter.length > 0) {
-        masterDataQuery = masterDataQuery.in('team_name', teamFilter);
-      }
+      // Note: team_name filter will be applied after joining with user_profiles data
 
       const { data: masterBatch, error: masterError } = await masterDataQuery
         .range(masterFrom, masterFrom + masterBatchSize - 1)
@@ -116,9 +113,31 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // If team filter is applied, fetch user profiles to get team_name for each KAM
+    if (teamFilter.length > 0 && allMasterData.length > 0) {
+      const uniqueKamEmails = [...new Set(allMasterData.map(b => b.kam_email_id))];
+      
+      const { data: userProfiles, error: profileError } = await supabaseAdmin
+        .from('user_profiles')
+        .select('email, team_name')
+        .in('email', uniqueKamEmails) as { data: Array<{ email: string; team_name: string }> | null; error: any };
+
+      if (!profileError && userProfiles) {
+        // Create a map of email to team_name
+        const emailToTeam = new Map(userProfiles.map(p => [p.email, p.team_name]));
+        
+        // Filter master_data based on team_name
+        allMasterData = allMasterData.filter(brand => {
+          const teamName = emailToTeam.get(brand.kam_email_id);
+          return teamName && teamFilter.includes(teamName);
+        });
+      }
+    }
+
     console.log(`📊 Fetched ${allDemos.length} total demos for analytics`);
     console.log(`📊 Fetched ${allMasterData.length} brands from master_data (in ${Math.ceil(allMasterData.length / masterBatchSize)} batches)`);
     console.log(`📊 Sample demo fields:`, allDemos[0] ? Object.keys(allDemos[0]) : 'No demos');
+    console.log(`📊 Sample master_data record:`, allMasterData[0] || 'No master data');
 
     // Calculate analytics
     const analytics = calculateDemoAnalytics(allDemos, allMasterData);
@@ -238,6 +257,8 @@ function groupByProduct(demos: any[]): Record<string, number> {
 }
 
 function calculateKAMSummary(demos: any[], masterData: any[]) {
+  console.log(`📊 [calculateKAMSummary] Processing ${demos.length} demos and ${masterData.length} master data records`);
+  
   const kamMap = new Map();
 
   // First, populate from master_data to get total brands
@@ -263,6 +284,8 @@ function calculateKAMSummary(demos: any[], masterData: any[]) {
 
     kamMap.get(kamEmail).totalBrandsFromMaster.add(brand.id);
   });
+
+  console.log(`📊 [calculateKAMSummary] Initialized ${kamMap.size} KAMs from master_data`);
 
   // Then, process demos
   demos.forEach(demo => {
@@ -304,12 +327,13 @@ function calculateKAMSummary(demos: any[], masterData: any[]) {
     
     // Check demo_completed for completed demos
     if (demo.demo_completed === true) {
-      kamData.demoDone++;
-      
       if (demo.conversion_status === 'Converted') {
         kamData.converted++;
       } else if (demo.conversion_status === 'Not Converted') {
         kamData.notConverted++;
+      } else {
+        // Only count as "Demo Done" if no conversion status is set
+        kamData.demoDone++;
       }
 
       if (demo.demo_completed_date) {
@@ -340,7 +364,7 @@ function calculateKAMSummary(demos: any[], masterData: any[]) {
       notConverted: kam.notConverted,
       lastDemoDate: kam.lastDemoDate
     };
-  });
+  }).sort((a, b) => b.totalBrands - a.totalBrands); // Sort by total brands descending
 }
 
 function calculateKAMProductSummary(demos: any[]) {
@@ -377,12 +401,13 @@ function calculateKAMProductSummary(demos: any[]) {
     
     // Check demo_completed for completed demos
     if (demo.demo_completed === true) {
-      data.demoDone++;
-      
       if (demo.conversion_status === 'Converted') {
         data.converted++;
       } else if (demo.conversion_status === 'Not Converted') {
         data.notConverted++;
+      } else {
+        // Only count as "Demo Done" if no conversion status is set
+        data.demoDone++;
       }
     }
   });
@@ -434,12 +459,13 @@ function calculateProductSummary(demos: any[]) {
     
     // Check demo_completed for completed demos
     if (demo.demo_completed === true) {
-      data.demoDone++;
-      
       if (demo.conversion_status === 'Converted') {
         data.converted++;
       } else if (demo.conversion_status === 'Not Converted') {
         data.notConverted++;
+      } else {
+        // Only count as "Demo Done" if no conversion status is set
+        data.demoDone++;
       }
     }
   });

@@ -146,11 +146,47 @@ export default function HealthCheckTab({ records, loading, error }: Props) {
     setCurrentPage(1)
   }, [startDateFilter, endDateFilter, kamFilter, zoneFilter, healthStatusFilter, natureFilter, teamFilter])
 
+  // Export to CSV function
+  const exportToCSV = (data: any[], filename: string) => {
+    if (data.length === 0) return
+    
+    const headers = Object.keys(data[0])
+    const csvContent = [
+      headers.join(','),
+      ...data.map(row => headers.map(header => {
+        const value = row[header]
+        return typeof value === 'string' && value.includes(',') ? `"${value}"` : value
+      }).join(','))
+    ].join('\n')
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    window.URL.revokeObjectURL(url)
+  }
+
   // KAM Summary - show all KAMs, not filtered by health check records
   const kamSummary = useMemo(() => {
     // Show all KAMs from master data, sorted by total brands
     return kamSummaryData.sort((a, b) => b.total_brands - a.total_brands)
   }, [kamSummaryData])
+
+  // Calculate totals for KAM Health Check Summary
+  const kamSummaryTotals = useMemo(() => {
+    return kamSummary.reduce(
+      (acc, kam) => ({
+        total_brands: acc.total_brands + kam.total_brands,
+        this_month_done: acc.this_month_done + kam.this_month_done,
+        this_month_pending: acc.this_month_pending + kam.this_month_pending,
+        last_month_done: acc.last_month_done + kam.last_month_done,
+        last_month_pending: acc.last_month_pending + kam.last_month_pending
+      }),
+      { total_brands: 0, this_month_done: 0, this_month_pending: 0, last_month_done: 0, last_month_pending: 0 }
+    )
+  }, [kamSummary])
 
   // This month trend data (5-day intervals)
   const thisMonthTrendData = useMemo(() => {
@@ -480,7 +516,19 @@ export default function HealthCheckTab({ records, loading, error }: Props) {
 
       {/* KAM Summary Table */}
       <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200 mb-6">
-        <h3 className="text-xl font-bold text-secondary-800 mb-4">👤 KAM Health Check Summary</h3>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-bold text-secondary-800">👤 KAM Health Check Summary</h3>
+          <button
+            onClick={() => exportToCSV(kamSummary, 'kam-health-check-summary.csv')}
+            disabled={kamSummary.length === 0}
+            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Export CSV
+          </button>
+        </div>
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -510,19 +558,31 @@ export default function HealthCheckTab({ records, loading, error }: Props) {
                     </td>
                   </tr>
                 ) : (
-                  kamSummary.map((kam, index) => (
-                    <tr key={index} className="hover:bg-secondary-50 transition-colors">
-                      <td className="px-4 py-3 text-sm font-medium text-secondary-900">{kam.kam_name}</td>
-                      <td className="px-4 py-3 text-sm text-center text-blue-600 font-semibold">{kam.total_brands}</td>
-                      <td className="px-4 py-3 text-sm text-center text-green-600 font-semibold">{kam.this_month_done}</td>
-                      <td className="px-4 py-3 text-sm text-center text-orange-600 font-semibold">{kam.this_month_pending}</td>
-                      <td className="px-4 py-3 text-sm text-center text-green-600 font-semibold">{kam.last_month_done}</td>
-                      <td className="px-4 py-3 text-sm text-center text-orange-600 font-semibold">{kam.last_month_pending}</td>
-                      <td className="px-4 py-3 text-sm text-center text-secondary-600">
-                        {kam.last_health_check_date ? new Date(kam.last_health_check_date).toLocaleDateString() : 'N/A'}
-                      </td>
+                  <>
+                    {kamSummary.map((kam, index) => (
+                      <tr key={index} className="hover:bg-secondary-50 transition-colors">
+                        <td className="px-4 py-3 text-sm font-medium text-secondary-900">{kam.kam_name}</td>
+                        <td className="px-4 py-3 text-sm text-center text-blue-600 font-semibold">{kam.total_brands}</td>
+                        <td className="px-4 py-3 text-sm text-center text-green-600 font-semibold">{kam.this_month_done}</td>
+                        <td className="px-4 py-3 text-sm text-center text-orange-600 font-semibold">{kam.this_month_pending}</td>
+                        <td className="px-4 py-3 text-sm text-center text-green-600 font-semibold">{kam.last_month_done}</td>
+                        <td className="px-4 py-3 text-sm text-center text-orange-600 font-semibold">{kam.last_month_pending}</td>
+                        <td className="px-4 py-3 text-sm text-center text-secondary-600">
+                          {kam.last_health_check_date ? new Date(kam.last_health_check_date).toLocaleDateString() : 'N/A'}
+                        </td>
+                      </tr>
+                    ))}
+                    {/* Totals Row */}
+                    <tr className="bg-blue-100 border-t-2 border-blue-300 font-bold">
+                      <td className="px-4 py-3 text-sm font-bold text-secondary-900">Total</td>
+                      <td className="px-4 py-3 text-sm text-center text-blue-700 font-bold">{kamSummaryTotals.total_brands}</td>
+                      <td className="px-4 py-3 text-sm text-center text-green-700 font-bold">{kamSummaryTotals.this_month_done}</td>
+                      <td className="px-4 py-3 text-sm text-center text-orange-700 font-bold">{kamSummaryTotals.this_month_pending}</td>
+                      <td className="px-4 py-3 text-sm text-center text-green-700 font-bold">{kamSummaryTotals.last_month_done}</td>
+                      <td className="px-4 py-3 text-sm text-center text-orange-700 font-bold">{kamSummaryTotals.last_month_pending}</td>
+                      <td className="px-4 py-3 text-sm text-center text-secondary-600">-</td>
                     </tr>
-                  ))
+                  </>
                 )}
               </tbody>
             </table>

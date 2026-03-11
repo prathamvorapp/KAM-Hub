@@ -109,6 +109,19 @@ export default function VisitTab({ userProfile }: VisitTabProps) {
     return kamSummary.filter(kam => kam.team_name === topTeamFilter)
   }, [kamSummary, topTeamFilter])
 
+  // Calculate totals for KAM Visit Summary
+  const kamVisitSummaryTotals = useMemo(() => {
+    return filteredKamSummary.reduce(
+      (acc, kam) => ({
+        total_brands: acc.total_brands + kam.total_brands,
+        scheduled_visits: acc.scheduled_visits + kam.scheduled_visits,
+        completed_visits: acc.completed_visits + kam.completed_visits,
+        pending_visits: acc.pending_visits + kam.pending_visits
+      }),
+      { total_brands: 0, scheduled_visits: 0, completed_visits: 0, pending_visits: 0 }
+    )
+  }, [filteredKamSummary])
+
   // Filter brand details for graphs by top team filter
   const graphBrandDetails = useMemo(() => {
     if (topTeamFilter === 'all') return brandDetails
@@ -373,28 +386,41 @@ export default function VisitTab({ userProfile }: VisitTabProps) {
                     </td>
                   </tr>
                 ) : (
-                  filteredKamSummary.map((kam, index) => (
-                    <tr key={index} className="hover:bg-secondary-50 transition-colors">
-                      <td className="px-4 py-3 text-sm text-secondary-900">{kam.kam_name}</td>
-                      <td className="px-4 py-3 text-sm text-secondary-600">{kam.team_name || '-'}</td>
-                      <td className="px-4 py-3 text-sm text-center text-secondary-700">{kam.total_brands}</td>
-                      <td className="px-4 py-3 text-sm text-center text-blue-600 font-medium">{kam.scheduled_visits}</td>
-                      <td className="px-4 py-3 text-sm text-center text-green-600 font-medium">{kam.completed_visits}</td>
-                      <td className="px-4 py-3 text-sm text-center text-orange-600 font-medium">{kam.pending_visits}</td>
-                      <td className="px-4 py-3 text-sm text-center">
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                          kam.avg_per_month > 10 ? 'bg-red-100 text-red-700' :
-                          kam.avg_per_month > 5 ? 'bg-yellow-100 text-yellow-700' :
-                          'bg-green-100 text-green-700'
-                        }`}>
-                          {kam.avg_per_month} visits/month
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-center text-secondary-600">
-                        {kam.last_visit_date ? new Date(kam.last_visit_date).toLocaleDateString() : '-'}
-                      </td>
+                  <>
+                    {filteredKamSummary.map((kam, index) => (
+                      <tr key={index} className="hover:bg-secondary-50 transition-colors">
+                        <td className="px-4 py-3 text-sm text-secondary-900">{kam.kam_name}</td>
+                        <td className="px-4 py-3 text-sm text-secondary-600">{kam.team_name || '-'}</td>
+                        <td className="px-4 py-3 text-sm text-center text-secondary-700">{kam.total_brands}</td>
+                        <td className="px-4 py-3 text-sm text-center text-blue-600 font-medium">{kam.scheduled_visits}</td>
+                        <td className="px-4 py-3 text-sm text-center text-green-600 font-medium">{kam.completed_visits}</td>
+                        <td className="px-4 py-3 text-sm text-center text-orange-600 font-medium">{kam.pending_visits}</td>
+                        <td className="px-4 py-3 text-sm text-center">
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            kam.avg_per_month > 10 ? 'bg-red-100 text-red-700' :
+                            kam.avg_per_month > 5 ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-green-100 text-green-700'
+                          }`}>
+                            {kam.avg_per_month} visits/month
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-center text-secondary-600">
+                          {kam.last_visit_date ? new Date(kam.last_visit_date).toLocaleDateString() : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                    {/* Totals Row */}
+                    <tr className="bg-blue-100 border-t-2 border-blue-300 font-bold">
+                      <td className="px-4 py-3 text-sm font-bold text-secondary-900">Total</td>
+                      <td className="px-4 py-3 text-sm text-secondary-600">-</td>
+                      <td className="px-4 py-3 text-sm text-center text-secondary-700 font-bold">{kamVisitSummaryTotals.total_brands}</td>
+                      <td className="px-4 py-3 text-sm text-center text-blue-700 font-bold">{kamVisitSummaryTotals.scheduled_visits}</td>
+                      <td className="px-4 py-3 text-sm text-center text-green-700 font-bold">{kamVisitSummaryTotals.completed_visits}</td>
+                      <td className="px-4 py-3 text-sm text-center text-orange-700 font-bold">{kamVisitSummaryTotals.pending_visits}</td>
+                      <td className="px-4 py-3 text-sm text-center">-</td>
+                      <td className="px-4 py-3 text-sm text-center text-secondary-600">-</td>
                     </tr>
-                  ))
+                  </>
                 )}
               </tbody>
             </table>

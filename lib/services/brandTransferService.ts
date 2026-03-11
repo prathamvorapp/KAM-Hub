@@ -212,18 +212,32 @@ export const brandTransferService = {
     const userProfile = normalizeUserProfile(rawProfile);
     const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
 
-    // All users can see all brands for transfer
-    let query = getSupabaseAdmin()
-      .from('master_data')
-      .select('id, brand_name, kam_email_id, kam_name, current_kam_assigned_date')
-      .order('brand_name');
+    // Fetch all brands with pagination to avoid 1000 record limit
+    const allBrands: any[] = [];
+    let from = 0;
+    const pageSize = 1000;
+    let hasMore = true;
 
-    const { data: brands, error } = await query;
+    while (hasMore) {
+      const { data: brands, error } = await getSupabaseAdmin()
+        .from('master_data')
+        .select('id, brand_name, kam_email_id, kam_name, current_kam_assigned_date')
+        .order('brand_name')
+        .range(from, from + pageSize - 1);
 
-    if (error) {
-      throw new Error(`Failed to fetch brands: ${error.message}`);
+      if (error) {
+        throw new Error(`Failed to fetch brands: ${error.message}`);
+      }
+
+      if (brands && brands.length > 0) {
+        allBrands.push(...brands);
+        from += pageSize;
+        hasMore = brands.length === pageSize;
+      } else {
+        hasMore = false;
+      }
     }
 
-    return brands || [];
+    return allBrands;
   }
 };
