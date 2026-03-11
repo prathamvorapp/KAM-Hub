@@ -8,10 +8,12 @@ import DashboardLayout from '@/components/Layout/DashboardLayout';
 interface Brand {
   id: string;
   brand_name: string;
+  brand_email_id?: string;
   kam_email_id: string;
   kam_name: string;
   team_name?: string;
   current_kam_assigned_date?: string;
+  outlet_counts?: number;
 }
 
 interface Agent {
@@ -62,6 +64,16 @@ export default function TransferBrandPage() {
     brand_state: '',
     zone: '',
     kam_name_secondary: '',
+    outlet_counts: 0
+  });
+
+  // Edit brand form state
+  const [showEditBrandForm, setShowEditBrandForm] = useState(false);
+  const [editingBrand, setEditingBrand] = useState(false);
+  const [selectedEditBrandId, setSelectedEditBrandId] = useState('');
+  const [editBrand, setEditBrand] = useState({
+    brand_name: '',
+    brand_email_id: '',
     outlet_counts: 0
   });
 
@@ -233,6 +245,68 @@ export default function TransferBrandPage() {
     }
   };
 
+  const handleEditBrandSelect = (brandId: string) => {
+    setSelectedEditBrandId(brandId);
+    const brand = brands.find(b => b.id === brandId);
+    if (brand) {
+      setEditBrand({
+        brand_name: brand.brand_name,
+        brand_email_id: brand.brand_email_id || '',
+        outlet_counts: brand.outlet_counts || 0
+      });
+    }
+  };
+
+  const handleUpdateBrand = async () => {
+    if (!selectedEditBrandId || !editBrand.brand_name) {
+      setError('Please select a brand and provide a brand name');
+      return;
+    }
+
+    if (!confirm('Are you sure you want to update this brand information?')) {
+      return;
+    }
+
+    try {
+      setEditingBrand(true);
+      setError('');
+      
+      const response = await fetch('/api/admin/brands', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandId: selectedEditBrandId,
+          brand_name: editBrand.brand_name,
+          brand_email_id: editBrand.brand_email_id,
+          outlet_counts: editBrand.outlet_counts
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setResult({ message: `Brand information updated successfully!` });
+        setSelectedEditBrandId('');
+        setEditBrand({
+          brand_name: '',
+          brand_email_id: '',
+          outlet_counts: 0
+        });
+        
+        // Refresh brands list
+        fetchData();
+      } else {
+        setError(data.error || 'Failed to update brand');
+      }
+      
+    } catch (err) {
+      console.error('Update brand error:', err);
+      setError('Failed to update brand: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setEditingBrand(false);
+    }
+  };
+
   if (loading) {
     return (
       <DashboardLayout userProfile={userProfile}>
@@ -263,11 +337,12 @@ export default function TransferBrandPage() {
             <button
               onClick={() => {
                 setShowNewBrandForm(false);
+                setShowEditBrandForm(false);
                 setError('');
                 setResult(null);
               }}
               className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                !showNewBrandForm
+                !showNewBrandForm && !showEditBrandForm
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
@@ -277,6 +352,7 @@ export default function TransferBrandPage() {
             <button
               onClick={() => {
                 setShowNewBrandForm(true);
+                setShowEditBrandForm(false);
                 setError('');
                 setResult(null);
               }}
@@ -287,6 +363,21 @@ export default function TransferBrandPage() {
               }`}
             >
               Add New Brand
+            </button>
+            <button
+              onClick={() => {
+                setShowNewBrandForm(false);
+                setShowEditBrandForm(true);
+                setError('');
+                setResult(null);
+              }}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                showEditBrandForm
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Edit Brand Info
             </button>
           </nav>
         </div>
@@ -468,8 +559,98 @@ export default function TransferBrandPage() {
           </div>
         )}
 
+        {/* Edit Brand Form */}
+        {showEditBrandForm && (
+          <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 className="text-xl font-semibold mb-4">Edit Brand Information</h2>
+            
+            <div className="space-y-4">
+              {/* Select Brand to Edit */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Brand <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={selectedEditBrandId}
+                  onChange={(e) => handleEditBrandSelect(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={editingBrand}
+                >
+                  <option value="">-- Select a brand to edit --</option>
+                  {brands.map(brand => (
+                    <option key={brand.id} value={brand.id}>
+                      {brand.brand_name} (KAM: {brand.kam_name})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedEditBrandId && (
+                <>
+                  {/* Brand Name */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Brand Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={editBrand.brand_name}
+                      onChange={(e) => setEditBrand({ ...editBrand, brand_name: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Enter brand name"
+                      disabled={editingBrand}
+                    />
+                  </div>
+
+                  {/* Brand Email */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Brand Email ID
+                    </label>
+                    <input
+                      type="email"
+                      value={editBrand.brand_email_id}
+                      onChange={(e) => setEditBrand({ ...editBrand, brand_email_id: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="brand@example.com"
+                      disabled={editingBrand}
+                    />
+                  </div>
+
+                  {/* Outlet Count */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Number of Outlets
+                    </label>
+                    <input
+                      type="number"
+                      value={editBrand.outlet_counts}
+                      onChange={(e) => setEditBrand({ ...editBrand, outlet_counts: parseInt(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="0"
+                      min="0"
+                      disabled={editingBrand}
+                    />
+                  </div>
+
+                  {/* Action Button */}
+                  <div className="pt-4">
+                    <button
+                      onClick={handleUpdateBrand}
+                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-400"
+                      disabled={editingBrand}
+                    >
+                      {editingBrand ? 'Updating Brand...' : 'Update Brand Information'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Transfer Form */}
-        {!showNewBrandForm && (
+        {!showNewBrandForm && !showEditBrandForm && (
           <>
             <div className="bg-white rounded-lg shadow p-6 mb-6">
               <h2 className="text-xl font-semibold mb-4">Transfer Details</h2>

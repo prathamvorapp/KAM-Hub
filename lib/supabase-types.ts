@@ -71,6 +71,8 @@ export interface Database {
           kam_name_secondary: string | null
           kam_email_id: string
           outlet_counts: number
+          kam_history: Json | null
+          current_kam_assigned_date: string | null
           created_at: string
           updated_at: string
         }
@@ -84,6 +86,8 @@ export interface Database {
           kam_name_secondary?: string | null
           kam_email_id: string
           outlet_counts?: number
+          kam_history?: Json | null
+          current_kam_assigned_date?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -97,6 +101,8 @@ export interface Database {
           kam_name_secondary?: string | null
           kam_email_id?: string
           outlet_counts?: number
+          kam_history?: Json | null
+          current_kam_assigned_date?: string | null
           created_at?: string
           updated_at?: string
         }

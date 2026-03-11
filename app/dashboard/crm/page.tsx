@@ -8,6 +8,7 @@ import HealthCheckTab from '@/components/CRM/HealthCheckTab'
 import ChurnTab from '@/components/CRM/ChurnTab'
 import VisitTab from '@/components/CRM/VisitTab'
 import DemoGiveTab from '@/components/CRM/DemoGiveTab'
+import MasterDataTab from '@/components/CRM/MasterDataTab'
 
 interface HealthCheckRecord {
   check_id: string
@@ -37,7 +38,7 @@ interface ChurnRecord {
 export default function CRMPage() {
   const { userProfile } = useAuth()
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<'health' | 'churn' | 'visits' | 'demogive'>('health')
+  const [activeTab, setActiveTab] = useState<'health' | 'churn' | 'visits' | 'demogive' | 'masterdata'>('health')
   
   // Health Check States
   const [healthRecords, setHealthRecords] = useState<HealthCheckRecord[]>([])
@@ -145,10 +146,20 @@ export default function CRMPage() {
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b border-gray-200 mb-6">
+            <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
+              <button
+                onClick={() => setActiveTab('masterdata')}
+                className={`px-6 py-3 font-medium transition-colors whitespace-nowrap ${
+                  activeTab === 'masterdata'
+                    ? 'border-b-2 border-primary-600 text-primary-600'
+                    : 'text-secondary-600 hover:text-secondary-800'
+                }`}
+              >
+                📋 Master Data
+              </button>
               <button
                 onClick={() => setActiveTab('health')}
-                className={`px-6 py-3 font-medium transition-colors ${
+                className={`px-6 py-3 font-medium transition-colors whitespace-nowrap ${
                   activeTab === 'health'
                     ? 'border-b-2 border-primary-600 text-primary-600'
                     : 'text-secondary-600 hover:text-secondary-800'
@@ -158,7 +169,7 @@ export default function CRMPage() {
               </button>
               <button
                 onClick={() => setActiveTab('churn')}
-                className={`px-6 py-3 font-medium transition-colors ${
+                className={`px-6 py-3 font-medium transition-colors whitespace-nowrap ${
                   activeTab === 'churn'
                     ? 'border-b-2 border-primary-600 text-primary-600'
                     : 'text-secondary-600 hover:text-secondary-800'
@@ -168,7 +179,7 @@ export default function CRMPage() {
               </button>
               <button
                 onClick={() => setActiveTab('visits')}
-                className={`px-6 py-3 font-medium transition-colors ${
+                className={`px-6 py-3 font-medium transition-colors whitespace-nowrap ${
                   activeTab === 'visits'
                     ? 'border-b-2 border-primary-600 text-primary-600'
                     : 'text-secondary-600 hover:text-secondary-800'
@@ -178,7 +189,7 @@ export default function CRMPage() {
               </button>
               <button
                 onClick={() => setActiveTab('demogive')}
-                className={`px-6 py-3 font-medium transition-colors ${
+                className={`px-6 py-3 font-medium transition-colors whitespace-nowrap ${
                   activeTab === 'demogive'
                     ? 'border-b-2 border-primary-600 text-primary-600'
                     : 'text-secondary-600 hover:text-secondary-800'
@@ -187,6 +198,10 @@ export default function CRMPage() {
                 🎯 Demo
               </button>
             </div>
+
+            {activeTab === 'masterdata' && (
+              <MasterDataTab userProfile={userProfile} />
+            )}
 
             {activeTab === 'health' && (
               <HealthCheckTab

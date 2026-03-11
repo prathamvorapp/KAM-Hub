@@ -221,7 +221,7 @@ export const brandTransferService = {
     while (hasMore) {
       const { data: brands, error } = await getSupabaseAdmin()
         .from('master_data')
-        .select('id, brand_name, kam_email_id, kam_name, current_kam_assigned_date')
+        .select('id, brand_name, brand_email_id, kam_email_id, kam_name, current_kam_assigned_date, outlet_counts')
         .order('brand_name')
         .range(from, from + pageSize - 1);
 
