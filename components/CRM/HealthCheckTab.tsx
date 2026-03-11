@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import SearchableMultiSelect from './SearchableMultiSelect'
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList } from 'recharts'
 
 interface HealthCheckRecord {
   check_id: string
@@ -22,6 +23,19 @@ interface Props {
   error: string | null
 }
 
+interface KAMSummary {
+  kam_name: string
+  kam_email: string
+  total_brands: number
+  this_month_done: number
+  this_month_pending: number
+  last_month_done: number
+  last_month_pending: number
+  last_health_check_date: string | null
+}
+
+const COLORS = ['#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316']
+
 export default function HealthCheckTab({ records, loading, error }: Props) {
   const [startDateFilter, setStartDateFilter] = useState('')
   const [endDateFilter, setEndDateFilter] = useState('')
@@ -32,6 +46,10 @@ export default function HealthCheckTab({ records, loading, error }: Props) {
   const [teamFilter, setTeamFilter] = useState<string[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const recordsPerPage = 20
+  
+  // KAM Summary state
+  const [kamSummaryData, setKamSummaryData] = useState<KAMSummary[]>([])
+  const [kamSummaryLoading, setKamSummaryLoading] = useState(true)
 
   const uniqueKAMs = useMemo(() => {
     const kams = new Set(records.map(r => r.kam_name))
@@ -57,6 +75,41 @@ export default function HealthCheckTab({ records, loading, error }: Props) {
     const teams = new Set(records.map(r => r.team_name).filter((t): t is string => Boolean(t)))
     return Array.from(teams).sort()
   }, [records])
+
+  // Fetch KAM Summary from API with filters
+  useEffect(() => {
+    const fetchKAMSummary = async () => {
+      try {
+        setKamSummaryLoading(true)
+        
+        // Build query parameters
+        const params = new URLSearchParams()
+        if (startDateFilter) params.append('startDate', startDateFilter)
+        if (endDateFilter) params.append('endDate', endDateFilter)
+        if (kamFilter.length > 0) params.append('kamNames', kamFilter.join(','))
+        if (zoneFilter.length > 0) params.append('zones', zoneFilter.join(','))
+        if (healthStatusFilter.length > 0) params.append('healthStatuses', healthStatusFilter.join(','))
+        if (natureFilter.length > 0) params.append('natures', natureFilter.join(','))
+        if (teamFilter.length > 0) params.append('teams', teamFilter.join(','))
+        
+        const url = `/api/data/health-checks/kam-summary${params.toString() ? '?' + params.toString() : ''}`
+        const response = await fetch(url)
+        const result = await response.json()
+        
+        if (result.success && result.data) {
+          setKamSummaryData(result.data)
+        } else {
+          console.error('Failed to fetch KAM summary:', result.error)
+        }
+      } catch (err) {
+        console.error('Error fetching KAM summary:', err)
+      } finally {
+        setKamSummaryLoading(false)
+      }
+    }
+
+    fetchKAMSummary()
+  }, [startDateFilter, endDateFilter, kamFilter, zoneFilter, healthStatusFilter, natureFilter, teamFilter]) // Refetch when filters change
 
   const filteredRecords = useMemo(() => {
     return records.filter(record => {
@@ -93,11 +146,80 @@ export default function HealthCheckTab({ records, loading, error }: Props) {
     setCurrentPage(1)
   }, [startDateFilter, endDateFilter, kamFilter, zoneFilter, healthStatusFilter, natureFilter, teamFilter])
 
+  // KAM Summary - show all KAMs, not filtered by health check records
+  const kamSummary = useMemo(() => {
+    // Show all KAMs from master data, sorted by total brands
+    return kamSummaryData.sort((a, b) => b.total_brands - a.total_brands)
+  }, [kamSummaryData])
+
+  // This month trend data (5-day intervals)
+  const thisMonthTrendData = useMemo(() => {
+    const now = new Date()
+    const currentMonth = now.getMonth()
+    const currentYear = now.getFullYear()
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
+
+    const intervals = [
+      { label: '1-5', start: 1, end: 5 },
+      { label: '6-10', start: 6, end: 10 },
+      { label: '11-15', start: 11, end: 15 },
+      { label: '16-20', start: 16, end: 20 },
+      { label: '21-25', start: 21, end: 25 },
+      { label: `26-${daysInMonth}`, start: 26, end: daysInMonth }
+    ]
+
+    const intervalCounts = intervals.map(interval => ({
+      interval: interval.label,
+      count: 0
+    }))
+
+    filteredRecords.forEach(record => {
+      const recordDate = new Date(record.assessment_date)
+      if (recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear) {
+        const day = recordDate.getDate()
+        const intervalIndex = intervals.findIndex(int => day >= int.start && day <= int.end)
+        if (intervalIndex !== -1) {
+          intervalCounts[intervalIndex].count++
+        }
+      }
+    })
+
+    return intervalCounts
+  }, [filteredRecords])
+
+  // Health Status pie chart data
+  const healthStatusData = useMemo(() => {
+    const statusMap = new Map<string, number>()
+
+    filteredRecords.forEach(record => {
+      const status = record.health_status
+      statusMap.set(status, (statusMap.get(status) || 0) + 1)
+    })
+
+    return Array.from(statusMap.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+  }, [filteredRecords])
+
+  // Nature pie chart data
+  const natureData = useMemo(() => {
+    const natureMap = new Map<string, number>()
+
+    filteredRecords.forEach(record => {
+      const nature = record.brand_nature
+      natureMap.set(nature, (natureMap.get(nature) || 0) + 1)
+    })
+
+    return Array.from(natureMap.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+  }, [filteredRecords])
+
   const downloadCSV = () => {
     const headers = ['Date', 'Brand Name', 'KAM Name', 'Zone', 'Health Status', 'Nature', 'Remarks']
     const csvData = filteredRecords.map(record => [
       record.assessment_date,
-      record.brand_name || '-',
+      `"${(record.brand_name || '-').replace(/"/g, '""')}"`,
       record.kam_name,
       record.zone,
       record.health_status,
@@ -249,6 +371,165 @@ export default function HealthCheckTab({ records, loading, error }: Props) {
         </div>
       </div>
 
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        {/* This Month Trend Chart */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <h3 className="text-lg font-bold text-secondary-800 mb-4">📊 This Month Trend</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={thisMonthTrendData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="interval" tick={{ fontSize: 12 }} />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="count" fill="#3b82f6" name="Health Check Count">
+                <LabelList dataKey="count" position="top" style={{ fontSize: '12px', fontWeight: 'bold' }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Health Status Pie Chart */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <h3 className="text-lg font-bold text-secondary-800 mb-4">🏥 Health Status Distribution</h3>
+          <div className="flex items-center justify-between">
+            <ResponsiveContainer width="60%" height={300}>
+              <PieChart>
+                <Pie
+                  data={healthStatusData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={false}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {healthStatusData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="w-[38%] max-h-[300px] overflow-y-auto pr-2">
+              <div className="space-y-2">
+                {healthStatusData.map((entry, index) => (
+                  <div key={index} className="flex items-start gap-2 text-xs">
+                    <div 
+                      className="w-4 h-4 rounded flex-shrink-0 mt-0.5" 
+                      style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium text-secondary-800">{entry.name}</div>
+                      <div className="text-secondary-600">
+                        {entry.value} ({((entry.value / filteredRecords.length) * 100).toFixed(1)}%)
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Nature Pie Chart */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <h3 className="text-lg font-bold text-secondary-800 mb-4">🏢 Nature Distribution</h3>
+          <div className="flex items-center justify-between">
+            <ResponsiveContainer width="60%" height={300}>
+              <PieChart>
+                <Pie
+                  data={natureData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={false}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {natureData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="w-[38%] max-h-[300px] overflow-y-auto pr-2">
+              <div className="space-y-2">
+                {natureData.map((entry, index) => (
+                  <div key={index} className="flex items-start gap-2 text-xs">
+                    <div 
+                      className="w-4 h-4 rounded flex-shrink-0 mt-0.5" 
+                      style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium text-secondary-800">{entry.name}</div>
+                      <div className="text-secondary-600">
+                        {entry.value} ({((entry.value / filteredRecords.length) * 100).toFixed(1)}%)
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* KAM Summary Table */}
+      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200 mb-6">
+        <h3 className="text-xl font-bold text-secondary-800 mb-4">👤 KAM Health Check Summary</h3>
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-secondary-50 border-b border-secondary-200">
+                <tr>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-secondary-700">KAM Name</th>
+                  <th className="px-4 py-3 text-center text-sm font-semibold text-secondary-700">Total Brands</th>
+                  <th className="px-4 py-3 text-center text-sm font-semibold text-secondary-700">This Month Done</th>
+                  <th className="px-4 py-3 text-center text-sm font-semibold text-secondary-700">This Month Pending</th>
+                  <th className="px-4 py-3 text-center text-sm font-semibold text-secondary-700">Last Month Done</th>
+                  <th className="px-4 py-3 text-center text-sm font-semibold text-secondary-700">Last Month Pending</th>
+                  <th className="px-4 py-3 text-center text-sm font-semibold text-secondary-700">Last Health Check Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-secondary-100">
+                {kamSummaryLoading ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-secondary-500">
+                      <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+                      <p className="mt-2">Loading KAM summary...</p>
+                    </td>
+                  </tr>
+                ) : kamSummary.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-secondary-500">
+                      No KAM data available for the selected filters
+                    </td>
+                  </tr>
+                ) : (
+                  kamSummary.map((kam, index) => (
+                    <tr key={index} className="hover:bg-secondary-50 transition-colors">
+                      <td className="px-4 py-3 text-sm font-medium text-secondary-900">{kam.kam_name}</td>
+                      <td className="px-4 py-3 text-sm text-center text-blue-600 font-semibold">{kam.total_brands}</td>
+                      <td className="px-4 py-3 text-sm text-center text-green-600 font-semibold">{kam.this_month_done}</td>
+                      <td className="px-4 py-3 text-sm text-center text-orange-600 font-semibold">{kam.this_month_pending}</td>
+                      <td className="px-4 py-3 text-sm text-center text-green-600 font-semibold">{kam.last_month_done}</td>
+                      <td className="px-4 py-3 text-sm text-center text-orange-600 font-semibold">{kam.last_month_pending}</td>
+                      <td className="px-4 py-3 text-sm text-center text-secondary-600">
+                        {kam.last_health_check_date ? new Date(kam.last_health_check_date).toLocaleDateString() : 'N/A'}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       {loading && (
         <div className="text-center py-12">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
@@ -273,7 +554,7 @@ export default function HealthCheckTab({ records, loading, error }: Props) {
                 <th className="text-left py-3 px-4 text-secondary-700 font-semibold">Zone</th>
                 <th className="text-left py-3 px-4 text-secondary-700 font-semibold">Health Status</th>
                 <th className="text-left py-3 px-4 text-secondary-700 font-semibold">Nature</th>
-                <th className="text-left py-3 px-4 text-secondary-700 font-semibold">Remarks</th>
+                <th className="text-left py-3 px-4 text-secondary-700 font-semibold" style={{ minWidth: '200px' }}>Remarks</th>
               </tr>
             </thead>
             <tbody>
@@ -288,7 +569,7 @@ export default function HealthCheckTab({ records, loading, error }: Props) {
                     <td className="py-3 px-4 text-secondary-800">{record.zone}</td>
                     <td className="py-3 px-4"><span className={`px-3 py-1 rounded-full text-sm font-medium ${getHealthStatusColor(record.health_status)}`}>{record.health_status}</span></td>
                     <td className="py-3 px-4 text-secondary-800">{record.brand_nature}</td>
-                    <td className="py-3 px-4 text-secondary-600 text-sm max-w-xs truncate">{record.remarks || '-'}</td>
+                    <td className="py-3 px-4 text-secondary-600 text-sm" style={{ minWidth: '200px', maxWidth: '400px', whiteSpace: 'normal', wordWrap: 'break-word' }}>{record.remarks || '-'}</td>
                   </tr>
                 ))
               )}

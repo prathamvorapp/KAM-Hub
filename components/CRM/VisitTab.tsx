@@ -85,9 +85,6 @@ export default function VisitTab({ userProfile }: VisitTabProps) {
         throw new Error(brandResult.error || 'Failed to fetch brand details')
       }
       
-      console.log('KAM Summary:', kamResult.data)
-      console.log('Brand Details:', brandResult.data)
-      
       setKamSummary(kamResult.data || [])
       setBrandDetails(brandResult.data || [])
     } catch (err) {

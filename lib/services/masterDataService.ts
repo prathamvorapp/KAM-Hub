@@ -28,7 +28,7 @@ interface MasterData {
 export const masterDataService = {
   // Get all master data with role-based filtering
   async getMasterData(params: {
-    userProfile: UserProfile; // Changed from email?: string
+    userProfile: UserProfile | null; // Allow null for viewAll mode
     search?: string;
     page?: number;
     limit?: number;
@@ -37,41 +37,44 @@ export const masterDataService = {
     
     let query = getSupabaseAdmin().from('master_data').select('*', { count: 'exact' });
     
-    if (!userProfile) { // Ensure user profile is provided
+    // If userProfile is null, it means viewAll mode (for CRM page)
+    if (userProfile === null) {
+      console.log(`📊 ViewAll mode - showing all master data`);
+      // No filter - show all data
+    } else if (!userProfile) { // Ensure user profile is provided for non-viewAll mode
       console.error(`❌ No user profile provided to getMasterData. Denying access.`);
       return { data: [], total: 0, page: 0, limit: 0, total_pages: 0 };
-    }
-
-    // console.log(`🔍 Master Data - User Profile for ${userProfile.email}:`, userProfile);
-    
-    const normalizedRole = userProfile.role?.toLowerCase().replace(/\s+/g, '');
-    
-    if (normalizedRole === 'agent') {
-      query = query.eq('kam_email_id', userProfile.email); // Filter by agent's email
-      // console.log(`👤 Agent filter - showing brands for email: ${userProfile.email}`);
-    } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
-      if (userProfile.team_name) {
-        const { data: teamMembers } = await getSupabaseAdmin()
-          .from('user_profiles')
-          .select('email')
-          .eq('team_name', userProfile.team_name)
-          .in('role', ['agent', 'Agent']) as { data: Array<{ email: string }> | null; error: any };
-        
-        const agentEmails = teamMembers?.map(m => m.email) || [];
-        // Include Team Lead's own email to show brands directly assigned to them
-        const allEmails = [...agentEmails, userProfile.email];
-        // console.log(`👥 Team Lead filter - showing brands for team ${userProfile.team_name} + Team Lead:`, allEmails);
-        query = query.in('kam_email_id', allEmails);
-      } else {
-        // Team Lead with no team_name, show only their own brands
-        query = query.eq('kam_email_id', userProfile.email);
-      }
-    } else if (normalizedRole === 'admin') {
-      // console.log(`👑 Admin - showing all brands`);
-      // No filter for admin
     } else {
-      // console.log(`⚠️ Unknown role: ${userProfile.role}, denying access to master data`);
-      query = query.eq('kam_email_id', 'NON_EXISTENT_EMAIL'); // Deny for unknown roles
+      // Apply role-based filtering
+      const normalizedRole = userProfile.role?.toLowerCase().replace(/\s+/g, '');
+      
+      if (normalizedRole === 'agent') {
+        query = query.eq('kam_email_id', userProfile.email); // Filter by agent's email
+        // console.log(`👤 Agent filter - showing brands for email: ${userProfile.email}`);
+      } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
+        if (userProfile.team_name) {
+          const { data: teamMembers } = await getSupabaseAdmin()
+            .from('user_profiles')
+            .select('email')
+            .eq('team_name', userProfile.team_name)
+            .in('role', ['agent', 'Agent']) as { data: Array<{ email: string }> | null; error: any };
+          
+          const agentEmails = teamMembers?.map(m => m.email) || [];
+          // Include Team Lead's own email to show brands directly assigned to them
+          const allEmails = [...agentEmails, userProfile.email];
+          // console.log(`👥 Team Lead filter - showing brands for team ${userProfile.team_name} + Team Lead:`, allEmails);
+          query = query.in('kam_email_id', allEmails);
+        } else {
+          // Team Lead with no team_name, show only their own brands
+          query = query.eq('kam_email_id', userProfile.email);
+        }
+      } else if (normalizedRole === 'admin') {
+        // console.log(`👑 Admin - showing all brands`);
+        // No filter for admin
+      } else {
+        // console.log(`⚠️ Unknown role: ${userProfile.role}, denying access to master data`);
+        query = query.eq('kam_email_id', 'NON_EXISTENT_EMAIL'); // Deny for unknown roles
+      }
     }
     
     // Apply search filter at DATABASE level (not in-memory)
@@ -97,8 +100,12 @@ export const masterDataService = {
     const paginatedRecords = records || [];
     const totalPages = Math.ceil(total / limit);
     
-    console.log(`📊 Total records matching criteria: ${total}`);
+    console.log(`📊 Master Data Service - Total records matching criteria: ${total}`);
     console.log(`📄 Pagination: page=${page}, limit=${limit}, range=[${startIndex}, ${endIndex}], total_pages=${totalPages}, returning ${paginatedRecords.length} records`);
+    
+    if (paginatedRecords.length > 0) {
+      console.log(`📄 Sample record:`, paginatedRecords[0]);
+    }
     
     return {
       data: paginatedRecords,

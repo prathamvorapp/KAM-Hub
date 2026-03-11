@@ -25,9 +25,12 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
     const search = searchParams.get('search') || '';
+    const viewAll = searchParams.get('viewAll') === 'true';
+
+    console.log(`📊 Master Data API - page: ${page}, limit: ${limit}, viewAll: ${viewAll}, user: ${user.email}`);
 
     // Cache key based on user and filters
-    const cacheKey = `master_data_${user.email}_${user.role}_${page}_${limit}_${search}`;
+    const cacheKey = `master_data_${viewAll ? 'all' : user.email}_${user.role}_${page}_${limit}_${search}`;
     
     const cachedData = masterDataCache.get(cacheKey);
     if (cachedData) {
@@ -35,15 +38,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(cachedData);
     }
 
-    console.log(`📊 Getting master data for user: ${user.email} (${user.role})`);
+    console.log(`📊 Getting master data for user: ${user.email} (${user.role}), viewAll: ${viewAll}`);
 
     // Get master data from Supabase with role-based filtering
     const result = await masterDataService.getMasterData({
-      userProfile: user, // Pass the entire user object as userProfile
+      userProfile: viewAll ? null : user, // Pass null for viewAll to skip filtering
       search,
       page,
       limit
     });
+
+    console.log(`📊 Master Data API - Received ${result.data?.length || 0} records from service`);
 
     const response = {
       success: true,

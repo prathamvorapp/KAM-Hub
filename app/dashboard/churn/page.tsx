@@ -17,7 +17,8 @@ import {
   COMPLETED_CHURN_REASONS, 
   ACTIVE_FOLLOW_UP_REASONS,
   isNoAgentResponse,
-  isCompletedReason 
+  isCompletedReason,
+  type ActiveFollowUpReason
 } from '@/lib/constants/churnReasons'
 
 interface User {
@@ -315,7 +316,7 @@ function ChurnDataPageContent() {
           }
           
           // If it's an active follow-up reason, check if it's actually active (not waiting for reminder)
-          if (ACTIVE_FOLLOW_UP_REASONS.includes(churnReason as any)) {
+          if (ACTIVE_FOLLOW_UP_REASONS.includes(churnReason as ActiveFollowUpReason)) {
             // If it has a next_reminder_time, check if it has passed
             if (record.next_reminder_time) {
               const reminderTime = new Date(record.next_reminder_time);
@@ -520,7 +521,7 @@ function ChurnDataPageContent() {
     }
     
     // Check active follow-up reasons
-    if (ACTIVE_FOLLOW_UP_REASONS.includes(reason as any)) {
+    if (ACTIVE_FOLLOW_UP_REASONS.includes(reason as ActiveFollowUpReason)) {
       return reason === "I don't know" ? 'bg-gray-100 text-gray-800' : 'bg-orange-100 text-orange-800'
     }
     
@@ -554,7 +555,7 @@ function ChurnDataPageContent() {
     }
     
     // Then check for active reasons with 24-hour waiting period logic
-    if (ACTIVE_FOLLOW_UP_REASONS.includes(churnReason as any)) {
+    if (ACTIVE_FOLLOW_UP_REASONS.includes(churnReason as ActiveFollowUpReason)) {
       // Check if there's a reminder time set (indicating waiting period)
       if (record.next_reminder_time) {
         const reminderTime = new Date(record.next_reminder_time);

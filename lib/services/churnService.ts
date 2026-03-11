@@ -8,7 +8,8 @@ import {
   COMPLETED_CHURN_REASONS,
   getControlledStatus as getControlledStatusHelper,
   isNoAgentResponse,
-  isCompletedReason
+  isCompletedReason,
+  type ActiveFollowUpReason
 } from '../constants/churnReasons';
 import { normalizeUserProfile } from '../../utils/authUtils';
 
@@ -409,7 +410,7 @@ export const churnService = {
     const currentDateTime = new Date().toISOString();
     const controlledStatus = getControlledStatusHelper(churn_reason);
     
-    const shouldActivateFollowUp = ACTIVE_FOLLOW_UP_REASONS.includes(churn_reason as any);
+    const shouldActivateFollowUp = ACTIVE_FOLLOW_UP_REASONS.includes(churn_reason as ActiveFollowUpReason);
     const shouldCompleteFollowUp = isCompletedReason(churn_reason);
     
     let followUpStatus = "INACTIVE";
@@ -636,9 +637,10 @@ export const churnService = {
     call_response: string;
     notes?: string;
     churn_reason: string;
+    mail_sent_confirmation?: boolean;
     userProfile: UserProfile; // email removed, userProfile required
   }) {
-    const { rid, call_response, notes, churn_reason, userProfile: rawProfile } = params;
+    const { rid, call_response, notes, churn_reason, mail_sent_confirmation, userProfile: rawProfile } = params;
     
     // Normalize userProfile
     const userProfile = normalizeUserProfile(rawProfile);
@@ -751,6 +753,8 @@ export const churnService = {
         churn_reason: churn_reason || record.churn_reason, // Update churn reason if provided
         controlled_status: controlledStatus, // Update controlled status based on churn reason
         date_time_filled: churn_reason ? currentDateTime : record.date_time_filled, // Update timestamp if churn reason changed
+        mail_sent: mail_sent_confirmation ? true : record.mail_sent, // Update mail_sent if confirmation provided
+        mail_sent_confirmation: mail_sent_confirmation ? true : record.mail_sent_confirmation, // Update mail_sent_confirmation
         updated_at: currentDateTime,
       })
       .eq('rid', rid);

@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import SearchableMultiSelect from './SearchableMultiSelect'
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList } from 'recharts'
 
 interface ChurnRecord {
   rid: string
@@ -23,6 +24,8 @@ interface Props {
   loading: boolean
   error: string | null
 }
+
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316']
 
 export default function ChurnTab({ records, loading, error }: Props) {
   const [startDateFilter, setStartDateFilter] = useState('')
@@ -90,7 +93,9 @@ export default function ChurnTab({ records, loading, error }: Props) {
 
   const uniqueChurnReasons = useMemo(() => {
     const reasons = new Set(records.map(r => r.churn_reason).filter(Boolean))
-    return Array.from(reasons).sort()
+    const reasonsArray = Array.from(reasons).sort()
+    // Add "Blank" option at the beginning
+    return ['Blank', ...reasonsArray]
   }, [records])
 
   const uniqueCallCounts = useMemo(() => {
@@ -193,7 +198,16 @@ export default function ChurnTab({ records, loading, error }: Props) {
       // KAM filter: direct KAM selection
       if (kamFilter.length > 0 && !kamFilter.includes(record.kam)) return false
       
-      if (churnReasonFilter.length > 0 && !churnReasonFilter.includes(record.churn_reason)) return false
+      if (churnReasonFilter.length > 0) {
+        const hasBlankFilter = churnReasonFilter.includes('Blank')
+        const isRecordBlank = !record.churn_reason || record.churn_reason.trim() === ''
+        
+        if (hasBlankFilter && isRecordBlank) {
+          // Record is blank and blank filter is selected
+        } else if (!churnReasonFilter.includes(record.churn_reason)) {
+          return false
+        }
+      }
       return true
     })
   }, [records, startDateFilter, endDateFilter, ridFilter, kamFilter, churnReasonFilter, callsFilter, teamFilter, kamsFromSelectedTeams])
@@ -215,7 +229,7 @@ export default function ChurnTab({ records, loading, error }: Props) {
     const csvData = filteredRecords.map(record => [
       record.date,
       record.rid,
-      record.restaurant_name,
+      `"${(record.restaurant_name || '').replace(/"/g, '""')}"`,
       record.kam,
       record.churn_reason || '',
       `"${(record.remarks || '').replace(/"/g, '""')}"`,
@@ -253,6 +267,149 @@ export default function ChurnTab({ records, loading, error }: Props) {
     return rids.size
   }, [filteredRecords])
 
+  // KAM Summary calculations
+  const kamSummary = useMemo(() => {
+    const kamMap = new Map<string, { totalChurn: number; yetToRespond: number; completed: number }>()
+    
+    filteredRecords.forEach(record => {
+      const kamName = record.kam
+      if (!kamName) return
+      
+      if (!kamMap.has(kamName)) {
+        kamMap.set(kamName, { totalChurn: 0, yetToRespond: 0, completed: 0 })
+      }
+      
+      const kamData = kamMap.get(kamName)!
+      kamData.totalChurn++
+      
+      if (!record.churn_reason || record.churn_reason.trim() === '') {
+        kamData.yetToRespond++
+      } else {
+        kamData.completed++
+      }
+    })
+    
+    return Array.from(kamMap.entries())
+      .map(([kamName, data]) => ({ kamName, ...data }))
+      .sort((a, b) => b.totalChurn - a.totalChurn)
+  }, [filteredRecords])
+
+  // Monthly trend data (5-day intervals for current month)
+  const monthlyTrendData = useMemo(() => {
+    const now = new Date()
+    const currentMonth = now.getMonth()
+    const currentYear = now.getFullYear()
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
+    
+    const intervals = [
+      { label: '1-5', start: 1, end: 5 },
+      { label: '6-10', start: 6, end: 10 },
+      { label: '11-15', start: 11, end: 15 },
+      { label: '16-20', start: 16, end: 20 },
+      { label: '21-25', start: 21, end: 25 },
+      { label: `26-${daysInMonth}`, start: 26, end: daysInMonth }
+    ]
+    
+    const intervalCounts = intervals.map(interval => ({
+      interval: interval.label,
+      count: 0
+    }))
+    
+    filteredRecords.forEach(record => {
+      const recordDate = parseDate(record.date)
+      if (recordDate && recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear) {
+        const day = recordDate.getDate()
+        const intervalIndex = intervals.findIndex(int => day >= int.start && day <= int.end)
+        if (intervalIndex !== -1) {
+          intervalCounts[intervalIndex].count++
+        }
+      }
+    })
+    
+    return intervalCounts
+  }, [filteredRecords])
+
+  // Churn reason pie chart data
+  const churnReasonData = useMemo(() => {
+    const reasonMap = new Map<string, number>()
+    
+    filteredRecords.forEach(record => {
+      const reason = record.churn_reason && record.churn_reason.trim() !== '' 
+        ? record.churn_reason 
+        : 'Not Filled'
+      
+      reasonMap.set(reason, (reasonMap.get(reason) || 0) + 1)
+    })
+    
+    return Array.from(reasonMap.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+  }, [filteredRecords])
+
+  // Controlled/Uncontrolled pie chart data with specific logic
+  const controlledStatusData = useMemo(() => {
+    const uncontrolledReasons = [
+      'Outlet once out of Sync – now Active',
+      'Permanently Closed (Outlet / brand)',
+      'Event Account / Demo Account'
+    ]
+    
+    let controlled = 0
+    let uncontrolled = 0
+    
+    filteredRecords.forEach(record => {
+      const reason = record.churn_reason?.trim() || ''
+      
+      // Check if reason matches uncontrolled criteria
+      if (uncontrolledReasons.some(ur => reason.toLowerCase().includes(ur.toLowerCase()))) {
+        uncontrolled++
+      } else {
+        // Everything else is controlled (including blank/not filled)
+        controlled++
+      }
+    })
+    
+    return [
+      { name: 'Controlled', value: controlled },
+      { name: 'Uncontrolled', value: uncontrolled }
+    ].filter(item => item.value > 0)
+  }, [filteredRecords])
+
+  // Team-wise bar chart data - fetch from KAM's team via team mapping
+  const teamWiseData = useMemo(() => {
+    const teamMap = new Map<string, number>()
+    
+    filteredRecords.forEach(record => {
+      const kamName = record.kam
+      if (!kamName) {
+        const unassignedCount = teamMap.get('Unassigned') || 0
+        teamMap.set('Unassigned', unassignedCount + 1)
+        return
+      }
+      
+      // Find team for this KAM from teamKamMapping
+      let kamTeam = 'Unassigned'
+      for (const [team, kams] of Object.entries(teamKamMapping)) {
+        if (kams.some(k => {
+          const kamLower = k.toLowerCase()
+          const recordKamLower = kamName.toLowerCase()
+          return kamLower === recordKamLower || 
+                 kamLower.includes(recordKamLower) || 
+                 recordKamLower.includes(kamLower)
+        })) {
+          kamTeam = team
+          break
+        }
+      }
+      
+      teamMap.set(kamTeam, (teamMap.get(kamTeam) || 0) + 1)
+    })
+    
+    return Array.from(teamMap.entries())
+      .map(([team, count]) => ({ team, count }))
+      .sort((a, b) => b.count - a.count)
+  }, [filteredRecords, teamKamMapping])
+
   return (
     <div>
       {/* Summary Cards - Interactive with Filters */}
@@ -275,13 +432,13 @@ export default function ChurnTab({ records, loading, error }: Props) {
         <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-6 border border-purple-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-purple-600 text-sm font-medium">Unique KAMs</p>
-              <p className="text-3xl font-bold text-purple-800 mt-2">{uniqueFilteredKAMs}</p>
+              <p className="text-purple-600 text-sm font-medium">Reason Not Filled</p>
+              <p className="text-3xl font-bold text-purple-800 mt-2">{filteredRecords.filter(r => !r.churn_reason || r.churn_reason.trim() === '').length}</p>
               <p className="text-xs text-purple-600 mt-1">in filtered data</p>
             </div>
             <div className="w-12 h-12 bg-purple-200 rounded-full flex items-center justify-center">
               <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
           </div>
@@ -309,13 +466,13 @@ export default function ChurnTab({ records, loading, error }: Props) {
         <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-6 border border-orange-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-orange-600 text-sm font-medium">Unique Restaurants</p>
-              <p className="text-3xl font-bold text-orange-800 mt-2">{uniqueFilteredRIDs}</p>
-              <p className="text-xs text-orange-600 mt-1">in filtered data</p>
+              <p className="text-orange-600 text-sm font-medium">Complete Records</p>
+              <p className="text-3xl font-bold text-orange-800 mt-2">{filteredRecords.filter(r => r.churn_reason && r.churn_reason.trim() !== '').length}</p>
+              <p className="text-xs text-orange-600 mt-1">with reason filled</p>
             </div>
             <div className="w-12 h-12 bg-orange-200 rounded-full flex items-center justify-center">
               <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
           </div>
@@ -352,6 +509,158 @@ export default function ChurnTab({ records, loading, error }: Props) {
 
         <div className="mt-4 text-sm text-secondary-600">
           Showing {filteredRecords.length === 0 ? 0 : (currentPage - 1) * recordsPerPage + 1} to {Math.min(currentPage * recordsPerPage, filteredRecords.length)} of {filteredRecords.length} records
+        </div>
+      </div>
+
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Monthly Trend Chart */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <h3 className="text-lg font-bold text-secondary-800 mb-4">📊 Current Month Churn Trend</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={monthlyTrendData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="interval" tick={{ fontSize: 12 }} />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="count" fill="#3b82f6" name="Churn Count">
+                <LabelList dataKey="count" position="top" style={{ fontSize: '12px', fontWeight: 'bold' }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Churn Reason Pie Chart */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <h3 className="text-lg font-bold text-secondary-800 mb-4">📋 Churn Reasons Distribution</h3>
+          <div className="flex items-center justify-between">
+            <ResponsiveContainer width="60%" height={300}>
+              <PieChart>
+                <Pie
+                  data={churnReasonData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={false}
+                  outerRadius={100}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {churnReasonData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  formatter={(value: any, name: any, props: any) => [`${value} (${((value / filteredRecords.length) * 100).toFixed(1)}%)`, props.payload.name]}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="w-[38%] max-h-[300px] overflow-y-auto pr-2">
+              <div className="space-y-2">
+                {churnReasonData.map((entry, index) => (
+                  <div key={index} className="flex items-start gap-2 text-xs">
+                    <div 
+                      className="w-4 h-4 rounded flex-shrink-0 mt-0.5" 
+                      style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium text-secondary-800">{entry.name}</div>
+                      <div className="text-secondary-600">
+                        {entry.value} ({((entry.value / filteredRecords.length) * 100).toFixed(1)}%)
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Controlled/Uncontrolled Pie Chart */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <h3 className="text-lg font-bold text-secondary-800 mb-4">🎯 Controlled vs Uncontrolled</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={controlledStatusData}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                outerRadius={80}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {controlledStatusData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Team-wise Bar Chart */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <h3 className="text-lg font-bold text-secondary-800 mb-4">👥 Team-wise Churn Count</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={teamWiseData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis 
+                dataKey="team" 
+                angle={-45} 
+                textAnchor="end" 
+                height={100}
+                interval={0}
+                tick={{ fontSize: 11 }}
+                label={{ value: 'Team Name', position: 'insideBottom', offset: -5 }}
+              />
+              <YAxis 
+                label={{ value: 'Churn Count', angle: -90, position: 'insideLeft' }}
+              />
+              <Tooltip />
+              <Bar dataKey="count" fill="#10b981" name="Churn Count">
+                <LabelList dataKey="count" position="top" style={{ fontSize: '12px', fontWeight: 'bold' }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* KAM Summary Table */}
+      <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-6 border border-indigo-200 mb-6">
+        <h3 className="text-xl font-bold text-secondary-800 mb-4">👤 KAM Churn Summary</h3>
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-secondary-50 border-b border-secondary-200">
+                <tr>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-secondary-700">KAM Name</th>
+                  <th className="px-4 py-3 text-center text-sm font-semibold text-secondary-700">Total Churn Count</th>
+                  <th className="px-4 py-3 text-center text-sm font-semibold text-secondary-700">Yet to Respond</th>
+                  <th className="px-4 py-3 text-center text-sm font-semibold text-secondary-700">Completed Count</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-secondary-100">
+                {kamSummary.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-8 text-center text-secondary-500">
+                      No KAM data available for the selected filters
+                    </td>
+                  </tr>
+                ) : (
+                  kamSummary.map((kam, index) => (
+                    <tr key={index} className="hover:bg-secondary-50 transition-colors">
+                      <td className="px-4 py-3 text-sm font-medium text-secondary-900">{kam.kamName}</td>
+                      <td className="px-4 py-3 text-sm text-center text-blue-600 font-semibold">{kam.totalChurn}</td>
+                      <td className="px-4 py-3 text-sm text-center text-orange-600 font-semibold">{kam.yetToRespond}</td>
+                      <td className="px-4 py-3 text-sm text-center text-green-600 font-semibold">{kam.completed}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

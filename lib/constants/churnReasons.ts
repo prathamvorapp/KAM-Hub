@@ -5,8 +5,6 @@
 
 // Active follow-up reasons (require agent action)
 export const ACTIVE_FOLLOW_UP_REASONS = [
-  "I don't know",
-  "KAM needs to respond"
 ] as const;
 
 // Completed churn reasons (final states)
@@ -28,8 +26,6 @@ export const ALL_CHURN_REASONS = [
 
 // Controlled churn reasons (within KAM's control)
 export const CONTROLLED_CHURN_REASONS = [
-  "KAM needs to respond",
-  "I don't know",
   "Temporarily Closed (Renovation / Relocation/Internet issue)",
   "Switched to Another POS",
   "Ownership Transferred",
@@ -47,7 +43,7 @@ export const UNCONTROLLED_CHURN_REASONS = [
 export function isNoAgentResponse(churnReason: string | null | undefined): boolean {
   if (!churnReason || churnReason.trim() === '') return true;
   const normalized = churnReason.trim();
-  return ACTIVE_FOLLOW_UP_REASONS.includes(normalized as any);
+  return ACTIVE_FOLLOW_UP_REASONS.includes(normalized as ActiveFollowUpReason);
 }
 
 // Helper function to check if a reason is completed

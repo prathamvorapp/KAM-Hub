@@ -22,17 +22,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const body = await request.json();
-    const { call_response, notes, churn_reason } = body;
+    const { call_response, notes, churn_reason, mail_sent_confirmation } = body;
 
     console.log(`📞 Recording call attempt for RID: ${rid}`);
     console.log(`   Call Response: ${call_response}`);
     console.log(`   Churn Reason: ${churn_reason}`);
+    console.log(`   Mail Sent Confirmation: ${mail_sent_confirmation}`);
 
     const result = await churnService.recordCallAttempt({
       rid,
       call_response,
       notes,
       churn_reason,
+      mail_sent_confirmation,
       userProfile: user // Pass the entire user object as userProfile
     });
 

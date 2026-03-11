@@ -68,6 +68,7 @@ export const apiClient = {
     call_response: string;
     notes?: string;
     churn_reason: string;
+    mail_sent_confirmation?: boolean;
     // email?: string; // Removed email parameter
   }) => {
     try {
@@ -79,7 +80,8 @@ export const apiClient = {
           rid: params.rid,
           call_response: params.call_response,
           notes: params.notes,
-          churn_reason: params.churn_reason
+          churn_reason: params.churn_reason,
+          mail_sent_confirmation: params.mail_sent_confirmation
         })
       });
       return await response.json();

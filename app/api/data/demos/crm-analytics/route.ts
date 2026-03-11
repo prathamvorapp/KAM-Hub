@@ -17,6 +17,15 @@ export async function GET(request: NextRequest) {
 
     console.log(`📊 Getting CRM demo analytics for user: ${user.email} (${user.role})`);
 
+    // Get filter parameters from query string
+    const { searchParams } = new URL(request.url);
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
+    const kamFilter = searchParams.get('kam')?.split(',').filter(Boolean) || [];
+    const teamFilter = searchParams.get('team')?.split(',').filter(Boolean) || [];
+
+    console.log('📊 Filters:', { startDate, endDate, kamFilter, teamFilter });
+
     const supabaseAdmin = getSupabaseAdmin();
     
     // Fetch all demos without role-based filtering (CRM page shows all data)
@@ -26,11 +35,30 @@ export async function GET(request: NextRequest) {
     let hasMore = true;
 
     while (hasMore) {
-      const query = supabaseAdmin
+      let query = supabaseAdmin
         .from('demos')
         .select('*');
 
-      // CRM page shows all data regardless of user role
+      // Apply date filter on demo_completed_date
+      if (startDate) {
+        query = query.gte('demo_completed_date', startDate);
+      }
+      if (endDate) {
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(23, 59, 59, 999);
+        query = query.lte('demo_completed_date', endDateTime.toISOString());
+      }
+
+      // Apply KAM filter
+      if (kamFilter.length > 0) {
+        query = query.in('agent_name', kamFilter);
+      }
+
+      // Apply team filter
+      if (teamFilter.length > 0) {
+        query = query.in('team_name', teamFilter);
+      }
+
       const { data: batch, error: demosError } = await query
         .range(from, from + batchSize - 1)
         .order('created_at', { ascending: false });
@@ -48,18 +76,27 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch master_data to get total brands per KAM (in chunks) - no role filtering
+    // Fetch master_data to get total brands per KAM (in chunks) - apply KAM and team filters
     let allMasterData: any[] = [];
     let masterFrom = 0;
     const masterBatchSize = 1000;
     let hasMasterMore = true;
 
     while (hasMasterMore) {
-      const masterDataQuery = supabaseAdmin
+      let masterDataQuery = supabaseAdmin
         .from('master_data')
-        .select('kam_email_id, kam_name, id');
+        .select('kam_email_id, kam_name, id, team_name');
 
-      // CRM page shows all data regardless of user role
+      // Apply KAM filter to master data
+      if (kamFilter.length > 0) {
+        masterDataQuery = masterDataQuery.in('kam_name', kamFilter);
+      }
+
+      // Apply team filter to master data
+      if (teamFilter.length > 0) {
+        masterDataQuery = masterDataQuery.in('team_name', teamFilter);
+      }
+
       const { data: masterBatch, error: masterError } = await masterDataQuery
         .range(masterFrom, masterFrom + masterBatchSize - 1)
         .order('kam_email_id', { ascending: true });
@@ -212,6 +249,7 @@ function calculateKAMSummary(demos: any[], masterData: any[]) {
       kamMap.set(kamEmail, {
         kamName: kamName || 'Unknown',
         kamEmail,
+        teamName: null, // Will be populated from demos
         totalBrandsFromMaster: new Set(),
         initiatedBrands: new Set(),
         scheduledDemo: 0,
@@ -230,11 +268,13 @@ function calculateKAMSummary(demos: any[], masterData: any[]) {
   demos.forEach(demo => {
     const kamEmail = demo.agent_id;
     const kamName = demo.agent_name;
+    const teamName = demo.team_name;
 
     if (!kamMap.has(kamEmail)) {
       kamMap.set(kamEmail, {
         kamName,
         kamEmail,
+        teamName,
         totalBrandsFromMaster: new Set(),
         initiatedBrands: new Set(),
         scheduledDemo: 0,
@@ -247,6 +287,12 @@ function calculateKAMSummary(demos: any[], masterData: any[]) {
     }
 
     const kamData = kamMap.get(kamEmail);
+    
+    // Update team name if not set
+    if (!kamData.teamName && teamName) {
+      kamData.teamName = teamName;
+    }
+    
     kamData.initiatedBrands.add(demo.brand_id);
 
     // Check current_status for scheduled/pending
@@ -283,6 +329,7 @@ function calculateKAMSummary(demos: any[], masterData: any[]) {
     return {
       kamName: kam.kamName,
       kamEmail: kam.kamEmail,
+      teamName: kam.teamName,
       totalBrands,
       initiated,
       yetToInitiate,

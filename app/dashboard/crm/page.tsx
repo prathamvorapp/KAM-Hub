@@ -66,12 +66,29 @@ export default function CRMPage() {
     try {
       setHealthLoading(true)
       setHealthError(null)
-      const response = await fetch('/api/data/health-checks?limit=10000&viewAll=true')
-      const result = await response.json()
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Failed to fetch health checks')
+      
+      let allRecords: HealthCheckRecord[] = []
+      let page = 1
+      const limit = 1000
+      let hasMore = true
+
+      while (hasMore) {
+        const response = await fetch(`/api/data/health-checks?limit=${limit}&page=${page}&viewAll=true`)
+        const result = await response.json()
+        
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || 'Failed to fetch health checks')
+        }
+
+        const records = result.data.data || []
+        allRecords = [...allRecords, ...records]
+        
+        // Check if there are more records
+        hasMore = records.length === limit
+        page++
       }
-      setHealthRecords(result.data.data || [])
+
+      setHealthRecords(allRecords)
     } catch (err) {
       setHealthError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -83,12 +100,29 @@ export default function CRMPage() {
     try {
       setChurnLoading(true)
       setChurnError(null)
-      const response = await fetch('/api/churn?limit=10000&viewAll=true')
-      const result = await response.json()
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Failed to fetch churn data')
+      
+      let allRecords: ChurnRecord[] = []
+      let page = 1
+      const limit = 1000
+      let hasMore = true
+
+      while (hasMore) {
+        const response = await fetch(`/api/churn?limit=${limit}&page=${page}&viewAll=true`)
+        const result = await response.json()
+        
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || 'Failed to fetch churn data')
+        }
+
+        const records = result.data || []
+        allRecords = [...allRecords, ...records]
+        
+        // Check if there are more records
+        hasMore = records.length === limit
+        page++
       }
-      setChurnRecords(result.data || [])
+
+      setChurnRecords(allRecords)
     } catch (err) {
       setChurnError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -150,7 +184,7 @@ export default function CRMPage() {
                     : 'text-secondary-600 hover:text-secondary-800'
                 }`}
               >
-                🎯 Demo Give
+                🎯 Demo
               </button>
             </div>
 

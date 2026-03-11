@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { Download } from 'lucide-react'
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList } from 'recharts'
 
@@ -15,6 +15,7 @@ interface DemoAnalytics {
   kamSummary: Array<{
     kamName: string
     kamEmail: string
+    teamName: string | null
     totalBrands: number
     initiated: number
     yetToInitiate: number
@@ -51,16 +52,46 @@ export default function DemoGiveTab() {
   const [analytics, setAnalytics] = useState<DemoAnalytics | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [startDateFilter, setStartDateFilter] = useState('')
+  const [endDateFilter, setEndDateFilter] = useState('')
+  const [kamFilter, setKamFilter] = useState<string[]>([])
+  const [teamFilter, setTeamFilter] = useState<string[]>([])
+
+  const uniqueKAMs = useMemo(() => {
+    if (!analytics) return []
+    const kams = new Set(analytics.kamSummary.map(k => k.kamName))
+    return Array.from(kams).sort()
+  }, [analytics])
+
+  const uniqueTeams = useMemo(() => {
+    if (!analytics) return []
+    const teams = new Set(analytics.kamSummary.map(k => k.teamName).filter((t): t is string => Boolean(t)))
+    return Array.from(teams).sort()
+  }, [analytics])
+
+  const filteredKamSummary = useMemo(() => {
+    if (!analytics) return []
+    return analytics.kamSummary
+  }, [analytics])
 
   useEffect(() => {
     fetchAnalytics()
-  }, [])
+  }, [startDateFilter, endDateFilter, kamFilter, teamFilter])
 
   const fetchAnalytics = async () => {
     try {
       setLoading(true)
       setError(null)
-      const response = await fetch('/api/data/demos/crm-analytics')
+      
+      // Build query params for filtering
+      const params = new URLSearchParams()
+      if (startDateFilter) params.append('startDate', startDateFilter)
+      if (endDateFilter) params.append('endDate', endDateFilter)
+      if (kamFilter.length > 0) params.append('kam', kamFilter.join(','))
+      if (teamFilter.length > 0) params.append('team', teamFilter.join(','))
+      
+      const url = `/api/data/demos/crm-analytics${params.toString() ? `?${params.toString()}` : ''}`
+      const response = await fetch(url)
       const result = await response.json()
       
       if (!response.ok || !result.success) {
@@ -124,8 +155,62 @@ export default function DemoGiveTab() {
     ? Object.keys(analytics.conversionByProduct)
     : Object.keys(analytics.applicabilityByProduct)
 
+  const clearFilters = () => {
+    setStartDateFilter('')
+    setEndDateFilter('')
+    setKamFilter([])
+    setTeamFilter([])
+  }
+
   return (
     <div className="space-y-8">
+      {/* Filters Section */}
+      <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold text-secondary-800">Filters</h2>
+          <button onClick={clearFilters} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-secondary-800 rounded-lg transition-colors text-sm">
+            Clear Filters
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-secondary-700 text-sm mb-2">Start Date</label>
+            <input type="date" value={startDateFilter} onChange={(e) => setStartDateFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-secondary-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-200" />
+          </div>
+          <div>
+            <label className="block text-secondary-700 text-sm mb-2">End Date</label>
+            <input type="date" value={endDateFilter} onChange={(e) => setEndDateFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-secondary-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-200" />
+          </div>
+          <div>
+            <label className="block text-secondary-700 text-sm mb-2">KAM Name</label>
+            <select
+              value={kamFilter.length > 0 ? kamFilter[0] : ''}
+              onChange={(e) => setKamFilter(e.target.value ? [e.target.value] : [])}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-secondary-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
+            >
+              <option value="">Select KAM</option>
+              {uniqueKAMs.map(kam => (
+                <option key={kam} value={kam}>{kam}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-secondary-700 text-sm mb-2">Team</label>
+            <select
+              value={teamFilter.length > 0 ? teamFilter[0] : ''}
+              onChange={(e) => setTeamFilter(e.target.value ? [e.target.value] : [])}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-secondary-800 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
+            >
+              <option value="">All Teams</option>
+              {uniqueTeams.map(team => (
+                <option key={team} value={team}>{team}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
       {/* Legend/Info Section */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <h4 className="text-sm font-semibold text-blue-900 mb-2">📖 Metrics Guide</h4>
@@ -322,7 +407,7 @@ export default function DemoGiveTab() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-secondary-100">
-                {analytics.kamSummary.map((kam, index) => (
+                {filteredKamSummary.map((kam, index) => (
                   <tr key={index} className="hover:bg-secondary-50 transition-colors">
                     <td className="px-4 py-3 text-sm text-secondary-900">{kam.kamName}</td>
                     <td className="px-4 py-3 text-sm text-center text-secondary-700 font-medium">{kam.totalBrands}</td>
@@ -386,13 +471,13 @@ export default function DemoGiveTab() {
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-secondary-700 uppercase tracking-wider"></th>
                   {products.map(product => (
-                    <>
-                      <th key={`${product}-na`} className="px-2 py-2 text-center text-xs font-medium text-secondary-600 uppercase tracking-wider border-l border-gray-300" title="Not Applicable">Not Appl</th>
-                      <th key={`${product}-pending`} className="px-2 py-2 text-center text-xs font-medium text-secondary-600 uppercase tracking-wider" title="Demo Pending">Pending</th>
-                      <th key={`${product}-done`} className="px-2 py-2 text-center text-xs font-medium text-secondary-600 uppercase tracking-wider" title="Demo Done">Done</th>
-                      <th key={`${product}-conv`} className="px-2 py-2 text-center text-xs font-medium text-secondary-600 uppercase tracking-wider" title="Converted">Conv</th>
-                      <th key={`${product}-nconv`} className="px-2 py-2 text-center text-xs font-medium text-secondary-600 uppercase tracking-wider" title="Not Converted">Not Conv</th>
-                    </>
+                    <React.Fragment key={product}>
+                      <th className="px-2 py-2 text-center text-xs font-medium text-secondary-600 uppercase tracking-wider border-l border-gray-300" title="Not Applicable">Not Appl</th>
+                      <th className="px-2 py-2 text-center text-xs font-medium text-secondary-600 uppercase tracking-wider" title="Demo Pending">Pending</th>
+                      <th className="px-2 py-2 text-center text-xs font-medium text-secondary-600 uppercase tracking-wider" title="Demo Done">Done</th>
+                      <th className="px-2 py-2 text-center text-xs font-medium text-secondary-600 uppercase tracking-wider" title="Converted">Conv</th>
+                      <th className="px-2 py-2 text-center text-xs font-medium text-secondary-600 uppercase tracking-wider" title="Not Converted">Not Conv</th>
+                    </React.Fragment>
                   ))}
                 </tr>
               </thead>
@@ -409,13 +494,13 @@ export default function DemoGiveTab() {
                         notConverted: 0
                       }
                       return (
-                        <>
-                          <td key={`${product}-na`} className="px-2 py-3 text-sm text-center text-secondary-900 border-l border-gray-300">{productData.notApplicable}</td>
-                          <td key={`${product}-pending`} className="px-2 py-3 text-sm text-center text-orange-600 font-medium">{productData.demoPending}</td>
-                          <td key={`${product}-done`} className="px-2 py-3 text-sm text-center text-blue-600 font-medium">{productData.demoDone}</td>
-                          <td key={`${product}-conv`} className="px-2 py-3 text-sm text-center text-green-600 font-semibold">{productData.converted}</td>
-                          <td key={`${product}-nconv`} className="px-2 py-3 text-sm text-center text-red-600 font-semibold">{productData.notConverted}</td>
-                        </>
+                        <React.Fragment key={product}>
+                          <td className="px-2 py-3 text-sm text-center text-secondary-900 border-l border-gray-300">{productData.notApplicable}</td>
+                          <td className="px-2 py-3 text-sm text-center text-orange-600 font-medium">{productData.demoPending}</td>
+                          <td className="px-2 py-3 text-sm text-center text-blue-600 font-medium">{productData.demoDone}</td>
+                          <td className="px-2 py-3 text-sm text-center text-green-600 font-semibold">{productData.converted}</td>
+                          <td className="px-2 py-3 text-sm text-center text-red-600 font-semibold">{productData.notConverted}</td>
+                        </React.Fragment>
                       )
                     })}
                   </tr>

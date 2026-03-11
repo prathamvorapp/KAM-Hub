@@ -219,7 +219,8 @@ export default function ChurnReasonModal({
         rid,
         call_response: actualCallResponse,
         notes: callNotes,
-        churn_reason: currentChurnReason
+        churn_reason: currentChurnReason,
+        mail_sent_confirmation: mailSentConfirmation
       })
 
       if (!response.success) {
