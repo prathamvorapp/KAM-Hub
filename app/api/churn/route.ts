@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
       page: queryData.page,
       limit: queryData.limit,
       search: queryData.search,
-      filter: filter as 'all' | 'newCount' | 'overdue' | 'followUps' | 'completed'
+      filter: filter as 'all' | 'newCount' | 'overdue' | 'followUps' | 'completed' | 'completedWithoutReason'
     });
 
     console.log(`✅ [Churn API] Result: ${result.data.length} records, total: ${result.total}`);

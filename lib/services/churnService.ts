@@ -67,7 +67,7 @@ export const churnService = {
     page?: number;
     limit?: number;
     search?: string;
-    filter?: 'all' | 'newCount' | 'overdue' | 'followUps' | 'completed';
+    filter?: 'all' | 'newCount' | 'overdue' | 'followUps' | 'completed' | 'completedWithoutReason';
   }) {
     const { userProfile: rawProfile, page = 1, limit = 100, search, filter = 'all' } = params;
 
@@ -206,12 +206,19 @@ export const churnService = {
       const completed = hasCompletedReason || hasCompletedStatus || hasThreeCalls;
       
       // Log for debugging (first 10 records)
-      if (acc.newCount + acc.overdue + acc.followUps + acc.completed < 10) {
+      if (acc.newCount + acc.overdue + acc.followUps + acc.completed + acc.completedWithoutReason < 10) {
         console.log(`📋 RID ${record.rid}: reason="${churnReason}", hasCompletedReason=${hasCompletedReason}, hasCompletedStatus=${hasCompletedStatus}, hasThreeCalls=${hasThreeCalls}, completed=${completed}`);
       }
       
       if (completed) {
-        acc.completed++;
+        // Check if completed without a proper churn reason
+        // Empty reason, "I don't know", or "KAM needs to respond" are not proper reasons
+        const noProperReason = !churnReason || churnReason === "" || isNoAgentResponse(churnReason) || !hasCompletedReason;
+        if (noProperReason) {
+          acc.completedWithoutReason++;
+        } else {
+          acc.completed++;
+        }
         return acc;
       }
       
@@ -245,7 +252,7 @@ export const churnService = {
       }
       
       return acc;
-    }, { newCount: 0, overdue: 0, followUps: 0, completed: 0 });
+    }, { newCount: 0, overdue: 0, followUps: 0, completed: 0, completedWithoutReason: 0 });
     
     // Apply category filter BEFORE search
     if (filter && filter !== 'all') {
@@ -269,7 +276,14 @@ export const churnService = {
         const completed = hasCompletedReason || hasCompletedStatus || hasThreeCalls;
         
         if (filter === 'completed') {
-          return completed;
+          // Only show records with proper completed reasons
+          return completed && hasCompletedReason && churnReason && churnReason !== "" && !isNoAgentResponse(churnReason);
+        }
+        
+        if (filter === 'completedWithoutReason') {
+          // Show completed records without proper reasons
+          const noProperReason = !churnReason || churnReason === "" || isNoAgentResponse(churnReason) || !hasCompletedReason;
+          return completed && noProperReason;
         }
         
         // For other filters, exclude completed records first

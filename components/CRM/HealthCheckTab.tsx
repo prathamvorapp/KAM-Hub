@@ -52,9 +52,19 @@ export default function HealthCheckTab({ records, loading, error }: Props) {
   const [kamSummaryLoading, setKamSummaryLoading] = useState(true)
 
   const uniqueKAMs = useMemo(() => {
+    // If team filter is active, only show KAMs from selected teams
+    if (teamFilter.length > 0) {
+      const kams = new Set(
+        records
+          .filter(r => teamFilter.includes(r.team_name || ''))
+          .map(r => r.kam_name)
+      )
+      return Array.from(kams).sort()
+    }
+    // Otherwise show all KAMs
     const kams = new Set(records.map(r => r.kam_name))
     return Array.from(kams).sort()
-  }, [records])
+  }, [records, teamFilter])
 
   const uniqueZones = useMemo(() => {
     const zones = new Set(records.map(r => r.zone))
@@ -145,6 +155,11 @@ export default function HealthCheckTab({ records, loading, error }: Props) {
   useEffect(() => {
     setCurrentPage(1)
   }, [startDateFilter, endDateFilter, kamFilter, zoneFilter, healthStatusFilter, natureFilter, teamFilter])
+
+  // Clear KAM filter when team filter changes
+  useEffect(() => {
+    setKamFilter([])
+  }, [teamFilter])
 
   // Export to CSV function
   const exportToCSV = (data: any[], filename: string) => {

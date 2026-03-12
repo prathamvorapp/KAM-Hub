@@ -177,8 +177,8 @@ export async function GET(request: NextRequest) {
       const completedVisits = kamData.completed_visits;
       kamData.pending_visits = Math.max(0, targetVisits - completedVisits);
       
-      // Calculate average visits needed per month to achieve target
-      kamData.avg_per_month = parseFloat((kamData.pending_visits / monthsInPeriod).toFixed(2));
+      // Calculate average visits needed per month to achieve target (rounded up)
+      kamData.avg_per_month = Math.ceil(kamData.pending_visits / monthsInPeriod);
     });
     
     const kamSummary = Array.from(kamMap.values());

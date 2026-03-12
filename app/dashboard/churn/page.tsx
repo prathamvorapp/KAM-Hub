@@ -64,6 +64,7 @@ interface Categorization {
   overdue: number
   followUps: number
   completed: number
+  completedWithoutReason?: number
 }
 
 interface PaginationInfo {
@@ -94,7 +95,8 @@ function ChurnDataPageContent() {
       newCount: 0,
       overdue: 0,
       followUps: 0,
-      completed: 0
+      completed: 0,
+      completedWithoutReason: 0
     }
   })
   const [completedFollowUpsCount, setCompletedFollowUpsCount] = useState(0)
@@ -678,7 +680,7 @@ function ChurnDataPageContent() {
           */}
 
           {/* Summary Boxes - 4 Section Categorization (Clickable) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
             {/* New Count Box (Last 3 Days, No Agent Response) */}
             <div 
               className={`card p-6 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 cursor-pointer transition-all duration-200 hover:shadow-lg ${activeFilter === 'newCount' ? 'ring-2 ring-blue-500 shadow-lg' : ''}`}
@@ -766,6 +768,27 @@ function ChurnDataPageContent() {
                 </div>
               </div>
             </div>
+            {/* Completed without Reason Box */}
+            <div 
+              className={`card p-6 bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200 cursor-pointer transition-all duration-200 hover:shadow-lg ${activeFilter === 'completedWithoutReason' ? 'ring-2 ring-orange-500 shadow-lg' : ''}`}
+              onClick={() => handleFilterChange('completedWithoutReason')}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-orange-600 uppercase tracking-wide">Completed w/o Reason</p>
+                  <p className="mt-2 text-4xl font-bold text-orange-900">
+                    {allCategoryStats ? allCategoryStats.completedWithoutReason : (pagination.categorization?.completedWithoutReason || 0)}
+                  </p>
+                  <p className="mt-1 text-sm text-orange-700">Completed but no reason given</p>
+                  {activeFilter === 'completedWithoutReason' && (
+                    <p className="mt-1 text-xs text-orange-600 font-medium">📋 Showing filtered records</p>
+                  )}
+                </div>
+                <div className="p-3 bg-orange-500 rounded-full">
+                  <span className="text-white text-2xl">⚠️</span>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Filter Controls */}
@@ -819,6 +842,17 @@ function ChurnDataPageContent() {
                     <span>Completed ({pagination.categorization?.completed || 0})</span>
                   </button>
                   <button
+                    onClick={() => handleFilterChange('completedWithoutReason')}
+                    className={`px-4 py-2.5 text-sm font-medium rounded-md transition-all duration-200 flex items-center space-x-2 ${
+                      activeFilter === 'completedWithoutReason' 
+                        ? 'bg-orange-500 text-white shadow-md' 
+                        : 'text-orange-600 hover:bg-orange-50'
+                    }`}
+                  >
+                    <div className={`w-2 h-2 rounded-full ${activeFilter === 'completedWithoutReason' ? 'bg-orange-200' : 'bg-orange-400'}`}></div>
+                    <span>No Reason ({pagination.categorization?.completedWithoutReason || 0})</span>
+                  </button>
+                  <button
                     onClick={() => handleFilterChange('all')}
                     className={`px-4 py-2.5 text-sm font-medium rounded-md transition-all duration-200 ${
                       activeFilter === 'all' 
@@ -826,7 +860,7 @@ function ChurnDataPageContent() {
                         : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
                     }`}
                   >
-                    📋 All ({(pagination.categorization?.newCount || 0) + (pagination.categorization?.overdue || 0) + (pagination.categorization?.followUps || 0) + (pagination.categorization?.completed || 0)})
+                    📋 All ({(pagination.categorization?.newCount || 0) + (pagination.categorization?.overdue || 0) + (pagination.categorization?.followUps || 0) + (pagination.categorization?.completed || 0) + (pagination.categorization?.completedWithoutReason || 0)})
                   </button>
                 </div>
               </div>

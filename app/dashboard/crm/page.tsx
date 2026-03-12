@@ -137,9 +137,8 @@ export default function CRMPage() {
 
   return (
     <DashboardLayout userProfile={userProfile}>
-      <div className="p-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="bg-white rounded-xl p-8 border border-gray-200 shadow-lg">
+      <div className="max-w-7xl mx-auto">
+        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-lg">
             <div className="mb-8">
               <h1 className="text-3xl font-bold text-secondary-800">📊 CRM Dashboard</h1>
               <p className="text-secondary-600 mt-2">Comprehensive data management and reporting</p>
@@ -228,7 +227,6 @@ export default function CRMPage() {
             )}
           </div>
         </div>
-      </div>
     </DashboardLayout>
   )
 }

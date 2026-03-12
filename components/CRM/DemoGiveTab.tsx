@@ -59,9 +59,19 @@ export default function DemoGiveTab() {
 
   const uniqueKAMs = useMemo(() => {
     if (!analytics) return []
+    // If team filter is active, only show KAMs from selected teams
+    if (teamFilter.length > 0) {
+      const kams = new Set(
+        analytics.kamSummary
+          .filter(k => teamFilter.includes(k.teamName || ''))
+          .map(k => k.kamName)
+      )
+      return Array.from(kams).sort()
+    }
+    // Otherwise show all KAMs
     const kams = new Set(analytics.kamSummary.map(k => k.kamName))
     return Array.from(kams).sort()
-  }, [analytics])
+  }, [analytics, teamFilter])
 
   const uniqueTeams = useMemo(() => {
     if (!analytics) return []
@@ -140,6 +150,11 @@ export default function DemoGiveTab() {
   useEffect(() => {
     fetchAnalytics()
   }, [startDateFilter, endDateFilter, kamFilter, teamFilter])
+
+  // Clear KAM filter when team filter changes
+  useEffect(() => {
+    setKamFilter([])
+  }, [teamFilter])
 
   const fetchAnalytics = async () => {
     try {

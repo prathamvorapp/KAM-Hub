@@ -53,6 +53,13 @@ export default function VisitTab({ userProfile }: VisitTabProps) {
     fetchData()
   }, [selectedKAM, selectedStatus, selectedTeam, scheduledStartDate, scheduledEndDate, completedStartDate, completedEndDate])
 
+  // Clear KAM filter when team filter changes
+  useEffect(() => {
+    if (selectedTeam !== 'all') {
+      setSelectedKAM('all')
+    }
+  }, [selectedTeam])
+
   const fetchData = async () => {
     try {
       setLoading(true)
@@ -108,6 +115,12 @@ export default function VisitTab({ userProfile }: VisitTabProps) {
     if (topTeamFilter === 'all') return kamSummary
     return kamSummary.filter(kam => kam.team_name === topTeamFilter)
   }, [kamSummary, topTeamFilter])
+
+  // Filter KAMs for dropdown based on selectedTeam
+  const filteredKamsForDropdown = useMemo(() => {
+    if (selectedTeam === 'all') return kamSummary
+    return kamSummary.filter(kam => kam.team_name === selectedTeam)
+  }, [kamSummary, selectedTeam])
 
   // Calculate totals for KAM Visit Summary
   const kamVisitSummaryTotals = useMemo(() => {
@@ -477,7 +490,7 @@ export default function VisitTab({ userProfile }: VisitTabProps) {
               className="px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="all">All KAMs</option>
-              {kamSummary.map(kam => (
+              {filteredKamsForDropdown.map(kam => (
                 <option key={kam.kam_email} value={kam.kam_email}>{kam.kam_name}</option>
               ))}
             </select>

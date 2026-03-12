@@ -81,27 +81,14 @@ export default function ChurnTab({ records, loading, error }: Props) {
     fetchTeamKamMapping()
   }, [])
 
+  // Clear KAM filter when team filter changes
+  useEffect(() => {
+    setKamFilter([])
+  }, [teamFilter])
+
   const uniqueRIDs = useMemo(() => {
     const rids = new Set(records.map(r => r.rid).filter(Boolean))
     return Array.from(rids).sort()
-  }, [records])
-
-  const uniqueKAMs = useMemo(() => {
-    const kams = new Set(records.map(r => r.kam).filter(Boolean))
-    return Array.from(kams).sort()
-  }, [records])
-
-  const uniqueChurnReasons = useMemo(() => {
-    const reasons = new Set(records.map(r => r.churn_reason).filter(Boolean))
-    const reasonsArray = Array.from(reasons).sort()
-    // Add "Blank" option at the beginning
-    return ['Blank', ...reasonsArray]
-  }, [records])
-
-  const uniqueCallCounts = useMemo(() => {
-    // Since no_of_calls_done doesn't exist, we'll use a placeholder
-    // You may need to add this field to your database
-    return ['0', '1', '2', '3', '4', '5+']
   }, [records])
 
   const uniqueTeams = useMemo(() => {
@@ -119,6 +106,41 @@ export default function ChurnTab({ records, loading, error }: Props) {
     })
     return [...new Set(kams)]
   }, [teamFilter, teamKamMapping, records])
+
+  const uniqueKAMs = useMemo(() => {
+    // If team filter is active, only show KAMs from selected teams
+    if (teamFilter.length > 0 && kamsFromSelectedTeams.length > 0) {
+      const kams = new Set(
+        records
+          .filter(r => kamsFromSelectedTeams.some(teamKam => {
+            const recordKam = r.kam?.toLowerCase() || ''
+            const teamKamLower = teamKam.toLowerCase()
+            return recordKam === teamKamLower || 
+                   recordKam.includes(teamKamLower) || 
+                   teamKamLower.includes(recordKam)
+          }))
+          .map(r => r.kam)
+          .filter(Boolean)
+      )
+      return Array.from(kams).sort()
+    }
+    // Otherwise show all KAMs
+    const kams = new Set(records.map(r => r.kam).filter(Boolean))
+    return Array.from(kams).sort()
+  }, [records, teamFilter, kamsFromSelectedTeams])
+
+  const uniqueChurnReasons = useMemo(() => {
+    const reasons = new Set(records.map(r => r.churn_reason).filter(Boolean))
+    const reasonsArray = Array.from(reasons).sort()
+    // Add "Blank" option at the beginning
+    return ['Blank', ...reasonsArray]
+  }, [records])
+
+  const uniqueCallCounts = useMemo(() => {
+    // Since no_of_calls_done doesn't exist, we'll use a placeholder
+    // You may need to add this field to your database
+    return ['0', '1', '2', '3', '4', '5+']
+  }, [records])
 
   const parseDate = (dateStr: string) => {
     if (!dateStr) return null
@@ -248,19 +270,21 @@ export default function ChurnTab({ records, loading, error }: Props) {
   }
 
   const downloadKAMSummaryCSV = () => {
-    const headers = ['KAM Name', 'Total Churn Count', 'Yet to Respond', 'Completed Count']
+    const headers = ['KAM Name', 'Total Churn Count', 'Yet to Respond', 'Completed Count', 'No Reason Count']
     const csvData = kamSummary.map(kam => [
       `"${kam.kamName.replace(/"/g, '""')}"`,
       kam.totalChurn,
       kam.yetToRespond,
-      kam.completed
+      kam.completed,
+      kam.noReasonCount
     ])
     // Add totals row
     csvData.push([
       'Total',
       kamSummaryTotals.totalChurn,
       kamSummaryTotals.yetToRespond,
-      kamSummaryTotals.completed
+      kamSummaryTotals.completed,
+      kamSummaryTotals.noReasonCount
     ])
     const csvContent = [headers.join(','), ...csvData.map(row => row.join(','))].join('\n')
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
@@ -294,23 +318,37 @@ export default function ChurnTab({ records, loading, error }: Props) {
     return rids.size
   }, [filteredRecords])
 
-  // KAM Summary calculations
+  // KAM Summary calculations - Updated to include No Reason Count
   const kamSummary = useMemo(() => {
-    const kamMap = new Map<string, { totalChurn: number; yetToRespond: number; completed: number }>()
+    const kamMap = new Map<string, { totalChurn: number; yetToRespond: number; completed: number; noReasonCount: number }>()
     
     filteredRecords.forEach(record => {
       const kamName = record.kam
       if (!kamName) return
       
       if (!kamMap.has(kamName)) {
-        kamMap.set(kamName, { totalChurn: 0, yetToRespond: 0, completed: 0 })
+        kamMap.set(kamName, { totalChurn: 0, yetToRespond: 0, completed: 0, noReasonCount: 0 })
       }
       
       const kamData = kamMap.get(kamName)!
       kamData.totalChurn++
       
-      if (!record.churn_reason || record.churn_reason.trim() === '') {
-        kamData.yetToRespond++
+      // Check if record is completed (by status or 3+ call attempts)
+      const hasCompletedStatus = record.follow_up_status === 'COMPLETED'
+      const callAttempts = Array.isArray(record.call_attempts) 
+        ? record.call_attempts 
+        : (typeof record.call_attempts === 'string' ? JSON.parse(record.call_attempts || '[]') : [])
+      const hasThreeCalls = callAttempts.length >= 3
+      const isCompleted = hasCompletedStatus || hasThreeCalls
+      
+      const churnReason = record.churn_reason?.trim() || ''
+      
+      if (!churnReason || churnReason === '') {
+        if (isCompleted) {
+          kamData.noReasonCount++
+        } else {
+          kamData.yetToRespond++
+        }
       } else {
         kamData.completed++
       }
@@ -327,9 +365,10 @@ export default function ChurnTab({ records, loading, error }: Props) {
       (acc, kam) => ({
         totalChurn: acc.totalChurn + kam.totalChurn,
         yetToRespond: acc.yetToRespond + kam.yetToRespond,
-        completed: acc.completed + kam.completed
+        completed: acc.completed + kam.completed,
+        noReasonCount: acc.noReasonCount + kam.noReasonCount
       }),
-      { totalChurn: 0, yetToRespond: 0, completed: 0 }
+      { totalChurn: 0, yetToRespond: 0, completed: 0, noReasonCount: 0 }
     )
   }, [kamSummary])
 
@@ -690,12 +729,13 @@ export default function ChurnTab({ records, loading, error }: Props) {
                   <th className="px-4 py-3 text-center text-sm font-semibold text-secondary-700">Total Churn Count</th>
                   <th className="px-4 py-3 text-center text-sm font-semibold text-secondary-700">Yet to Respond</th>
                   <th className="px-4 py-3 text-center text-sm font-semibold text-secondary-700">Completed Count</th>
+                  <th className="px-4 py-3 text-center text-sm font-semibold text-secondary-700">No Reason Count</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-secondary-100">
                 {kamSummary.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-secondary-500">
+                    <td colSpan={5} className="px-4 py-8 text-center text-secondary-500">
                       No KAM data available for the selected filters
                     </td>
                   </tr>
@@ -707,6 +747,7 @@ export default function ChurnTab({ records, loading, error }: Props) {
                         <td className="px-4 py-3 text-sm text-center text-blue-600 font-semibold">{kam.totalChurn}</td>
                         <td className="px-4 py-3 text-sm text-center text-orange-600 font-semibold">{kam.yetToRespond}</td>
                         <td className="px-4 py-3 text-sm text-center text-green-600 font-semibold">{kam.completed}</td>
+                        <td className="px-4 py-3 text-sm text-center text-red-600 font-semibold">{kam.noReasonCount}</td>
                       </tr>
                     ))}
                     {/* Totals Row */}
@@ -715,6 +756,7 @@ export default function ChurnTab({ records, loading, error }: Props) {
                       <td className="px-4 py-3 text-sm text-center text-blue-700 font-bold">{kamSummaryTotals.totalChurn}</td>
                       <td className="px-4 py-3 text-sm text-center text-orange-700 font-bold">{kamSummaryTotals.yetToRespond}</td>
                       <td className="px-4 py-3 text-sm text-center text-green-700 font-bold">{kamSummaryTotals.completed}</td>
+                      <td className="px-4 py-3 text-sm text-center text-red-700 font-bold">{kamSummaryTotals.noReasonCount}</td>
                     </tr>
                   </>
                 )}

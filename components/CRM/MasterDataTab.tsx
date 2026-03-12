@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import SearchableMultiSelect from './SearchableMultiSelect'
 
 // Zone colors for pie chart
 const ZONE_COLORS = [
@@ -136,29 +137,14 @@ export default function MasterDataTab({ userProfile }: MasterDataTabProps) {
     return Math.max(...records.map(r => r.churn_count || 0))
   }, [records])
 
-  // Calculate statistics
-  const statistics = useMemo(() => {
-    const totalBrands = records.length
-    const unassignedBrands = records.filter(r => r.kam_name === 'Unassigned')
-    const unassignedCount = unassignedBrands.length
-
-    // Group unassigned brands by zone
-    const unassignedByZone: Record<string, number> = {}
-    unassignedBrands.forEach(brand => {
-      const zone = brand.zone || 'Unknown'
-      unassignedByZone[zone] = (unassignedByZone[zone] || 0) + 1
-    })
-
-    return {
-      totalBrands,
-      unassignedCount,
-      unassignedByZone
-    }
-  }, [records])
-
   useEffect(() => {
     fetchMasterData()
   }, [])
+
+  // Clear KAM filter when team filter changes
+  useEffect(() => {
+    setKamFilter([])
+  }, [teamFilter])
 
   const fetchMasterData = async () => {
     try {
@@ -182,9 +168,20 @@ export default function MasterDataTab({ userProfile }: MasterDataTabProps) {
 
   // Get unique values for filters
   const uniqueKams = useMemo(() => {
+    // If team filter is active, only show KAMs from selected teams
+    if (teamFilter.length > 0) {
+      const kams = new Set(
+        records
+          .filter(r => teamFilter.includes(r.team_name))
+          .map(r => r.kam_name)
+          .filter(Boolean)
+      )
+      return Array.from(kams).sort()
+    }
+    // Otherwise show all KAMs
     const kams = new Set(records.map(r => r.kam_name).filter(Boolean))
     return Array.from(kams).sort()
-  }, [records])
+  }, [records, teamFilter])
 
   const uniqueTeams = useMemo(() => {
     const teams = new Set(records.map(r => r.team_name).filter(Boolean))
@@ -256,17 +253,25 @@ export default function MasterDataTab({ userProfile }: MasterDataTabProps) {
     })
   }, [records, searchTerm, kamFilter, teamFilter, zoneFilter, stateFilter, healthStatusFilter, brandNatureFilter, churnCountMin, churnCountMax])
 
-  const handleMultiSelectChange = (
-    value: string,
-    currentFilters: string[],
-    setFilter: (filters: string[]) => void
-  ) => {
-    if (currentFilters.includes(value)) {
-      setFilter(currentFilters.filter(f => f !== value))
-    } else {
-      setFilter([...currentFilters, value])
+  // Calculate statistics based on filtered records
+  const statistics = useMemo(() => {
+    const totalBrands = filteredRecords.length
+    const unassignedBrands = filteredRecords.filter(r => r.kam_name === 'Unassigned')
+    const unassignedCount = unassignedBrands.length
+
+    // Group unassigned brands by zone
+    const unassignedByZone: Record<string, number> = {}
+    unassignedBrands.forEach(brand => {
+      const zone = brand.zone || 'Unknown'
+      unassignedByZone[zone] = (unassignedByZone[zone] || 0) + 1
+    })
+
+    return {
+      totalBrands,
+      unassignedCount,
+      unassignedByZone
     }
-  }
+  }, [filteredRecords])
 
   const clearAllFilters = () => {
     setSearchTerm('')
@@ -455,112 +460,52 @@ export default function MasterDataTab({ userProfile }: MasterDataTabProps) {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* KAM Filter */}
-          <div>
-            <label className="block text-sm font-medium text-secondary-700 mb-2">KAM Name</label>
-            <div className="max-h-40 overflow-y-auto border border-gray-300 rounded-lg p-2 bg-white">
-              {uniqueKams.map(kam => (
-                <label key={kam} className="flex items-center space-x-2 py-1 hover:bg-gray-50 px-2 rounded">
-                  <input
-                    type="checkbox"
-                    checked={kamFilter.includes(kam)}
-                    onChange={() => handleMultiSelectChange(kam, kamFilter, setKamFilter)}
-                    className="rounded text-primary-600"
-                  />
-                  <span className="text-sm">{kam}</span>
-                </label>
-              ))}
-            </div>
-          </div>
+          <SearchableMultiSelect
+            label="KAM Name"
+            options={uniqueKams}
+            selected={kamFilter}
+            onChange={setKamFilter}
+          />
 
           {/* Team Filter */}
-          <div>
-            <label className="block text-sm font-medium text-secondary-700 mb-2">Team Name</label>
-            <div className="max-h-40 overflow-y-auto border border-gray-300 rounded-lg p-2 bg-white">
-              {uniqueTeams.map(team => (
-                <label key={team} className="flex items-center space-x-2 py-1 hover:bg-gray-50 px-2 rounded">
-                  <input
-                    type="checkbox"
-                    checked={teamFilter.includes(team)}
-                    onChange={() => handleMultiSelectChange(team, teamFilter, setTeamFilter)}
-                    className="rounded text-primary-600"
-                  />
-                  <span className="text-sm">{team}</span>
-                </label>
-              ))}
-            </div>
-          </div>
+          <SearchableMultiSelect
+            label="Team Name"
+            options={uniqueTeams}
+            selected={teamFilter}
+            onChange={setTeamFilter}
+          />
 
           {/* Zone Filter */}
-          <div>
-            <label className="block text-sm font-medium text-secondary-700 mb-2">Zone</label>
-            <div className="max-h-40 overflow-y-auto border border-gray-300 rounded-lg p-2 bg-white">
-              {uniqueZones.map(zone => (
-                <label key={zone} className="flex items-center space-x-2 py-1 hover:bg-gray-50 px-2 rounded">
-                  <input
-                    type="checkbox"
-                    checked={zoneFilter.includes(zone)}
-                    onChange={() => handleMultiSelectChange(zone, zoneFilter, setZoneFilter)}
-                    className="rounded text-primary-600"
-                  />
-                  <span className="text-sm">{zone}</span>
-                </label>
-              ))}
-            </div>
-          </div>
+          <SearchableMultiSelect
+            label="Zone"
+            options={uniqueZones}
+            selected={zoneFilter}
+            onChange={setZoneFilter}
+          />
 
           {/* State Filter */}
-          <div>
-            <label className="block text-sm font-medium text-secondary-700 mb-2">Brand State</label>
-            <div className="max-h-40 overflow-y-auto border border-gray-300 rounded-lg p-2 bg-white">
-              {uniqueStates.map(state => (
-                <label key={state} className="flex items-center space-x-2 py-1 hover:bg-gray-50 px-2 rounded">
-                  <input
-                    type="checkbox"
-                    checked={stateFilter.includes(state)}
-                    onChange={() => handleMultiSelectChange(state, stateFilter, setStateFilter)}
-                    className="rounded text-primary-600"
-                  />
-                  <span className="text-sm">{state}</span>
-                </label>
-              ))}
-            </div>
-          </div>
+          <SearchableMultiSelect
+            label="Brand State"
+            options={uniqueStates}
+            selected={stateFilter}
+            onChange={setStateFilter}
+          />
 
           {/* Health Status Filter */}
-          <div>
-            <label className="block text-sm font-medium text-secondary-700 mb-2">Health Status</label>
-            <div className="max-h-40 overflow-y-auto border border-gray-300 rounded-lg p-2 bg-white">
-              {uniqueHealthStatuses.map(status => (
-                <label key={status} className="flex items-center space-x-2 py-1 hover:bg-gray-50 px-2 rounded">
-                  <input
-                    type="checkbox"
-                    checked={healthStatusFilter.includes(status)}
-                    onChange={() => handleMultiSelectChange(status, healthStatusFilter, setHealthStatusFilter)}
-                    className="rounded text-primary-600"
-                  />
-                  <span className="text-sm">{status}</span>
-                </label>
-              ))}
-            </div>
-          </div>
+          <SearchableMultiSelect
+            label="Health Status"
+            options={uniqueHealthStatuses}
+            selected={healthStatusFilter}
+            onChange={setHealthStatusFilter}
+          />
 
           {/* Brand Nature Filter */}
-          <div>
-            <label className="block text-sm font-medium text-secondary-700 mb-2">Brand Nature</label>
-            <div className="max-h-40 overflow-y-auto border border-gray-300 rounded-lg p-2 bg-white">
-              {uniqueBrandNatures.map(nature => (
-                <label key={nature} className="flex items-center space-x-2 py-1 hover:bg-gray-50 px-2 rounded">
-                  <input
-                    type="checkbox"
-                    checked={brandNatureFilter.includes(nature)}
-                    onChange={() => handleMultiSelectChange(nature, brandNatureFilter, setBrandNatureFilter)}
-                    className="rounded text-primary-600"
-                  />
-                  <span className="text-sm">{nature}</span>
-                </label>
-              ))}
-            </div>
-          </div>
+          <SearchableMultiSelect
+            label="Brand Nature"
+            options={uniqueBrandNatures}
+            selected={brandNatureFilter}
+            onChange={setBrandNatureFilter}
+          />
 
           {/* Churn Count Range Filter */}
           <div>

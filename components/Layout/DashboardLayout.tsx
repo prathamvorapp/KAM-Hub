@@ -55,16 +55,16 @@ export default function DashboardLayout({ children, userProfile }: DashboardLayo
       {userProfile && (
         <ApprovalNotifications userEmail={userProfile.email} userRole={userProfile.role} />
       )}
-      <div className="flex relative z-10">
+      <div className="flex relative z-10 min-h-[calc(100vh-64px)]">
         <Sidebar userProfile={userProfile} />
         <motion.main
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
-          className="flex-1 p-6 overflow-auto bg-white/30 backdrop-blur-sm"
+          className="flex-1 overflow-y-auto bg-white/30 backdrop-blur-sm"
         >
           <motion.div
-            className="page-transition"
+            className="page-transition p-6"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: "easeOut" }}
