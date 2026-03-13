@@ -97,14 +97,36 @@ export async function GET(request: NextRequest) {
       churnCategorizations.map(c => [c.kam_name, c.overdue])
     );
 
-    // Get visits this month for each KAM
-    const { data: visitsData, error: visitsError } = await supabase
-      .from('visits')
-      .select('agent_id, visit_date')
-      .gte('visit_date', firstDayOfMonth)
-      .lte('visit_date', lastDayOfMonth);
-
-    if (visitsError) throw visitsError;
+    // Get visits this month for each KAM (any visit scheduled or completed in this month)
+    let allVisits: any[] = [];
+    let visitPage = 0;
+    const visitPageSize = 1000;
+    let hasMoreVisits = true;
+    
+    while (hasMoreVisits) {
+      const { data: pageData, error: visitsError } = await supabase
+        .from('visits')
+        .select('agent_id, visit_date, scheduled_date, visit_status')
+        .eq('visit_year', now.getFullYear().toString())
+        .range(visitPage * visitPageSize, (visitPage + 1) * visitPageSize - 1);
+      
+      if (visitsError) throw visitsError;
+      
+      if (pageData && pageData.length > 0) {
+        allVisits = [...allVisits, ...pageData];
+        hasMoreVisits = pageData.length === visitPageSize;
+        visitPage++;
+      } else {
+        hasMoreVisits = false;
+      }
+    }
+    
+    // Filter visits for current month
+    const visitsData = allVisits.filter((v: any) => {
+      const visitDate = v.visit_date ? v.visit_date.slice(0, 7) : null;
+      const scheduledDate = v.scheduled_date ? v.scheduled_date.slice(0, 7) : null;
+      return visitDate === currentMonth || scheduledDate === currentMonth;
+    });
 
     // Get health checks pending this month for each KAM
     const { data: healthChecks, error: healthError } = await supabase
