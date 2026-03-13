@@ -65,6 +65,7 @@ interface Categorization {
   followUps: number
   completed: number
   completedWithoutReason?: number
+  brandCount?: number
 }
 
 interface PaginationInfo {
@@ -96,7 +97,8 @@ function ChurnDataPageContent() {
       overdue: 0,
       followUps: 0,
       completed: 0,
-      completedWithoutReason: 0
+      completedWithoutReason: 0,
+      brandCount: 0
     }
   })
   const [completedFollowUpsCount, setCompletedFollowUpsCount] = useState(0)
@@ -680,7 +682,7 @@ function ChurnDataPageContent() {
           */}
 
           {/* Summary Boxes - 4 Section Categorization (Clickable) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
             {/* New Count Box (Last 3 Days, No Agent Response) */}
             <div 
               className={`card p-6 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 cursor-pointer transition-all duration-200 hover:shadow-lg ${activeFilter === 'newCount' ? 'ring-2 ring-blue-500 shadow-lg' : ''}`}
@@ -786,6 +788,24 @@ function ChurnDataPageContent() {
                 </div>
                 <div className="p-3 bg-orange-500 rounded-full">
                   <span className="text-white text-2xl">⚠️</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Brand Count Box */}
+            <div 
+              className="card p-6 bg-gradient-to-br from-teal-50 to-teal-100 border-teal-200"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-teal-600 uppercase tracking-wide">Brand Count</p>
+                  <p className="mt-2 text-4xl font-bold text-teal-900">
+                    {allCategoryStats ? allCategoryStats.brandCount : (pagination.categorization?.brandCount || 0)}
+                  </p>
+                  <p className="mt-1 text-sm text-teal-700">Unique brands (owner emails)</p>
+                </div>
+                <div className="p-3 bg-teal-500 rounded-full">
+                  <span className="text-white text-2xl">🏢</span>
                 </div>
               </div>
             </div>

@@ -9,6 +9,7 @@ import ChurnTab from '@/components/CRM/ChurnTab'
 import VisitTab from '@/components/CRM/VisitTab'
 import DemoGiveTab from '@/components/CRM/DemoGiveTab'
 import MasterDataTab from '@/components/CRM/MasterDataTab'
+import KAMSummaryTab from '@/components/CRM/KAMSummaryTab'
 
 interface HealthCheckRecord {
   check_id: string
@@ -38,7 +39,7 @@ interface ChurnRecord {
 export default function CRMPage() {
   const { userProfile } = useAuth()
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<'health' | 'churn' | 'visits' | 'demogive' | 'masterdata'>('health')
+  const [activeTab, setActiveTab] = useState<'health' | 'churn' | 'visits' | 'demogive' | 'masterdata' | 'kamsummary'>('kamsummary')
   
   // Health Check States
   const [healthRecords, setHealthRecords] = useState<HealthCheckRecord[]>([])
@@ -147,6 +148,16 @@ export default function CRMPage() {
             {/* Tabs */}
             <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
               <button
+                onClick={() => setActiveTab('kamsummary')}
+                className={`px-6 py-3 font-medium transition-colors whitespace-nowrap ${
+                  activeTab === 'kamsummary'
+                    ? 'border-b-2 border-primary-600 text-primary-600'
+                    : 'text-secondary-600 hover:text-secondary-800'
+                }`}
+              >
+                📊 KAM Summary
+              </button>
+              <button
                 onClick={() => setActiveTab('masterdata')}
                 className={`px-6 py-3 font-medium transition-colors whitespace-nowrap ${
                   activeTab === 'masterdata'
@@ -197,6 +208,10 @@ export default function CRMPage() {
                 🎯 Demo
               </button>
             </div>
+
+            {activeTab === 'kamsummary' && (
+              <KAMSummaryTab />
+            )}
 
             {activeTab === 'masterdata' && (
               <MasterDataTab userProfile={userProfile} />

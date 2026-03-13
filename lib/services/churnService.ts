@@ -254,6 +254,12 @@ export const churnService = {
       return acc;
     }, { newCount: 0, overdue: 0, followUps: 0, completed: 0, completedWithoutReason: 0 });
     
+    // Calculate unique brand count based on unique owner_email
+    const uniqueOwnerEmails = new Set(records.map(record => record.owner_email?.trim().toLowerCase()).filter(Boolean));
+    const brandCount = uniqueOwnerEmails.size;
+    
+    console.log(`📊 Brand Count: ${brandCount} unique brands from ${records.length} records`);
+    
     // Apply category filter BEFORE search
     if (filter && filter !== 'all') {
       console.log(`🔍 Applying category filter: ${filter}`);
@@ -363,7 +369,10 @@ export const churnService = {
       data: paginatedRecords,
       total,
       missing_churn_reasons: categorization.newCount + categorization.overdue,
-      categorization,
+      categorization: {
+        ...categorization,
+        brandCount
+      },
       page,
       limit,
       total_pages: Math.ceil(total / limit),

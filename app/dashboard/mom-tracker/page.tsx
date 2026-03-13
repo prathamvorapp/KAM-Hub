@@ -55,6 +55,7 @@ function TicketsPageContent() {
   const [searchTerm, setSearchTerm] = useState<string>('')
   const [selectedMOM, setSelectedMOM] = useState<MOMRecord | null>(null)
   const [visitDetails, setVisitDetails] = useState<any>(null)
+  const [showOnlySelected, setShowOnlySelected] = useState<boolean>(!!visitId)
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -549,16 +550,37 @@ function TicketsPageContent() {
           </div>
         ) : (
           <div className="space-y-4">
-            {momRecords.map((mom, momIndex) => {
+            {/* Toggle to show all or only selected MOM */}
+            {visitId && momRecords.length > 1 && (
+              <div className="bg-white/10 backdrop-blur-md rounded-xl border border-white/20 p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-white text-sm">
+                    {showOnlySelected 
+                      ? `Showing only the selected MOM (${momRecords.filter(m => m.visit_id === visitId).length} of ${momRecords.length})`
+                      : `Showing all MOMs (${momRecords.length})`
+                    }
+                  </span>
+                  <button
+                    onClick={() => setShowOnlySelected(!showOnlySelected)}
+                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors text-sm font-medium"
+                  >
+                    {showOnlySelected ? 'Show All MOMs' : 'Show Only Selected'}
+                  </button>
+                </div>
+              </div>
+            )}
+            {momRecords
+              .filter(mom => !showOnlySelected || !visitId || mom.visit_id === visitId)
+              .map((mom, momIndex) => {
               const isSelectedMOM = visitId && mom.visit_id === visitId
               // Create a safe key that handles undefined _id
               const safeKey = mom._id || `mom-${momIndex}-${mom.ticket_id || 'no-ticket'}-${mom.created_at || Date.now()}`;
               return (
                 <div 
                   key={safeKey}
-                  className={`backdrop-blur-md rounded-xl border p-6 ${
+                  className={`backdrop-blur-md rounded-xl border p-6 transition-all duration-300 ${
                     isSelectedMOM 
-                      ? 'bg-blue-500/20 border-blue-400/50 ring-2 ring-blue-400/30' 
+                      ? 'bg-blue-500/20 border-blue-400/50 ring-4 ring-blue-400/40 shadow-xl shadow-blue-500/20' 
                       : 'bg-white/10 border-white/20'
                   }`}
                 >

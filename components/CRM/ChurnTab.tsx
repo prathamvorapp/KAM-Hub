@@ -491,7 +491,7 @@ export default function ChurnTab({ records, loading, error }: Props) {
   return (
     <div>
       {/* Summary Cards - Interactive with Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
         <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6 border border-blue-200">
           <div className="flex items-center justify-between">
             <div>
@@ -552,6 +552,21 @@ export default function ChurnTab({ records, loading, error }: Props) {
               <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-teal-50 to-teal-100 rounded-lg p-6 border border-teal-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-teal-600 text-sm font-medium">Brand Count</p>
+              <p className="text-3xl font-bold text-teal-800 mt-2">
+                {new Set(filteredRecords.map(r => r.owner_email?.trim().toLowerCase()).filter(Boolean)).size}
+              </p>
+              <p className="text-xs text-teal-600 mt-1">unique brands (owner emails)</p>
+            </div>
+            <div className="w-12 h-12 bg-teal-200 rounded-full flex items-center justify-center">
+              <span className="text-2xl">🏢</span>
             </div>
           </div>
         </div>
