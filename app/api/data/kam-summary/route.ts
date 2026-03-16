@@ -128,13 +128,27 @@ export async function GET(request: NextRequest) {
       return visitDate === currentMonth || scheduledDate === currentMonth;
     });
 
-    // Get health checks pending this month for each KAM
-    const { data: healthChecks, error: healthError } = await supabase
-      .from('health_checks')
-      .select('kam_email, assessment_date')
-      .eq('assessment_month', currentMonth);
-
-    if (healthError) throw healthError;
+    // Get health checks done this month for each KAM (paginated)
+    let healthChecks: any[] = [];
+    let hcPage = 0;
+    const hcPageSize = 1000;
+    let hasMoreHc = true;
+    while (hasMoreHc) {
+      const { data: pageData, error: healthError } = await supabase
+        .from('health_checks')
+        .select('kam_email, assessment_date')
+        .gte('assessment_date', firstDayOfMonth)
+        .lte('assessment_date', lastDayOfMonth)
+        .range(hcPage * hcPageSize, (hcPage + 1) * hcPageSize - 1);
+      if (healthError) throw healthError;
+      if (pageData && pageData.length > 0) {
+        healthChecks = [...healthChecks, ...pageData];
+        hasMoreHc = pageData.length === hcPageSize;
+        hcPage++;
+      } else {
+        hasMoreHc = false;
+      }
+    }
 
     // Get demos done this month for each KAM
     const { data: demos, error: demosError } = await supabase
@@ -146,13 +160,26 @@ export async function GET(request: NextRequest) {
 
     if (demosError) throw demosError;
 
-    // Get all brands assigned to each KAM
-    const { data: allBrands, error: brandsError } = await supabase
-      .from('master_data')
-      .select('kam_email_id, id')
-      .in('kam_email_id', uniqueKams.map(k => k.kam_email_id));
-
-    if (brandsError) throw brandsError;
+    // Get all brands assigned to each KAM (paginated to avoid Supabase 1000-row default limit)
+    let allBrands: any[] = [];
+    let brandsPage = 0;
+    const brandsPageSize = 1000;
+    let hasMoreBrands = true;
+    while (hasMoreBrands) {
+      const { data: pageData, error: brandsError } = await supabase
+        .from('master_data')
+        .select('kam_email_id, id')
+        .in('kam_email_id', uniqueKams.map(k => k.kam_email_id))
+        .range(brandsPage * brandsPageSize, (brandsPage + 1) * brandsPageSize - 1);
+      if (brandsError) throw brandsError;
+      if (pageData && pageData.length > 0) {
+        allBrands = [...allBrands, ...pageData];
+        hasMoreBrands = pageData.length === brandsPageSize;
+        brandsPage++;
+      } else {
+        hasMoreBrands = false;
+      }
+    }
 
     // Build summary for each KAM
     const summary = uniqueKams.map(kam => {
