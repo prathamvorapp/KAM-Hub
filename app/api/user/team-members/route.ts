@@ -19,36 +19,55 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const team = searchParams.get('team');
-
-    if (!team) {
-      return NextResponse.json({
-        success: false,
-        error: 'team parameter is required'
-      }, { status: 400 });
-    }
+    let team = searchParams.get('team');
 
     // Authorization check
-    // Normalize roles for comparison
-    const normalizedUserRole = user.role.toLowerCase();
+    const normalizedUserRole = user.role.toLowerCase().replace(/\s+/g, '_');
 
-    if (normalizedUserRole === UserRole.ADMIN.toLowerCase()) {
-      // Admin can view any team members
+    const supabase = getSupabaseAdmin();
+
+    const isAdmin = normalizedUserRole === 'admin';
+    const isTeamLead = normalizedUserRole === 'team_lead' || normalizedUserRole === 'teamlead';
+
+    if (isAdmin) {
+      // Admin can view any team members; team param required
+      if (!team) {
+        return NextResponse.json({ success: false, error: 'team parameter is required' }, { status: 400 });
+      }
       console.log(`✅ [API Auth] Admin ${user.email} viewing team: ${team}`);
-    } else if (normalizedUserRole === UserRole.TEAM_LEAD.toLowerCase()) {
+    } else if (isTeamLead) {
+      // If team param is missing or empty, fall back to the authenticated user's own team from DB
+      if (!team) {
+        const { data: freshProfile } = await supabase
+          .from('user_profiles')
+          .select('team_name')
+          .eq('email', user.email)
+          .single();
+        team = (freshProfile as { team_name: string | null } | null)?.team_name || null;
+        console.log(`ℹ️ [API Auth] Team Lead ${user.email} - resolved team from DB: ${team}`);
+      }
+
+      if (!team) {
+        return NextResponse.json({ success: false, error: 'Team Lead has no team assigned' }, { status: 400 });
+      }
+
       // Team Lead can only view members of their own team
-      if (user.team_name?.toLowerCase() !== team.toLowerCase()) {
+      const userTeam = user.team_name || (await supabase
+        .from('user_profiles')
+        .select('team_name')
+        .eq('email', user.email)
+        .single()
+        .then(r => (r.data as { team_name: string | null } | null)?.team_name));
+
+      if (userTeam?.toLowerCase() !== team.toLowerCase()) {
         console.log(`❌ [API Auth] Team Lead ${user.email} attempted to view unauthorized team: ${team}`);
-        return unauthorizedResponse(`Access denied - Team Leads can only view their own team's members. Your team: ${user.team_name}`);
+        return unauthorizedResponse(`Access denied - Team Leads can only view their own team's members. Your team: ${userTeam}`);
       }
       console.log(`✅ [API Auth] Team Lead ${user.email} viewing own team members: ${team}`);
     } else {
-      // Agents and other roles cannot view team members (or perhaps only their own, which this route doesn't support directly)
       console.log(`❌ [API Auth] User ${user.email} (Role: ${user.role}) attempted to view team: ${team}`);
       return unauthorizedResponse('Access denied - Only Team Leads and Admins can view team members.');
     }
-
-    const supabase = getSupabaseAdmin();
 
     const { data: teamMembers, error: dbError } = await supabase
       .from('user_profiles')

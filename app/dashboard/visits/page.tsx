@@ -678,10 +678,11 @@ export default function VisitManagementPage() {
 
         if (normalizedRole === 'teamlead') {
           // Team Leads see all agents in their team
-          // console.log('👥 Fetching team members for team:', userProfile?.teamName);
-          const teamMembers = await api.getTeamMembers(userProfile?.teamName || '');
-          
-          // console.log('📊 Team members response:', teamMembers);
+          const teamName = userProfile?.teamName || '';
+          if (!teamName) {
+            console.warn('⚠️ Team Lead has no team_name set in profile');
+          }
+          const teamMembers = await api.getTeamMembers(teamName);
           
           if (teamMembers.success && teamMembers.data) {
             agents = teamMembers.data
@@ -694,8 +695,6 @@ export default function VisitManagementPage() {
                 full_name: member.full_name,
                 team_name: member.team_name
               }));
-            
-            // console.log('✅ Filtered agents:', agents);
           }
         } else if (normalizedRole === 'admin') {
           // Admins see all active agents

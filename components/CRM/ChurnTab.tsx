@@ -7,6 +7,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Toolti
 interface ChurnRecord {
   rid: string
   restaurant_name: string
+  brand_name?: string
   kam: string
   churn_reason: string
   remarks: string
@@ -247,11 +248,12 @@ export default function ChurnTab({ records, loading, error }: Props) {
   }, [startDateFilter, endDateFilter, ridFilter, kamFilter, churnReasonFilter, teamFilter])
 
   const downloadCSV = () => {
-    const headers = ['Date', 'RID', 'Restaurant Name', 'KAM', 'Churn Reason', 'Remarks', 'Mail Sent']
+    const headers = ['Date', 'RID', 'Restaurant Name', 'Brand Name', 'KAM', 'Churn Reason', 'Remarks', 'Mail Sent']
     const csvData = filteredRecords.map(record => [
       record.date,
       record.rid,
       `"${(record.restaurant_name || '').replace(/"/g, '""')}"`,
+      `"${(record.brand_name || '').replace(/"/g, '""')}"`,
       record.kam,
       record.churn_reason || '',
       `"${(record.remarks || '').replace(/"/g, '""')}"`,
@@ -802,6 +804,7 @@ export default function ChurnTab({ records, loading, error }: Props) {
                 <th className="text-left py-3 px-4 text-secondary-700 font-semibold">Date</th>
                 <th className="text-left py-3 px-4 text-secondary-700 font-semibold">RID</th>
                 <th className="text-left py-3 px-4 text-secondary-700 font-semibold">Restaurant Name</th>
+                <th className="text-left py-3 px-4 text-secondary-700 font-semibold">Brand Name</th>
                 <th className="text-left py-3 px-4 text-secondary-700 font-semibold">KAM</th>
                 <th className="text-left py-3 px-4 text-secondary-700 font-semibold">Churn Reason</th>
                 <th className="text-left py-3 px-4 text-secondary-700 font-semibold">Remarks</th>
@@ -810,13 +813,14 @@ export default function ChurnTab({ records, loading, error }: Props) {
             </thead>
             <tbody>
               {filteredRecords.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-8 text-secondary-600">No records found matching the selected filters</td></tr>
+                <tr><td colSpan={8} className="text-center py-8 text-secondary-600">No records found matching the selected filters</td></tr>
               ) : (
                 paginatedRecords.map((record, index) => (
                   <tr key={`${record.rid}-${index}`} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                     <td className="py-3 px-4 text-secondary-800">{formatDate(record.date)}</td>
                     <td className="py-3 px-4 text-secondary-800 font-medium">{record.rid}</td>
                     <td className="py-3 px-4 text-secondary-800">{record.restaurant_name}</td>
+                    <td className="py-3 px-4 text-secondary-800">{record.brand_name || '-'}</td>
                     <td className="py-3 px-4 text-secondary-800">{record.kam}</td>
                     <td className="py-3 px-4 text-secondary-800">{record.churn_reason || '-'}</td>
                     <td className="py-3 px-4 text-secondary-600 text-sm max-w-xs truncate">{record.remarks || '-'}</td>
