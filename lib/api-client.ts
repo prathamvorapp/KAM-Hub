@@ -528,19 +528,17 @@ export const apiClient = {
 
   // Schedule backdated visit
   scheduleBackdatedVisit: async (visitData: any) => {
-    try {
-      const response = await fetch(`/api/data/visits/backdated`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(visitData)
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return await response.json();
-    } catch (error) {
-      console.error('Error scheduling backdated visit:', error);
-      return { success: false, error: 'Failed to schedule backdated visit' };
+    const response = await fetch(`/api/data/visits/backdated`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(visitData)
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || `HTTP ${response.status}`);
     }
+    return result;
   },
 
   // Demo operations

@@ -258,6 +258,7 @@ export default function MasterDataTab({ userProfile }: MasterDataTabProps) {
     const totalBrands = filteredRecords.length
     const unassignedBrands = filteredRecords.filter(r => r.kam_name === 'Unassigned')
     const unassignedCount = unassignedBrands.length
+    const totalOutlets = filteredRecords.reduce((sum, r) => sum + (r.outlet_count || 0), 0)
 
     // Group unassigned brands by zone
     const unassignedByZone: Record<string, number> = {}
@@ -269,7 +270,8 @@ export default function MasterDataTab({ userProfile }: MasterDataTabProps) {
     return {
       totalBrands,
       unassignedCount,
-      unassignedByZone
+      unassignedByZone,
+      totalOutlets
     }
   }, [filteredRecords])
 
@@ -344,7 +346,7 @@ export default function MasterDataTab({ userProfile }: MasterDataTabProps) {
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Total Brands Card */}
         <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-6 shadow-sm">
           <div className="flex items-center justify-between">
@@ -375,6 +377,21 @@ export default function MasterDataTab({ userProfile }: MasterDataTabProps) {
             <div className="bg-orange-500 rounded-full p-3">
               <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        {/* Total Outlets Card */}
+        <div className="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-lg p-6 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-green-600 mb-1">Total Outlets</p>
+              <p className="text-3xl font-bold text-green-900">{statistics.totalOutlets.toLocaleString()}</p>
+            </div>
+            <div className="bg-green-500 rounded-full p-3">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
             </div>
           </div>

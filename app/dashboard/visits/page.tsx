@@ -763,7 +763,6 @@ export default function VisitManagementPage() {
         zone: visitData.zone,
         visit_year: visitYear,
         backdate_reason: visitData.backdate_reason,
-        created_by: userProfile.email,
       });
       
       handleCloseBackdatedModal();
