@@ -1077,21 +1077,19 @@ function ChurnDataPageContent() {
       </DashboardLayout>
 
       {/* Churn Reason Modal - Rendered outside DashboardLayout to avoid z-index issues */}
-      {selectedRecord && (
-        <ChurnReasonModal
-          isOpen={isModalOpen}
-          onClose={() => {
-            // console.log('🔄 Closing modal for RID:', selectedRecord.rid)
-            setIsModalOpen(false)
-            setSelectedRecord(null)
-          }}
-          onSelect={handleChurnReasonSelect}
-          currentReason={selectedRecord.churn_reason}
-          currentRemarks={selectedRecord.remarks}
-          rid={selectedRecord.rid}
-          restaurantName={selectedRecord.restaurant_name}
-        />
-      )}
+      <ChurnReasonModal
+        isOpen={isModalOpen && !!selectedRecord}
+        onClose={() => {
+          // console.log('🔄 Closing modal for RID:', selectedRecord.rid)
+          setIsModalOpen(false)
+          setSelectedRecord(null)
+        }}
+        onSelect={handleChurnReasonSelect}
+        currentReason={selectedRecord?.churn_reason}
+        currentRemarks={selectedRecord?.remarks}
+        rid={selectedRecord?.rid || ''}
+        restaurantName={selectedRecord?.restaurant_name || ''}
+      />
       
       {/* CSV Upload Modal */}
       {canUploadCSV && (

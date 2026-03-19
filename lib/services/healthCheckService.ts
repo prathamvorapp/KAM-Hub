@@ -67,12 +67,45 @@ export const healthCheckService = {
       query = query.eq('assessment_month', month);
     }
     
-    const { data: allRecords, count } = await query.order('assessment_date', { ascending: false });
-    
-    const total = allRecords?.length || 0;
+    // Fetch ALL records in chunks to bypass Supabase's 1000-row default limit
+    let allRecords: any[] = [];
+    let chunkPage = 0;
+    const chunkSize = 1000;
+    let hasMore = true;
+
+    while (hasMore) {
+      const start = chunkPage * chunkSize;
+      const end = start + chunkSize - 1;
+
+      const { data: chunk, error: chunkError } = await query
+        .order('assessment_date', { ascending: false })
+        .range(start, end);
+
+      if (chunkError) {
+        console.error(`❌ [getHealthChecks] Error fetching chunk ${chunkPage}:`, chunkError);
+        throw chunkError;
+      }
+
+      if (chunk && chunk.length > 0) {
+        allRecords = [...allRecords, ...chunk];
+        hasMore = chunk.length === chunkSize;
+        chunkPage++;
+      } else {
+        hasMore = false;
+      }
+
+      if (chunkPage > 100) {
+        console.warn('⚠️ [getHealthChecks] Reached maximum chunk limit (100)');
+        break;
+      }
+    }
+
+    console.log(`📊 [getHealthChecks] Total records fetched: ${allRecords.length} (in ${chunkPage} chunks)`);
+
+    const total = allRecords.length;
     const startIndex = (page - 1) * limit;
-    const paginatedRecords = allRecords?.slice(startIndex, startIndex + limit) || [];
-    
+    const paginatedRecords = allRecords.slice(startIndex, startIndex + limit);
+
     return {
       data: paginatedRecords,
       total,

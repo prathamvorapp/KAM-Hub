@@ -64,13 +64,12 @@ export default function ChurnReasonModal({
     }
   }, [isOpen, rid])
 
-  // Force refresh follow-up data every 30 seconds when modal is open
+  // Background refresh every 30 seconds — does NOT show loading spinner
   useEffect(() => {
     if (isOpen) {
       const interval = setInterval(() => {
-        loadFollowUpData()
-      }, 30000) // Refresh every 30 seconds
-      
+        loadFollowUpDataSilent()
+      }, 30000)
       return () => clearInterval(interval)
     }
   }, [isOpen])
@@ -111,6 +110,29 @@ export default function ChurnReasonModal({
       console.error('Error loading follow-up data:', error)
     } finally {
       setLoadingFollowUp(false)
+    }
+  }
+
+  // Silent background refresh — does not trigger loading spinner so user input is preserved
+  const loadFollowUpDataSilent = async () => {
+    try {
+      const { api } = await import('@/lib/api')
+      const response = await api.getFollowUpStatus(rid, currentReason || '')
+      if (response.success && response.data) {
+        const data = response.data
+        setFollowUpData({
+          rid: rid,
+          call_attempts: data.call_attempts || [],
+          current_call: data.current_call || 1,
+          is_active: data.is_active,
+          mail_sent: data.mail_sent || false,
+          next_reminder_time: data.next_reminder_time,
+          created_at: data.created_at || new Date().toISOString(),
+          updated_at: data.updated_at || new Date().toISOString()
+        })
+      }
+    } catch (error) {
+      console.error('Error silently refreshing follow-up data:', error)
     }
   }
 
