@@ -88,6 +88,8 @@ export const visitService = {
       }
     }
     
+    // Use brand_id (UUID) for counting to survive brand name changes
+    const brandIdSet = new Set(agentBrands.map((brand: any) => brand.id).filter(Boolean));
     brandFilter = agentBrands.map((brand: any) => brand.brand_name) || [];
     
     // Fetch all visits using pagination
@@ -114,20 +116,21 @@ export const visitService = {
     }
     
     const visits = allVisits;
-    const total_brands = brandFilter.length;
+    const total_brands = brandIdSet.size;
     const nonCancelledVisits = visits.filter((v: any) => v.visit_status !== 'Cancelled'); 
     
     const approvedVisits = nonCancelledVisits.filter((v: any) => 
       v.visit_status === 'Completed' && v.approval_status === 'Approved'
     );
     
+    // Count by brand_id (falls back to brand_name for legacy visits without brand_id)
     const brandsWithApprovedMOM = new Set(
-      approvedVisits.map((visit: any) => visit.brand_name)
+      approvedVisits.map((visit: any) => visit.brand_id || visit.brand_name)
     );
     const visit_done = brandsWithApprovedMOM.size;
     const pending_visits = total_brands - visit_done;
     
-    const brandsWithVisits = new Set(nonCancelledVisits.map((visit: any) => visit.brand_name));
+    const brandsWithVisits = new Set(nonCancelledVisits.map((visit: any) => visit.brand_id || visit.brand_name));
     const brands_with_visits = brandsWithVisits.size;
 
     const completed = nonCancelledVisits.filter((v: any) => v.visit_status === 'Completed').length;
@@ -389,9 +392,26 @@ export const visitService = {
         agentNameMap = new Map(profiles?.map((p: any) => [p.email, p.full_name]) || []);
       }
 
+      // Backfill brand_id for legacy visits that were created without it
+      const missingBrandIdNames = [
+        ...new Set(
+          visits?.filter((v: any) => !v.brand_id && v.brand_name).map((v: any) => v.brand_name) || []
+        )
+      ];
+      let brandNameToIdMap = new Map<string, string>();
+      if (missingBrandIdNames.length > 0) {
+        const { data: brandRows } = await getSupabaseAdmin()
+          .from('master_data')
+          .select('id, brand_name')
+          .in('brand_name', missingBrandIdNames);
+        brandNameToIdMap = new Map(brandRows?.map((b: any) => [b.brand_name, b.id]) || []);
+      }
+
       const enrichedVisits = visits?.map((visit: any) => ({
         ...visit,
         agent_name: agentNameMap.get(visit.agent_id) || visit.agent_name || 'Unknown Agent',
+        // Use stored brand_id or resolve from master_data by brand_name
+        brand_id: visit.brand_id || brandNameToIdMap.get(visit.brand_name) || null,
       })) || [];
       
       let filteredVisits = enrichedVisits;
@@ -884,17 +904,24 @@ export const visitService = {
     const userProfile = normalizeUserProfile(rawProfile);
     const now = new Date().toISOString();
     
-    // Authorization: Only Admin and Team Lead can schedule backdated visits
-    const isAuthorized = await visitService._authorizeVisitAdminAction(userProfile);
-    if (!isAuthorized) {
+    // Authorization: Admin and Team Lead can schedule for others; Agents can only schedule for themselves
+    const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
+    const isAdminOrTeamLead = normalizedRole === 'admin' || normalizedRole === 'team_lead' || normalizedRole === 'teamlead';
+    const isAgent = normalizedRole === 'agent';
+
+    if (!isAdminOrTeamLead && !isAgent) {
       throw new Error(`Access denied: User ${userProfile.email} (Role: ${userProfile.role}) is not authorized to schedule backdated visits`);
     }
 
+    // Agents can only backdate for themselves
+    if (isAgent && data.agent_id !== userProfile.email) {
+      throw new Error(`Access denied: Agents can only schedule backdated visits for themselves`);
+    }
+
     // If Team Lead, ensure it's for their team members
-    const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
     if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
       const teamName = userProfile.team_name || userProfile.teamName;
-      if (data.agent_id !== userProfile.email && teamName) { // If creating for someone else
+      if (data.agent_id !== userProfile.email && teamName) {
         const { data: teamMembers } = await getSupabaseAdmin()
           .from('user_profiles')
           .select('email')
@@ -911,11 +938,24 @@ export const visitService = {
       ...data,
       visit_date: data.visit_date || data.scheduled_date,
       is_backdated: true,
-      backdated_by: userProfile.email, // Use authenticated user's email
+      backdated_by: userProfile.email,
       backdated_at: now,
       created_at: now,
       updated_at: now,
     };
+
+    // If MOM was already submitted and approved, populate all approval columns
+    if (data.mom_approved === true) {
+      const visitDate = data.visit_date || data.scheduled_date;
+      visitData.mom_shared = 'Yes';
+      visitData.mom_shared_date = visitDate;
+      visitData.approval_status = 'Approved';
+      visitData.approved_by = userProfile.email; // backdated by this user (Team Lead / Admin / Agent)
+      visitData.approved_at = visitDate;
+    }
+
+    // Strip the helper flag before inserting
+    delete visitData.mom_approved;
 
     const { error } = await getSupabaseAdmin()
       .from('visits')

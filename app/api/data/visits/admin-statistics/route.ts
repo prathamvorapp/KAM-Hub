@@ -144,23 +144,23 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Get all brands to calculate actual total
+    // Get all brands to calculate actual total — use id (UUID) to avoid double-counting on name changes
     const { data: allBrandsData, error: allBrandsError } = await supabase
       .from('master_data')
-      .select('brand_name');
+      .select('id');
 
     if (allBrandsError) {
       console.error('❌ Error fetching all brands:', allBrandsError);
     }
 
     // Type assertion for brands
-    type BrandData = { brand_name: string };
+    type BrandData = { id: string };
 
-    // Count distinct brand names (excluding null/empty)
+    // Count distinct brand IDs
     const uniqueBrands = new Set(
       (allBrandsData as BrandData[])
-        ?.filter(b => b.brand_name && b.brand_name.trim() !== '')
-        .map(b => b.brand_name)
+        ?.filter(b => b.id)
+        .map(b => b.id)
     );
     const actualTotalBrands = uniqueBrands.size;
 

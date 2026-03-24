@@ -18,6 +18,7 @@ interface BackdatedVisitModalProps {
     purpose?: string;
     zone?: string;
     backdate_reason: string;
+    mom_approved?: boolean;
   }) => void;
   userRole: string;
   userTeam?: string;
@@ -48,6 +49,7 @@ export default function BackdatedVisitModal({
   const [selectedAgent, setSelectedAgent] = useState('');
   const [scheduledDate, setScheduledDate] = useState('');
   const [visitStatus, setVisitStatus] = useState('Scheduled');
+  const [momApproved, setMomApproved] = useState<boolean | null>(null);
   const [purpose, setPurpose] = useState('');
   const [backdateReason, setBackdateReason] = useState('');
   const [loading, setLoading] = useState(false);
@@ -125,16 +127,22 @@ export default function BackdatedVisitModal({
     }
   };
 
-  // Reset form when modal opens/closes
+  // Reset form when modal opens/closes; auto-select agent when only one available
   useEffect(() => {
     if (!isOpen) {
       setSelectedBrand('');
       setSelectedAgent('');
       setScheduledDate('');
       setVisitStatus('Scheduled');
+      setMomApproved(null);
       setPurpose('');
       setBackdateReason('');
       setAgentBrands([]);
+    } else if (isOpen && filteredAgents.length === 1) {
+      // Auto-select the only agent (e.g. when user is an Agent)
+      const onlyAgent = filteredAgents[0];
+      setSelectedAgent(onlyAgent.email);
+      fetchBrandsForAgent(onlyAgent.email);
     }
   }, [isOpen]);
 
@@ -148,6 +156,12 @@ export default function BackdatedVisitModal({
       return;
     }
 
+    // If Completed, must answer the MOM question
+    if (visitStatus === 'Completed' && momApproved === null) {
+      alert('Please indicate whether the MOM was submitted and approved.');
+      return;
+    }
+
     // Validate that the date is in the past
     const selectedDateObj = new Date(scheduledDate);
     const today = new Date();
@@ -155,6 +169,13 @@ export default function BackdatedVisitModal({
     
     if (selectedDateObj >= today) {
       alert('Backdated visits must have a date in the past.');
+      return;
+    }
+
+    // Validate minimum date (Jan 1, 2026)
+    const minDate = new Date('2026-01-01');
+    if (selectedDateObj < minDate) {
+      alert('Backdated visits cannot be scheduled before January 1, 2026.');
       return;
     }
 
@@ -179,6 +200,7 @@ export default function BackdatedVisitModal({
         purpose: purpose.trim() || undefined,
         zone: selectedBrandData.zone,
         backdate_reason: backdateReason.trim(),
+        mom_approved: visitStatus === 'Completed' ? (momApproved ?? false) : undefined,
       });
       onClose();
     } catch (error) {
@@ -189,10 +211,11 @@ export default function BackdatedVisitModal({
     }
   };
 
-  // Calculate max date (yesterday)
+  // Calculate max date (yesterday) and min date (Jan 1, 2026)
   const maxDate = new Date();
   maxDate.setDate(maxDate.getDate() - 1);
   const maxDateString = maxDate.toISOString().split('T')[0];
+  const minDateString = '2026-01-01';
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -217,14 +240,15 @@ export default function BackdatedVisitModal({
             <AlertTriangle className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
             <div className="text-sm text-orange-800">
               <p className="font-medium">Backdated Visit</p>
-              <p>This feature allows {userRole}s to schedule visits with past dates. A reason is required for audit purposes.</p>
+              <p>This feature allows scheduling visits with past dates (from Jan 1, 2026 onwards). A reason is required for audit purposes.</p>
             </div>
           </div>
         </div>
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-4">
-            {/* Agent Selection */}
+            {/* Agent Selection - hidden for agents (auto-selected) */}
+            {filteredAgents.length !== 1 && (
             <div>
               <label htmlFor="agent" className="block text-sm font-medium text-gray-700 mb-1">
                 Select Agent *
@@ -245,6 +269,7 @@ export default function BackdatedVisitModal({
                 ))}
               </select>
             </div>
+            )}
 
             {/* Brand Selection */}
             <div>
@@ -290,10 +315,11 @@ export default function BackdatedVisitModal({
                 onChange={(e) => setScheduledDate(e.target.value)}
                 className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                 max={maxDateString}
+                min={minDateString}
                 disabled={loading}
                 required
               />
-              <p className="text-xs text-gray-500 mt-1">Must be a date in the past</p>
+              <p className="text-xs text-gray-500 mt-1">Must be a past date on or after Jan 1, 2026</p>
             </div>
 
             {/* Visit Status */}
@@ -304,16 +330,56 @@ export default function BackdatedVisitModal({
               <select
                 id="visitStatus"
                 value={visitStatus}
-                onChange={(e) => setVisitStatus(e.target.value)}
+                onChange={(e) => { setVisitStatus(e.target.value); setMomApproved(null); }}
                 className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                 disabled={loading}
                 required
               >
                 <option value="Scheduled">Scheduled</option>
                 <option value="Completed">Completed</option>
-                <option value="Visit Done">Visit Done</option>
               </select>
             </div>
+
+            {/* MOM Approved question — only when Completed */}
+            {visitStatus === 'Completed' && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm font-medium text-gray-700 mb-2">
+                  Was MOM submitted and approved? *
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setMomApproved(true)}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                      momApproved === true
+                        ? 'bg-green-600 text-white border-green-600'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-green-50'
+                    }`}
+                    disabled={loading}
+                  >
+                    Yes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMomApproved(false)}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                      momApproved === false
+                        ? 'bg-orange-500 text-white border-orange-500'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-orange-50'
+                    }`}
+                    disabled={loading}
+                  >
+                    No
+                  </button>
+                </div>
+                {momApproved === true && (
+                  <p className="text-xs text-green-700 mt-2">Visit will be marked as fully done with MOM approved.</p>
+                )}
+                {momApproved === false && (
+                  <p className="text-xs text-orange-700 mt-2">Visit will be marked Completed — MOM submission required via the usual flow.</p>
+                )}
+              </div>
+            )}
 
             {/* Purpose */}
             <div>
@@ -359,7 +425,13 @@ export default function BackdatedVisitModal({
                 <User className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
                 <div className="text-sm text-blue-800">
                   <p className="font-medium">Permission Level</p>
-                  <p>As a {userRole}, you can schedule backdated visits {userRole === 'Team Lead' ? 'for your team members' : 'for any agent'}.</p>
+                  <p>As a {userRole}, you can schedule backdated visits {
+                    userRole?.toLowerCase().replace(/[_\s]/g, '') === 'agent'
+                      ? 'for your own brands'
+                      : userRole === 'Team Lead'
+                      ? 'for your team members'
+                      : 'for any agent'
+                  }.</p>
                 </div>
               </div>
             </div>

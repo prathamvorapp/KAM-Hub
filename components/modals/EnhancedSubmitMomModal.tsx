@@ -24,6 +24,7 @@ interface CSVTopic {
   status: string;
   assignedTo: string;
   nextSteps: string;
+  timeline?: string;
 }
 
 interface EnhancedSubmitMomModalProps {
@@ -168,6 +169,7 @@ export default function EnhancedSubmitMomModal({
     const statusIndex = findColumnIndex(['status', 'state']);
     const assignedIndex = findColumnIndex(['assigned', 'responded', 'owner', 'responsible']);
     const nextStepsIndex = findColumnIndex(['next', 'steps', 'action', 'follow']);
+    const timelineIndex = findColumnIndex(['timeline', 'date', 'due', 'deadline', 'target']);
 
     for (let i = 1; i < lines.length; i++) {
       const values = parseCSVLine(lines[i]);
@@ -179,7 +181,8 @@ export default function EnhancedSubmitMomModal({
         description: descriptionIndex >= 0 ? (values[descriptionIndex] || 'No description provided') : 'No description provided',
         status: statusIndex >= 0 ? (values[statusIndex] || 'Open') : 'Open',
         assignedTo: assignedIndex >= 0 ? (values[assignedIndex] || brandName) : brandName,
-        nextSteps: nextStepsIndex >= 0 ? (values[nextStepsIndex] || 'To be determined') : 'To be determined'
+        nextSteps: nextStepsIndex >= 0 ? (values[nextStepsIndex] || 'To be determined') : 'To be determined',
+        timeline: timelineIndex >= 0 ? (values[timelineIndex] || '').replace(/['"]/g, '').trim() : ''
       };
 
       topic.topic = topic.topic.replace(/['"]/g, '').trim();
@@ -212,26 +215,24 @@ export default function EnhancedSubmitMomModal({
   };
 
   const convertCsvToOpenPoints = () => {
-    const openCsvTopics = csvTopics.filter(topic => 
-      topic.status.toLowerCase() === 'open'
-    );
-
     const defaultTimeline = getDefaultTimeline();
+    const today = new Date().toISOString().split('T')[0];
 
-    const convertedPoints: OpenPoint[] = openCsvTopics.map(topic => {
+    const convertedPoints: OpenPoint[] = csvTopics.map(topic => {
       const isAssignedToAgent = topic.assignedTo.toLowerCase().includes(agentName.toLowerCase()) ||
                                topic.assignedTo.toLowerCase().includes('agent') ||
                                topic.assignedTo.toLowerCase().includes('me') ||
                                topic.assignedTo.toLowerCase().includes('kam');
-      
+      const isClosed = topic.status.toLowerCase() === 'closed';
+
       return {
         topic: topic.topic,
         description: topic.description,
         next_steps: topic.nextSteps || '',
         ownership: isAssignedToAgent ? 'Me' : 'Brand',
         owner_name: isAssignedToAgent ? agentName : (topic.assignedTo || brandName),
-        status: 'Open',
-        timeline: defaultTimeline
+        status: isClosed ? 'Closed' : 'Open',
+        timeline: isClosed ? today : defaultTimeline
       };
     });
 

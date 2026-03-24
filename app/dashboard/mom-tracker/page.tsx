@@ -716,14 +716,14 @@ function TicketsPageContent() {
                               <div className="ml-4">
                                 {point.status === 'Open' ? (
                                   <button
-                                    onClick={() => handleCloseOpenPoint(mom._id, index)}
+                                    onClick={() => handleCloseOpenPoint(mom.ticket_id, index)}
                                     className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white text-xs rounded-md transition-colors font-medium shadow-sm"
                                   >
                                     Mark Closed
                                   </button>
                                 ) : (
                                   <button
-                                    onClick={() => handleReopenOpenPoint(mom._id, index)}
+                                    onClick={() => handleReopenOpenPoint(mom.ticket_id, index)}
                                     className="px-3 py-1 bg-orange-500 hover:bg-orange-600 text-white text-xs rounded-md transition-colors font-medium shadow-sm"
                                   >
                                     Reopen

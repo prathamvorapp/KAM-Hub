@@ -300,7 +300,7 @@ export const apiClient = {
   updateMOMOpenPointStatus: async (ticketId: string, pointIndex: number, status: string) => {
     try {
       const response = await fetch(`/api/data/mom/${ticketId}/open-points/${pointIndex}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ status })

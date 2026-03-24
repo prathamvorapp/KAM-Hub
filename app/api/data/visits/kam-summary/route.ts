@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     while (hasMore) {
       const { data: pageData, error: masterError } = await supabase
         .from('master_data')
-        .select('kam_name, kam_email_id, brand_name')
+        .select('id, kam_name, kam_email_id, brand_name')
         .range(page * pageSize, (page + 1) * pageSize - 1);
       
       if (masterError) {
@@ -130,7 +130,10 @@ export async function GET(request: NextRequest) {
       last_visit_date: string | null;
     }>();
     
-    // Count brands per KAM
+    // Track brand IDs per KAM to avoid double-counting on name changes
+    const kamBrandIds = new Map<string, Set<string>>();
+
+    // Count brands per KAM using brand id (UUID)
     masterData.forEach((record: any) => {
       const kamEmail = record.kam_email_id;
       if (!kamMap.has(kamEmail)) {
@@ -145,9 +148,17 @@ export async function GET(request: NextRequest) {
           avg_per_month: 0,
           last_visit_date: null
         });
+        kamBrandIds.set(kamEmail, new Set());
       }
-      const kamData = kamMap.get(kamEmail)!;
-      kamData.total_brands++;
+      if (record.id) {
+        kamBrandIds.get(kamEmail)!.add(record.id);
+      }
+    });
+
+    // Set total_brands from unique brand IDs
+    kamBrandIds.forEach((brandIds, kamEmail) => {
+      const kamData = kamMap.get(kamEmail);
+      if (kamData) kamData.total_brands = brandIds.size;
     });
     
     // Count visits per KAM and track last visit date

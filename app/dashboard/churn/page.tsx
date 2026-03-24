@@ -83,7 +83,12 @@ function ChurnDataPageContent() {
   const { userProfile, session } = useAuth()
   const [records, setRecords] = useState<ChurnRecord[]>([])
   const [allRecords, setAllRecords] = useState<ChurnRecord[]>([]) // Store all records for filtering
-  const [activeFilter, setActiveFilter] = useState<string>('overdue') // Track active filter
+  const [activeFilter, setActiveFilter] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('churnActiveFilter') || 'overdue'
+    }
+    return 'overdue'
+  }) // Track active filter
   const [pagination, setPagination] = useState<PaginationInfo>({
     page: 1,
     limit: 1000, // Increased to show all records
@@ -128,6 +133,7 @@ function ChurnDataPageContent() {
   // Handle filter change - now passes filter to backend
   const handleFilterChange = (filterType: string) => {
     setActiveFilter(filterType);
+    sessionStorage.setItem('churnActiveFilter', filterType);
     // Load data with the new filter from backend
     loadData(1, searchTerm.trim() === '' ? undefined : searchTerm.trim(), filterType);
   };
@@ -494,6 +500,9 @@ function ChurnDataPageContent() {
       
       // Add a longer delay to ensure the mutation is fully processed and propagated
       await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      // Persist current filter so we return to the same section after reload
+      sessionStorage.setItem('churnActiveFilter', activeFilter)
       
       // Force a complete page refresh to bypass all caching
       window.location.reload()

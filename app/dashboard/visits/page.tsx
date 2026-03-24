@@ -390,9 +390,14 @@ export default function VisitManagementPage() {
     const counts: Record<string, { scheduled: number; done: number; total: number }> = {};
     
     for (const brand of displayedBrands) {
-      const brandVisits = visits.filter(
-        (visit) => visit.brand_name === brand.brandName && visit.visit_year === currentYear && visit.visit_status !== 'Cancelled'
-      );
+      const brandId = brand._id?.toString();
+      const brandVisits = visits.filter((visit) => {
+        if (visit.visit_year !== currentYear || visit.visit_status === 'Cancelled') return false;
+        // Match by brand_id (UUID) first — survives brand name changes
+        if (brandId && visit.brand_id) return visit.brand_id === brandId;
+        // Fallback to brand_name for legacy visits without brand_id
+        return visit.brand_name === brand.brandName;
+      });
       counts[brand.brandName] = {
         scheduled: brandVisits.length,
         done: brandVisits.filter(v => v.visit_status === 'Visit Done').length,
@@ -664,64 +669,48 @@ export default function VisitManagementPage() {
   const handleOpenBackdatedModal = async () => {
     // Normalize role for comparison
     const normalizedRole = userProfile?.role?.toLowerCase().replace(/[_\s]/g, '');
-    
-    // Load available agents if user is Team Lead or Admin
-    if (normalizedRole === 'teamlead' || normalizedRole === 'admin') {
-      try {
-        let agents: Array<{
-          email: string;
-          full_name: string;
-          team_name: string;
-        }> = [];
 
-        // console.log('📋 Loading agents for backdated visit. User role:', userProfile?.role);
+    if (normalizedRole === 'agent') {
+      // Agents can only backdate for themselves
+      setAvailableAgents([{
+        email: userProfile?.email || '',
+        full_name: userProfile?.fullName || 'Unknown',
+        team_name: userProfile?.teamName || '',
+      }]);
+    } else if (normalizedRole === 'teamlead' || normalizedRole === 'admin') {
+      try {
+        let agents: Array<{ email: string; full_name: string; team_name: string }> = [];
 
         if (normalizedRole === 'teamlead') {
-          // Team Leads see all agents in their team
           const teamName = userProfile?.teamName || '';
-          if (!teamName) {
-            console.warn('⚠️ Team Lead has no team_name set in profile');
-          }
           const teamMembers = await api.getTeamMembers(teamName);
-          
           if (teamMembers.success && teamMembers.data) {
             agents = teamMembers.data
-              .filter((member: any) => {
-                const memberRole = member.role?.toLowerCase().replace(/[_\s]/g, '');
-                return memberRole === 'agent';
-              })
+              .filter((member: any) => member.role?.toLowerCase().replace(/[_\s]/g, '') === 'agent')
               .map((member: any) => ({
                 email: member.email,
                 full_name: member.full_name,
-                team_name: member.team_name
+                team_name: member.team_name,
               }));
           }
         } else if (normalizedRole === 'admin') {
-          // Admins see all active agents
-          // console.log('👥 Fetching all active agents');
           const allAgents = await api.getAllActiveAgents();
-          
           if (allAgents.success && allAgents.data) {
             agents = allAgents.data.map((agent: any) => ({
               email: agent.email,
               full_name: agent.full_name,
-              team_name: agent.team_name || 'Unknown'
+              team_name: agent.team_name || 'Unknown',
             }));
-            
-            // console.log('✅ All agents:', agents);
           }
         }
 
         setAvailableAgents(agents);
-        // console.log('✅ Available agents set:', agents.length);
       } catch (error) {
         console.error('❌ Error loading agents:', error);
         setAvailableAgents([]);
       }
-    } else {
-      // console.log('⚠️ User role not authorized for backdated visits:', userProfile?.role);
     }
-    
+
     setIsBackdatedModalOpen(true);
   };
 
@@ -741,6 +730,7 @@ export default function VisitManagementPage() {
     purpose?: string;
     zone?: string;
     backdate_reason: string;
+    mom_approved?: boolean;
   }) => {
     if (!userProfile?.email) { // Updated check
       alert("Error: User not authenticated.");
@@ -763,6 +753,7 @@ export default function VisitManagementPage() {
         zone: visitData.zone,
         visit_year: visitYear,
         backdate_reason: visitData.backdate_reason,
+        mom_approved: visitData.mom_approved,
       });
       
       handleCloseBackdatedModal();
@@ -819,19 +810,16 @@ export default function VisitManagementPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-secondary-800">Visit Management</h1>
           
-          {/* Team Lead and Admin Actions */}
-          {((userProfile?.role === 'Team Lead' || userProfile?.role === 'team_lead' || userProfile?.role === 'TEAM_LEAD') || 
-            (userProfile?.role === 'Admin' || userProfile?.role === 'admin')) && (
-            <div className="flex gap-3">
-              <button
-                onClick={handleOpenBackdatedModal}
-                className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-lg font-medium transition-colors shadow-sm"
-              >
-                <CalendarPlus className="w-4 h-4" />
-                Schedule Backdated Visit
-              </button>
-            </div>
-          )}
+          {/* All roles can schedule backdated visits */}
+          <div className="flex gap-3">
+            <button
+              onClick={handleOpenBackdatedModal}
+              className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-lg font-medium transition-colors shadow-sm"
+            >
+              <CalendarPlus className="w-4 h-4" />
+              Schedule Backdated Visit
+            </button>
+          </div>
         </div>
 
         {/* Statistics Section - Role-based Display */}
@@ -1141,9 +1129,10 @@ export default function VisitManagementPage() {
                                                     <XCircle className="w-3 h-3" />
                                                     Cancel
                                                 </button>
-                                                {/* Reschedule button for Team Lead and Admin */}
+                                                {/* Reschedule button for Team Lead, Admin, and Agent (own visits) */}
                                                 {((userProfile?.role === 'Team Lead' || userProfile?.role === 'team_lead' || userProfile?.role === 'TEAM_LEAD') || 
-                                                  (userProfile?.role === 'Admin' || userProfile?.role === 'admin')) && (
+                                                  (userProfile?.role === 'Admin' || userProfile?.role === 'admin') ||
+                                                  ((userProfile?.role === 'Agent' || userProfile?.role === 'agent') && visit.agent_id === userProfile?.email)) && (
                                                   <button 
                                                       className="btn btn-sm bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1 min-w-[90px] justify-center"
                                                       onClick={() => handleOpenRescheduleModal(visit)}
