@@ -32,15 +32,15 @@ interface SidebarProps {
 }
 
 const allModules = [
-  { name: 'Dashboard', href: '/dashboard', icon: BarChart3, color: 'from-blue-500 to-cyan-500', roles: ['agent', 'team_lead', 'admin'] },
-  { name: 'CRM', href: '/dashboard/crm', icon: Building2, color: 'from-indigo-500 to-blue-500', roles: ['agent', 'team_lead', 'admin'] },
-  { name: 'Churn Data', href: '/dashboard/churn', icon: TrendingDown, color: 'from-red-500 to-pink-500', roles: ['agent', 'team_lead', 'admin'] },
-  { name: 'Visits', href: '/dashboard/visits', icon: MapPin, color: 'from-green-500 to-emerald-500', roles: ['agent', 'team_lead', 'admin'] },
+  { name: 'Dashboard', href: '/dashboard', icon: BarChart3, color: 'from-blue-500 to-cyan-500', roles: ['agent', 'sub_agent', 'team_lead', 'admin'] },
+  { name: 'CRM', href: '/dashboard/crm', icon: Building2, color: 'from-indigo-500 to-blue-500', roles: ['agent', 'sub_agent', 'bo_person', 'team_lead', 'admin'] },
+  { name: 'Churn Data', href: '/dashboard/churn', icon: TrendingDown, color: 'from-red-500 to-pink-500', roles: ['agent', 'sub_agent', 'team_lead', 'admin'] },
+  { name: 'Visits', href: '/dashboard/visits', icon: MapPin, color: 'from-green-500 to-emerald-500', roles: ['agent', 'sub_agent', 'team_lead', 'admin'] },
   { name: 'Approvals', href: '/dashboard/approvals', icon: ThumbsUp, color: 'from-yellow-500 to-orange-500', roles: ['team_lead'] },
-  { name: 'Demos', href: '/dashboard/demos', icon: Presentation, color: 'from-purple-500 to-violet-500', roles: ['agent', 'team_lead', 'admin'] },
-  { name: 'Health Check-ups', href: '/dashboard/health-checks', icon: Heart, color: 'from-rose-500 to-red-500', roles: ['agent', 'team_lead', 'admin'] },
-  { name: 'MOM Tracker', href: '/dashboard/mom-tracker', icon: Ticket, color: 'from-orange-500 to-amber-500', roles: ['agent', 'team_lead', 'admin'] },
-  { name: 'Brand Management', href: '/admin/transfer-brand', icon: Building2, color: 'from-blue-500 to-indigo-500', roles: ['agent', 'team_lead', 'admin'] },
+  { name: 'Demos', href: '/dashboard/demos', icon: Presentation, color: 'from-purple-500 to-violet-500', roles: ['agent', 'sub_agent', 'team_lead', 'admin'] },
+  { name: 'Health Check-ups', href: '/dashboard/health-checks', icon: Heart, color: 'from-rose-500 to-red-500', roles: ['agent', 'sub_agent', 'team_lead', 'admin'] },
+  { name: 'MOM Tracker', href: '/dashboard/mom-tracker', icon: Ticket, color: 'from-orange-500 to-amber-500', roles: ['agent', 'sub_agent', 'team_lead', 'admin'] },
+  { name: 'Brand Management', href: '/admin/transfer-brand', icon: Building2, color: 'from-blue-500 to-indigo-500', roles: ['agent', 'sub_agent', 'team_lead', 'admin'] },
 ]
 
 export default function Sidebar({ userProfile }: SidebarProps) {

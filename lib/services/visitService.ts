@@ -7,11 +7,14 @@ import { normalizeUserProfile } from '../../utils/authUtils';
 
 // Type definitions
 interface UserProfile {
+  id?: string;
+  dbId?: string;
   email: string;
   fullName: string;
   role: string;
   team_name?: string;
-  teamName?: string; // Add camelCase for compatibility
+  teamName?: string;
+  coordinator_id?: string;
   [key: string]: any;
 }
 
@@ -39,6 +42,22 @@ export const visitService = {
       // Agent can access their own visits
       return userProfile.email === visit.agent_id;
     }
+    if (normalizedRole === 'sub_agent' || normalizedRole === 'subagent') {
+      // sub_agent can access any of their coordinators' visits
+      const lookupId = userProfile.dbId || userProfile.id;
+      if (lookupId) {
+        const { data: sacRows } = await getSupabaseAdmin()
+          .from('sub_agent_coordinators')
+          .select('coordinator_id')
+          .eq('sub_agent_id', lookupId) as { data: Array<{ coordinator_id: string }> | null; error: any };
+        if (sacRows && sacRows.length > 0) {
+          const { data: coords } = await getSupabaseAdmin()
+            .from('user_profiles').select('email').in('id', sacRows.map(r => r.coordinator_id));
+          const coordinatorEmails = (coords as any[])?.map((c: any) => c.email) || [];
+          return coordinatorEmails.includes(visit.agent_id);
+        }
+      }
+    }
     return false;
   },
 
@@ -54,31 +73,56 @@ export const visitService = {
       throw new Error("Agent profile with email is required for individual statistics");
     }
 
-    let brandFilter: string[] = [];
-    let visitQuery = getSupabaseAdmin().from('visits').select('*');
+    const normalizedRole = agentProfile.role?.toLowerCase().replace(/[_\s]/g, '');
+    const isSubAgent = normalizedRole === 'subagent' || normalizedRole === 'sub_agent';
 
+    // For sub_agent: resolve coordinator emails; for agent: use own email
+    let agentEmails: string[] = [agentProfile.email];
+    if (isSubAgent) {
+      const lookupId = agentProfile.dbId || agentProfile.id;
+      if (lookupId) {
+        const { data: sacRows } = await getSupabaseAdmin()
+          .from('sub_agent_coordinators').select('coordinator_id')
+          .eq('sub_agent_id', lookupId) as { data: Array<{ coordinator_id: string }> | null; error: any };
+        if (sacRows && sacRows.length > 0) {
+          const { data: coords } = await getSupabaseAdmin()
+            .from('user_profiles').select('email').in('id', sacRows.map(r => r.coordinator_id));
+          agentEmails = (coords as any[])?.map((c: any) => c.email).filter(Boolean) || [];
+        }
+      }
+    }
+
+    let visitQuery = getSupabaseAdmin().from('visits').select('*');
     const currentYearStr = new Date().getFullYear().toString();
     visitQuery = visitQuery.eq('visit_year', currentYearStr);
-    visitQuery = visitQuery.eq('agent_id', agentProfile.email);
 
-    // Fetch brands directly with email filter using pagination
+    if (agentEmails.length === 1) {
+      visitQuery = visitQuery.eq('agent_id', agentEmails[0]);
+    } else if (agentEmails.length > 1) {
+      visitQuery = visitQuery.in('agent_id', agentEmails);
+    }
+
+    // Fetch brands for all relevant agent emails
     let agentBrands: any[] = [];
     let page = 0;
     const pageSize = 1000;
     let hasMore = true;
-    
+
     while (hasMore) {
-      const { data: pageData, error: brandsError } = await getSupabaseAdmin()
-        .from('master_data')
-        .select('*')
-        .eq('kam_email_id', agentProfile.email)
+      let brandsQuery = getSupabaseAdmin().from('master_data').select('*');
+      if (agentEmails.length === 1) {
+        brandsQuery = brandsQuery.eq('kam_email_id', agentEmails[0]);
+      } else {
+        brandsQuery = brandsQuery.in('kam_email_id', agentEmails);
+      }
+      const { data: pageData, error: brandsError } = await brandsQuery
         .range(page * pageSize, (page + 1) * pageSize - 1);
-      
+
       if (brandsError) {
-        console.error(`❌ Error fetching brands for ${agentProfile.email}:`, brandsError);
+        console.error(`❌ Error fetching brands for ${agentEmails}:`, brandsError);
         throw new Error(`Failed to fetch brands: ${brandsError.message}`);
       }
-      
+
       if (pageData && pageData.length > 0) {
         agentBrands = [...agentBrands, ...pageData];
         hasMore = pageData.length === pageSize;
@@ -90,7 +134,7 @@ export const visitService = {
     
     // Use brand_id (UUID) for counting to survive brand name changes
     const brandIdSet = new Set(agentBrands.map((brand: any) => brand.id).filter(Boolean));
-    brandFilter = agentBrands.map((brand: any) => brand.brand_name) || [];
+    const brandFilter = agentBrands.map((brand: any) => brand.brand_name) || [];
     
     // Fetch all visits using pagination
     let allVisits: any[] = [];
@@ -228,6 +272,22 @@ export const visitService = {
           agentprofiles.push(memberProfile);
         }
       });
+    } else if (normalizedRole === 'sub_agent' || normalizedRole === 'subagent') {
+      // sub_agent: get stats for all coordinator agents
+      const lookupId = userProfile.dbId || userProfile.id;
+      if (lookupId) {
+        const { data: sacRows } = await getSupabaseAdmin()
+          .from('sub_agent_coordinators')
+          .select('coordinator_id')
+          .eq('sub_agent_id', lookupId) as { data: Array<{ coordinator_id: string }> | null; error: any };
+        if (sacRows && sacRows.length > 0) {
+          const { data: coords } = await getSupabaseAdmin()
+            .from('user_profiles')
+            .select('email, full_name, role, team_name')
+            .in('id', sacRows.map(r => r.coordinator_id));
+          coords?.forEach((c: any) => agentprofiles.push(normalizeUserProfile(c)));
+        }
+      }
     } else if (normalizedRole === 'admin') {
       const { data: allAgents, error } = await getSupabaseAdmin()
         .from('user_profiles')
@@ -358,6 +418,26 @@ export const visitService = {
 
       if (normalizedRole === 'agent') {
         query = query.eq('agent_id', userProfile.email);
+      } else if (normalizedRole === 'sub_agent' || normalizedRole === 'subagent') {
+        // sub_agent sees coordinator agents' visits
+        const lookupId = userProfile.dbId || userProfile.id;
+        if (lookupId) {
+          const { data: sacRows } = await getSupabaseAdmin()
+            .from('sub_agent_coordinators').select('coordinator_id')
+            .eq('sub_agent_id', lookupId) as { data: Array<{ coordinator_id: string }> | null; error: any };
+          if (sacRows && sacRows.length > 0) {
+            const { data: coords } = await getSupabaseAdmin()
+              .from('user_profiles').select('email').in('id', sacRows.map(r => r.coordinator_id));
+            const coordinatorEmails = (coords as any[])?.map((c: any) => c.email).filter(Boolean) || [];
+            query = coordinatorEmails.length > 0
+              ? query.in('agent_id', coordinatorEmails)
+              : query.eq('agent_id', 'NON_EXISTENT_EMAIL');
+          } else {
+            query = query.eq('agent_id', 'NON_EXISTENT_EMAIL');
+          }
+        } else {
+          query = query.eq('agent_id', 'NON_EXISTENT_EMAIL');
+        }
       } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
         const teamName = userProfile.team_name || userProfile.teamName;
         if (teamName) {
@@ -445,30 +525,66 @@ export const visitService = {
   },
 
   // Create a new visit
-  async createVisit(data: any, rawProfile: UserProfile) { // userProfile required
+  async createVisit(data: any, rawProfile: UserProfile) {
     const userProfile = normalizeUserProfile(rawProfile);
     const now = new Date().toISOString();
-    
-    // Authorization
     const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
 
-    // Fetch agent's team_name and potentially team_lead_id
+    // For sub_agent: resolve the brand's actual KAM email FIRST before any other logic
+    if ((normalizedRole === 'sub_agent' || normalizedRole === 'subagent') && data.brand_id) {
+      const { data: brand, error: brandError } = await getSupabaseAdmin()
+        .from('master_data')
+        .select('kam_email_id, kam_name')
+        .eq('id', data.brand_id)
+        .single();
+      if (brandError) console.error(`❌ [Sub-agent createVisit] Brand lookup error:`, brandError);
+      if (brand) {
+        data.agent_id = (brand as any).kam_email_id;
+        data.agent_name = (brand as any).kam_name;
+        data.actioned_by = userProfile.fullName || userProfile.full_name;
+        console.log(`🔄 [Sub-agent createVisit] agent_id set to: ${data.agent_id}`);
+      } else {
+        // Fallback by brand_name
+        const { data: brandByName } = await getSupabaseAdmin()
+          .from('master_data').select('kam_email_id, kam_name').eq('brand_name', data.brand_name).single();
+        if (brandByName) {
+          data.agent_id = (brandByName as any).kam_email_id;
+          data.agent_name = (brandByName as any).kam_name;
+          data.actioned_by = userProfile.fullName || userProfile.full_name;
+          console.log(`🔄 [Sub-agent createVisit] agent_id set via brand_name: ${data.agent_id}`);
+        }
+      }
+    }
+
+    // Fetch agent's team_name from user_profiles (now uses correct agent_id after sub_agent override)
     const { data: agentProfile, error: agentProfileError } = await getSupabaseAdmin()
       .from('user_profiles')
       .select('team_name')
       .eq('email', data.agent_id)
       .single();
-
     if (agentProfileError) {
       console.error(`Error fetching agent profile for ${data.agent_id}:`, agentProfileError);
-      // Optionally, throw an error or handle gracefully if agent profile is critical
     }
     
     // Authorization
     if (normalizedRole === 'agent') {
-      // Agent can only create visits for themselves
       if (data.agent_id !== userProfile.email) {
         throw new Error(`Access denied: Agent ${userProfile.email} cannot create visit for another agent ${data.agent_id}`);
+      }
+    } else if (normalizedRole === 'sub_agent' || normalizedRole === 'subagent') {
+      // Brand lookup already done above — just validate agent_id is a coordinator
+      const lookupId = userProfile.dbId || userProfile.id;
+      if (lookupId) {
+        const { data: sacRows } = await getSupabaseAdmin()
+          .from('sub_agent_coordinators').select('coordinator_id').eq('sub_agent_id', lookupId) as { data: Array<{ coordinator_id: string }> | null; error: any };
+        if (sacRows && sacRows.length > 0) {
+          const { data: coords } = await getSupabaseAdmin()
+            .from('user_profiles').select('email').in('id', sacRows.map(r => r.coordinator_id));
+          const coordinatorEmails = (coords as any[])?.map((c: any) => c.email) || [];
+          if (!coordinatorEmails.includes(data.agent_id)) {
+            throw new Error(`Access denied: Sub-agent ${userProfile.email} cannot create visit for ${data.agent_id}`);
+          }
+        }
       }
     } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
       // Team Lead can create visits for themselves or their team members
@@ -494,6 +610,7 @@ export const visitService = {
       ...data,
       team_name: (agentProfile as any)?.team_name || null, // Populate team_name
       visit_status: data.visit_status || "Scheduled",
+      actioned_by: userProfile.fullName, // Track who created this visit
       created_at: now,
       updated_at: now,
     };
@@ -908,14 +1025,33 @@ export const visitService = {
     const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
     const isAdminOrTeamLead = normalizedRole === 'admin' || normalizedRole === 'team_lead' || normalizedRole === 'teamlead';
     const isAgent = normalizedRole === 'agent';
+    const isSubAgent = normalizedRole === 'sub_agent' || normalizedRole === 'subagent';
 
-    if (!isAdminOrTeamLead && !isAgent) {
+    if (!isAdminOrTeamLead && !isAgent && !isSubAgent) {
       throw new Error(`Access denied: User ${userProfile.email} (Role: ${userProfile.role}) is not authorized to schedule backdated visits`);
     }
 
     // Agents can only backdate for themselves
     if (isAgent && data.agent_id !== userProfile.email) {
       throw new Error(`Access denied: Agents can only schedule backdated visits for themselves`);
+    }
+
+    // sub_agent can only backdate for their coordinators
+    if (isSubAgent) {
+      const lookupId = userProfile.dbId || userProfile.id;
+      if (lookupId) {
+        const { data: sacRows } = await getSupabaseAdmin()
+          .from('sub_agent_coordinators').select('coordinator_id')
+          .eq('sub_agent_id', lookupId) as { data: Array<{ coordinator_id: string }> | null; error: any };
+        if (sacRows && sacRows.length > 0) {
+          const { data: coords } = await getSupabaseAdmin()
+            .from('user_profiles').select('email').in('id', sacRows.map(r => r.coordinator_id));
+          const coordinatorEmails = (coords as any[])?.map((c: any) => c.email) || [];
+          if (!coordinatorEmails.includes(data.agent_id)) {
+            throw new Error(`Access denied: Sub-agent ${userProfile.email} cannot schedule backdated visit for ${data.agent_id}`);
+          }
+        }
+      }
     }
 
     // If Team Lead, ensure it's for their team members

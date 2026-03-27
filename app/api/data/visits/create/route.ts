@@ -17,23 +17,16 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-
     console.log(`📅 Creating visit for brand: ${body.brand_name}`);
-    console.log(`📋 Visit data:`, JSON.stringify(body, null, 2));
 
-    // Don't add created_by - the visits table doesn't have this column
-    const result = await visitService.createVisit(body, user); // Pass the userProfile here
+    // sub_agent agent_id override is handled inside visitService.createVisit
+    const result = await visitService.createVisit(body, user);
 
     console.log(`✅ Visit created successfully`);
-
-    return NextResponse.json({
-      success: true,
-      data: result
-    });
+    return NextResponse.json({ success: true, data: result });
 
   } catch (error: any) {
     console.error('[Visit Create] Error:', error);
-    
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : String(error)

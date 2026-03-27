@@ -27,15 +27,18 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export interface AuthenticatedUser {
-  id: string;
+  id: string;         // Supabase auth UUID
+  dbId?: string;      // user_profiles.id (DB row UUID) — used for junction table lookups
   email: string;
   fullName: string;
-  full_name: string; // Required for compatibility with UserProfile
+  full_name: string;
   role: string;
   teamName?: string;
-  team_name?: string; // Add for backward compatibility
+  team_name?: string;
   permissions: string[];
   is_active?: boolean;
+  coordinator_id?: string;
+  coordinatorName?: string;
 }
 
 export interface AuthResult {
@@ -81,25 +84,55 @@ export async function requireAuth(request: NextRequest): Promise<AuthResult | Ne
     
     // Type assertion for profile
     const userProfile = profile as {
+      id: string;
       email: string;
       full_name: string;
       role: string;
       team_name: string;
+      coordinator_id?: string;
     };
     
     // Get permissions based on role
     const permissions = getPermissionsForRole(userProfile.role);
+
+    // For sub_agent: resolve all coordinator names via junction table
+    // For bo_person: resolve single coordinator name via coordinator_id
+    let coordinatorName: string | undefined;
+    const normalizedRole = userProfile.role.toLowerCase().replace(/\s+/g, '_');
+    if (normalizedRole === 'sub_agent') {
+      // sub_agent — fetch all coordinator names from junction table
+      const { data: sacRows } = await supabase
+        .from('sub_agent_coordinators')
+        .select('coordinator_id')
+        .eq('sub_agent_id', userProfile.id);
+      if (sacRows && sacRows.length > 0) {
+        const { data: coords } = await supabase
+          .from('user_profiles').select('full_name').in('id', sacRows.map((r: any) => r.coordinator_id));
+        // Store as comma-separated for display; service layer does the full lookup
+        coordinatorName = (coords as any[])?.map((c: any) => c.full_name).join(', ');
+      }
+    } else if (normalizedRole === 'bo_person' && userProfile.coordinator_id) {
+      const { data: coordinator } = await supabase
+        .from('user_profiles')
+        .select('full_name')
+        .eq('id', userProfile.coordinator_id)
+        .single();
+      coordinatorName = (coordinator as any)?.full_name;
+    }
     
     const user: AuthenticatedUser = {
       id: authUser.id,
+      dbId: (profile as any).id, // user_profiles.id (DB row UUID) — used for junction table lookups
       email: userProfile.email,
       fullName: userProfile.full_name,
-      full_name: userProfile.full_name, // Populate both for compatibility
+      full_name: userProfile.full_name,
       role: userProfile.role,
       teamName: userProfile.team_name,
-      team_name: userProfile.team_name, // Populate both for compatibility
+      team_name: userProfile.team_name,
       permissions,
-      is_active: true
+      is_active: true,
+      coordinator_id: userProfile.coordinator_id,
+      coordinatorName,
     };
     
     console.log('✅ [API Auth] User authenticated:', user.email, 'Role:', user.role);
@@ -173,6 +206,14 @@ function getPermissionsForRole(role: string): string[] {
     case 'agent':
       return ['read_own', 'write_own'];
       
+    case 'sub_agent':
+      // Same as agent — acts on behalf of coordinator agent
+      return ['read_own', 'write_own'];
+
+    case 'bo_person':
+      // CRM read-only access
+      return ['read_own'];
+      
     default:
       console.warn(`⚠️ [API Auth] Unknown role: ${role}, defaulting to minimal permissions`);
       return ['read_own'];
@@ -219,6 +260,24 @@ export function applyRoleFilter(
     case 'agent':
       // Agent sees only their own data
       console.log(`🔒 [API Auth] Agent filter - own data: ${user.email}`);
+      return query.eq(emailField, user.email);
+
+    case 'sub_agent':
+      // sub_agent sees coordinator's data (same view as their coordinator agent)
+      if (user.coordinatorName) {
+        console.log(`🔒 [API Auth] Sub-agent filter - coordinator data: ${user.coordinatorName}`);
+        return query.eq(emailField, user.email); // email-based tables use coordinator email via service layer
+      }
+      console.warn(`⚠️ [API Auth] Sub-agent ${user.email} has no coordinator, filtering to own data`);
+      return query.eq(emailField, user.email);
+
+    case 'bo_person':
+      // bo_person: CRM only, same data scope as their coordinator agent
+      if (user.coordinatorName) {
+        console.log(`🔒 [API Auth] BO Person filter - coordinator data: ${user.coordinatorName}`);
+        return query.eq(emailField, user.email);
+      }
+      console.warn(`⚠️ [API Auth] BO Person ${user.email} has no coordinator, filtering to own data`);
       return query.eq(emailField, user.email);
       
     default:

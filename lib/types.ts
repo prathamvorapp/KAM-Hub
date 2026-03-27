@@ -1,5 +1,5 @@
 // User types for the application
-export type UserRole = 'admin' | 'team_lead' | 'agent'
+export type UserRole = 'admin' | 'team_lead' | 'agent' | 'sub_agent' | 'bo_person'
 
 export interface UserProfile {
   user_id: string
@@ -13,6 +13,7 @@ export interface UserProfile {
   contact_number?: string
   employee_code?: string
   is_active: boolean
+  coordinator_id?: string // For sub_agent and bo_person: references their coordinator agent's id
 }
 
 // Legacy interface for backward compatibility

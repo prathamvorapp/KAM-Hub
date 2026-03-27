@@ -173,18 +173,35 @@ export async function POST(
     
     // Handle visit creation
     if (moduleType === 'visits') {
+      const normalizedRole = user.role.toLowerCase().replace(/\s+/g, '_');
+      let agentId = user.email;
+      let agentName = user.full_name;
+      let teamName = user.team_name;
+
+      // For sub_agent: use the brand's actual KAM as agent_id
+      if (normalizedRole === 'sub_agent' && body.brand_id) {
+        const { data: brand } = await (await import('@/lib/supabase-server')).getSupabaseAdmin()
+          .from('master_data').select('kam_email_id, kam_name, team_name').eq('id', body.brand_id).single();
+        if (brand) {
+          agentId = (brand as any).kam_email_id;
+          agentName = (brand as any).kam_name;
+          teamName = (brand as any).team_name;
+        }
+      }
+
       const visitData = {
-        visit_id: uuidv4(), // Generate UUID
+        visit_id: uuidv4(),
         brand_id: body.brand_id,
         brand_name: body.brand_name,
-        agent_id: user.email, // Use authenticated user's email
-        agent_name: user.full_name, // Use authenticated user's full_name
-        team_name: user.team_name, // Use authenticated user's team_name
+        agent_id: agentId,
+        agent_name: agentName,
+        team_name: teamName,
         scheduled_date: body.scheduled_date,
         visit_status: body.visit_status || 'Scheduled',
         visit_year: body.visit_year || new Date(body.scheduled_date).getFullYear().toString(),
         purpose: body.purpose,
         zone: body.zone,
+        actioned_by: normalizedRole === 'sub_agent' ? user.full_name : undefined,
       };
       
       await visitService.createVisit(visitData, user); // Pass userProfile

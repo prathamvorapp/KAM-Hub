@@ -16,11 +16,14 @@ interface BrandData {
 }
 
 interface UserProfile {
+  id?: string;
+  dbId?: string;
   email: string;
   full_name: string;
   role: string;
   team_name?: string;
-  teamName?: string; // Add camelCase for compatibility
+  teamName?: string;
+  coordinator_id?: string;
   [key: string]: any;
 }
 
@@ -74,6 +77,22 @@ export const demoService = {
       // Agent can access their own demos
       return userProfile.email === demo.agent_id;
     }
+    if (normalizedRole === 'sub_agent' || normalizedRole === 'subagent') {
+      // sub_agent can access any of their coordinators' demos
+      const lookupId = userProfile.dbId || userProfile.id;
+      if (lookupId) {
+        const { data: sacRows } = await getSupabaseAdmin()
+          .from('sub_agent_coordinators')
+          .select('coordinator_id')
+          .eq('sub_agent_id', lookupId) as { data: Array<{ coordinator_id: string }> | null; error: any };
+        if (sacRows && sacRows.length > 0) {
+          const { data: coords } = await getSupabaseAdmin()
+            .from('user_profiles').select('email').in('id', sacRows.map(r => r.coordinator_id));
+          const coordinatorEmails = (coords as any[])?.map((c: any) => c.email) || [];
+          return coordinatorEmails.includes(demo.agent_id);
+        }
+      }
+    }
     return false;
   },
 
@@ -114,6 +133,21 @@ export const demoService = {
     if (normalizedRole === 'agent') {
       // Agent can only initialize their own assigned brands
       return userProfile.email === brandData.kam_email_id;
+    }
+    if (normalizedRole === 'sub_agent' || normalizedRole === 'subagent') {
+      // sub_agent can initialize brands belonging to any of their coordinators
+      const lookupId = userProfile.dbId || userProfile.id;
+      if (lookupId) {
+        const { data: sacRows } = await getSupabaseAdmin()
+          .from('sub_agent_coordinators').select('coordinator_id')
+          .eq('sub_agent_id', lookupId) as { data: Array<{ coordinator_id: string }> | null; error: any };
+        if (sacRows && sacRows.length > 0) {
+          const { data: coords } = await getSupabaseAdmin()
+            .from('user_profiles').select('email').in('id', sacRows.map(r => r.coordinator_id));
+          const coordinatorEmails = (coords as any[])?.map((c: any) => c.email) || [];
+          return coordinatorEmails.includes(brandData.kam_email_id);
+        }
+      }
     }
     return false;
   },
@@ -171,6 +205,7 @@ export const demoService = {
         zone: brandData.zone,
         current_status: "Step 1 Pending",
         workflow_completed: false,
+        actioned_by: userProfile.full_name || userProfile.fullName, // Track who initialized
         created_at: now,
         updated_at: now,
       });
@@ -208,6 +243,28 @@ export const demoService = {
         const teamName = userProfile.team_name || userProfile.teamName;
         if (teamName) {
           query = query.eq('team_name', teamName);
+        } else {
+          query = query.eq('agent_id', 'NON_EXISTENT_EMAIL');
+        }
+      } else if (normalizedRole === 'sub_agent' || normalizedRole === 'subagent') {
+        // sub_agent sees coordinator agents' demos
+        const lookupId = userProfile.dbId || userProfile.id;
+        if (lookupId) {
+          const { data: sacRows } = await getSupabaseAdmin()
+            .from('sub_agent_coordinators').select('coordinator_id')
+            .eq('sub_agent_id', lookupId) as { data: Array<{ coordinator_id: string }> | null; error: any };
+          if (sacRows && sacRows.length > 0) {
+            const { data: coords } = await getSupabaseAdmin()
+              .from('user_profiles').select('email').in('id', sacRows.map(r => r.coordinator_id));
+            const coordinatorEmails = (coords as any[])?.map((c: any) => c.email).filter(Boolean) || [];
+            if (coordinatorEmails.length > 0) {
+              query = query.in('agent_id', coordinatorEmails);
+            } else {
+              query = query.eq('agent_id', 'NON_EXISTENT_EMAIL');
+            }
+          } else {
+            query = query.eq('agent_id', 'NON_EXISTENT_EMAIL');
+          }
         } else {
           query = query.eq('agent_id', 'NON_EXISTENT_EMAIL');
         }
@@ -616,9 +673,28 @@ export const demoService = {
         }
       } else if (normalizedRole === "agent") {
         query = query.eq('agent_id', userProfile.email);
+      } else if (normalizedRole === 'sub_agent' || normalizedRole === 'subagent') {
+        const lookupId = userProfile.dbId || userProfile.id;
+        if (lookupId) {
+          const { data: sacRows } = await getSupabaseAdmin()
+            .from('sub_agent_coordinators').select('coordinator_id')
+            .eq('sub_agent_id', lookupId) as { data: Array<{ coordinator_id: string }> | null; error: any };
+          if (sacRows && sacRows.length > 0) {
+            const { data: coords } = await getSupabaseAdmin()
+              .from('user_profiles').select('email').in('id', sacRows.map(r => r.coordinator_id));
+            const coordinatorEmails = (coords as any[])?.map((c: any) => c.email).filter(Boolean) || [];
+            query = coordinatorEmails.length > 0
+              ? query.in('agent_id', coordinatorEmails)
+              : query.eq('agent_id', 'NON_EXISTENT_EMAIL');
+          } else {
+            query = query.eq('agent_id', 'NON_EXISTENT_EMAIL');
+          }
+        } else {
+          query = query.eq('agent_id', 'NON_EXISTENT_EMAIL');
+        }
       } else {
         console.warn(`⚠️ Unknown role: ${userProfile.role}, denying access to demo statistics`);
-        query = query.eq('agent_id', 'NON_EXISTENT_EMAIL'); // Deny for unknown roles
+        query = query.eq('agent_id', 'NON_EXISTENT_EMAIL');
       }
       
       const { data: batch, error } = await query.range(from, from + batchSize - 1) as { data: Demo[] | null; error: any };

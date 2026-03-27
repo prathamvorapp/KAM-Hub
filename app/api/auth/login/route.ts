@@ -122,7 +122,9 @@ export async function POST(request: NextRequest) {
       'team_lead': UserRole.TEAM_LEAD,
       'Team Lead': UserRole.TEAM_LEAD,
       'agent': UserRole.AGENT,
-      'Agent': UserRole.AGENT
+      'Agent': UserRole.AGENT,
+      'sub_agent': UserRole.SUB_AGENT,
+      'bo_person': UserRole.BO_PERSON,
     };
     
     const userRole = roleMap[userProfile.role] || UserRole.AGENT;

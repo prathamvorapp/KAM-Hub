@@ -10,6 +10,8 @@ interface UserProfile {
   full_name: string;
   role: string;
   team_name?: string;
+  id?: string;
+  dbId?: string;
   [key: string]: any;
 }
 
@@ -49,8 +51,27 @@ export const masterDataService = {
       const normalizedRole = userProfile.role?.toLowerCase().replace(/\s+/g, '');
       
       if (normalizedRole === 'agent') {
-        query = query.eq('kam_email_id', userProfile.email); // Filter by agent's email
-        // console.log(`👤 Agent filter - showing brands for email: ${userProfile.email}`);
+        query = query.eq('kam_email_id', userProfile.email);
+      } else if (normalizedRole === 'subagent' || normalizedRole === 'sub_agent') {
+        // sub_agent sees coordinator agents' brands
+        const lookupId = userProfile.dbId || userProfile.id;
+        if (lookupId) {
+          const { data: sacRows } = await getSupabaseAdmin()
+            .from('sub_agent_coordinators').select('coordinator_id')
+            .eq('sub_agent_id', lookupId) as { data: Array<{ coordinator_id: string }> | null; error: any };
+          if (sacRows && sacRows.length > 0) {
+            const { data: coords } = await getSupabaseAdmin()
+              .from('user_profiles').select('email').in('id', sacRows.map(r => r.coordinator_id));
+            const coordinatorEmails = (coords as any[])?.map((c: any) => c.email).filter(Boolean) || [];
+            query = coordinatorEmails.length > 0
+              ? query.in('kam_email_id', coordinatorEmails)
+              : query.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
+          } else {
+            query = query.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
+          }
+        } else {
+          query = query.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
+        }
       } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
         if (userProfile.team_name) {
           const { data: teamMembers } = await getSupabaseAdmin()

@@ -3,7 +3,9 @@ import { z } from 'zod';
 export enum UserRole {
   ADMIN = 'Admin',
   TEAM_LEAD = 'Team Lead',
-  AGENT = 'Agent'
+  AGENT = 'Agent',
+  SUB_AGENT = 'sub_agent',
+  BO_PERSON = 'bo_person'
 }
 
 export const UserRoleSchema = z.nativeEnum(UserRole);
@@ -18,7 +20,8 @@ export const UserProfileSchema = z.object({
   contact_number: z.string().optional(),
   employee_code: z.string().optional(),
   permissions: z.array(z.string()).default([]),
-  is_active: z.boolean().default(true)
+  is_active: z.boolean().default(true),
+  coordinator_id: z.string().optional(), // For sub_agent and bo_person
 });
 
 export const RoleMappingSchema = z.object({

@@ -15,12 +15,53 @@ import { normalizeUserProfile } from '../../utils/authUtils';
 
 // User profile type
 interface UserProfile {
+  id?: string;   // Supabase auth UUID
+  dbId?: string; // user_profiles.id (DB row UUID) — used for junction table lookups
   email: string;
   fullName: string;
   role: string;
   team_name?: string;
-  teamName?: string; // Add camelCase for compatibility
+  teamName?: string;
   is_active?: boolean;
+  coordinator_id?: string;
+}
+
+/**
+ * Resolve coordinator full_names for a sub_agent (many-to-many via junction table).
+ * Returns array of coordinator full_names, or empty array if none assigned.
+ */
+async function getSubAgentCoordinatorNames(userProfile: UserProfile): Promise<string[]> {
+  // Look up all coordinators for this sub_agent from the junction table
+  const lookupId = userProfile.dbId || userProfile.id;
+  if (!lookupId) return [];
+  const { data } = await getSupabaseAdmin()
+    .from('sub_agent_coordinators')
+    .select('coordinator_id')
+    .eq('sub_agent_id', lookupId) as { data: Array<{ coordinator_id: string }> | null; error: any };
+
+  if (!data || data.length === 0) return [];
+
+  const coordinatorIds = data.map(r => r.coordinator_id);
+
+  const { data: profiles } = await getSupabaseAdmin()
+    .from('user_profiles')
+    .select('full_name')
+    .in('id', coordinatorIds) as { data: Array<{ full_name: string }> | null; error: any };
+
+  return profiles?.map(p => p.full_name).filter(Boolean) || [];
+}
+
+/**
+ * Resolve coordinator full_name for bo_person (single coordinator via coordinator_id).
+ */
+async function getBoPersonCoordinatorName(userProfile: UserProfile): Promise<string | null> {
+  if (!userProfile.coordinator_id) return null;
+  const { data } = await getSupabaseAdmin()
+    .from('user_profiles')
+    .select('full_name')
+    .eq('id', userProfile.coordinator_id)
+    .single() as { data: { full_name: string } | null; error: any };
+  return data?.full_name || null;
 }
 
 // Churn record type
@@ -94,6 +135,16 @@ export const churnService = {
       if (normalizedRole === 'agent') {
         kamFilter = [userProfile.fullName];
         console.log(`👤 Agent filter - showing records for KAM: ${userProfile.fullName}`);
+      } else if (normalizedRole === 'subagent' || normalizedRole === 'sub_agent') {
+        // sub_agent sees all their coordinators' records combined
+        const coordinatorNames = await getSubAgentCoordinatorNames(userProfile);
+        kamFilter = coordinatorNames.length > 0 ? coordinatorNames : [];
+        console.log(`👤 Sub-agent filter - showing records for coordinators:`, coordinatorNames);
+      } else if (normalizedRole === 'boperson' || normalizedRole === 'bo_person') {
+        // bo_person sees single coordinator's records
+        const coordinatorName = await getBoPersonCoordinatorName(userProfile);
+        kamFilter = coordinatorName ? [coordinatorName] : [];
+        console.log(`👤 BO Person filter - showing records for coordinator KAM: ${coordinatorName}`);
       } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
         if (userProfile.team_name) {
           const { data: teamMembers } = await getSupabaseAdmin()
@@ -424,6 +475,10 @@ export const churnService = {
       }
     } else if (normalizedRole === 'agent') {
       hasAccess = record.kam === userProfile.fullName;
+    } else if (normalizedRole === 'subagent' || normalizedRole === 'sub_agent') {
+      // sub_agent can act on any of their coordinators' records
+      const coordinatorNames = await getSubAgentCoordinatorNames(userProfile);
+      hasAccess = coordinatorNames.includes(record.kam);
     }
 
     if (!hasAccess) {
@@ -461,6 +516,7 @@ export const churnService = {
       current_call: shouldActivateFollowUp ? (record.current_call || 1) : record.current_call,
       mail_sent: mail_sent_confirmation ?? record.mail_sent ?? false,
       follow_up_completed_at: followUpCompletedAt,
+      actioned_by: userProfile.fullName, // Track who actually made this change
     };
     
     if (shouldActivateFollowUp && !record.is_follow_up_active) {
@@ -527,6 +583,12 @@ export const churnService = {
     
     if (normalizedRole === 'agent') {
       kamFilter = [userProfile.fullName];
+    } else if (normalizedRole === 'subagent' || normalizedRole === 'sub_agent') {
+      const coordinatorNames = await getSubAgentCoordinatorNames(userProfile);
+      kamFilter = coordinatorNames.length > 0 ? coordinatorNames : [];
+    } else if (normalizedRole === 'boperson' || normalizedRole === 'bo_person') {
+      const coordinatorName = await getBoPersonCoordinatorName(userProfile);
+      kamFilter = coordinatorName ? [coordinatorName] : [];
     } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
       if (userProfile.team_name) {
         const { data: teamMembers } = await getSupabaseAdmin()
@@ -623,6 +685,9 @@ export const churnService = {
       }
     } else if (normalizedRole === 'agent') {
       hasAccess = record.kam === userProfile.fullName;
+    } else if (normalizedRole === 'subagent' || normalizedRole === 'sub_agent') {
+      const coordinatorNames = await getSubAgentCoordinatorNames(userProfile);
+      hasAccess = coordinatorNames.includes(record.kam);
     }
     
     if (!hasAccess) {
@@ -696,6 +761,9 @@ export const churnService = {
       }
     } else if (normalizedRole === 'agent') {
       hasAccess = record.kam === userProfile.fullName;
+    } else if (normalizedRole === 'subagent' || normalizedRole === 'sub_agent') {
+      const coordinatorNames = await getSubAgentCoordinatorNames(userProfile);
+      hasAccess = coordinatorNames.includes(record.kam);
     }
     
     if (!hasAccess) {
@@ -711,6 +779,7 @@ export const churnService = {
       call_response,
       notes: notes || "",
       churn_reason,
+      actioned_by: userProfile.fullName, // Track who made this call attempt
     };
     
     const existingAttempts = record.call_attempts || [];
@@ -776,6 +845,7 @@ export const churnService = {
         churn_reason: churn_reason || record.churn_reason, // Update churn reason if provided
         controlled_status: controlledStatus, // Update controlled status based on churn reason
         date_time_filled: churn_reason ? currentDateTime : record.date_time_filled, // Update timestamp if churn reason changed
+        actioned_by: userProfile.fullName, // Track who performed this action
         mail_sent: mail_sent_confirmation ? true : record.mail_sent, // Update mail_sent if confirmation provided
         mail_sent_confirmation: mail_sent_confirmation ? true : record.mail_sent_confirmation, // Update mail_sent_confirmation
         updated_at: currentDateTime,
@@ -812,9 +882,17 @@ export const churnService = {
       const normalizedRole = userProfile.role.toLowerCase().replace(/[_\s]/g, ''); // Changed
       
       if (normalizedRole === 'agent') {
-        kamFilter = [userProfile.fullName]; // Changed
-        console.log(`🔒 [getActiveFollowUps] Agent filter applied - showing only records for KAM: "${userProfile.fullName}"`); // Changed
-      } else if (normalizedRole === 'teamlead') {
+        kamFilter = [userProfile.fullName];
+        console.log(`🔒 [getActiveFollowUps] Agent filter applied - showing only records for KAM: "${userProfile.fullName}"`);
+      } else if (normalizedRole === 'subagent' || normalizedRole === 'sub_agent') {
+        const coordinatorNames = await getSubAgentCoordinatorNames(userProfile);
+        kamFilter = coordinatorNames.length > 0 ? coordinatorNames : [];
+        console.log(`🔒 [getActiveFollowUps] Sub-agent filter - coordinators:`, coordinatorNames);
+      } else if (normalizedRole === 'boperson' || normalizedRole === 'bo_person') {
+        const coordinatorName = await getBoPersonCoordinatorName(userProfile);
+        kamFilter = coordinatorName ? [coordinatorName] : [];
+        console.log(`🔒 [getActiveFollowUps] BO Person filter - coordinator: ${coordinatorName}`);
+      } else if (normalizedRole === 'teamlead' || normalizedRole === 'team_lead') {
         if (userProfile.team_name) {
           const { data: teamMembers } = await getSupabaseAdmin()
             .from('user_profiles')
@@ -827,6 +905,9 @@ export const churnService = {
       } else if (normalizedRole === 'admin') {
         console.log(`👑 [getActiveFollowUps] Admin - showing all records`);
         kamFilter = null;
+      } else {
+        console.warn(`⚠️ [getActiveFollowUps] Unknown role: ${userProfile.role}, returning no records`);
+        kamFilter = [];
       }
     } else {
       console.warn(`⚠️ [getActiveFollowUps] No user profile provided.`); // Changed
@@ -897,9 +978,17 @@ export const churnService = {
       const normalizedRole = userProfile.role.toLowerCase().replace(/[_\s]/g, ''); // Changed
       
       if (normalizedRole === 'agent') {
-        kamFilter = [userProfile.fullName]; // Changed
-        console.log(`🔒 [getOverdueFollowUps] Agent filter applied - showing only records for KAM: "${userProfile.fullName}"`); // Changed
-      } else if (normalizedRole === 'teamlead') {
+        kamFilter = [userProfile.fullName];
+        console.log(`🔒 [getOverdueFollowUps] Agent filter applied - showing only records for KAM: "${userProfile.fullName}"`);
+      } else if (normalizedRole === 'subagent' || normalizedRole === 'sub_agent') {
+        const coordinatorNames = await getSubAgentCoordinatorNames(userProfile);
+        kamFilter = coordinatorNames.length > 0 ? coordinatorNames : [];
+        console.log(`🔒 [getOverdueFollowUps] Sub-agent filter - coordinators:`, coordinatorNames);
+      } else if (normalizedRole === 'boperson' || normalizedRole === 'bo_person') {
+        const coordinatorName = await getBoPersonCoordinatorName(userProfile);
+        kamFilter = coordinatorName ? [coordinatorName] : [];
+        console.log(`🔒 [getOverdueFollowUps] BO Person filter - coordinator: ${coordinatorName}`);
+      } else if (normalizedRole === 'teamlead' || normalizedRole === 'team_lead') {
         if (userProfile.team_name) {
           const { data: teamMembers } = await getSupabaseAdmin()
             .from('user_profiles')
@@ -912,6 +1001,9 @@ export const churnService = {
       } else if (normalizedRole === 'admin') {
         console.log(`👑 [getOverdueFollowUps] Admin - showing all records`);
         kamFilter = null;
+      } else {
+        console.warn(`⚠️ [getOverdueFollowUps] Unknown role: ${userProfile.role}, returning no records`);
+        kamFilter = [];
       }
     } else {
       console.warn(`⚠️ [getOverdueFollowUps] No user profile provided.`); // Changed

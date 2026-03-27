@@ -7,11 +7,14 @@ import { normalizeUserProfile } from '../../utils/authUtils';
 
 // Type definitions
 interface UserProfile {
+  id?: string;
+  dbId?: string;
   email: string;
   full_name: string;
   role: string;
   team_name?: string;
-  teamName?: string; // Add camelCase for compatibility
+  teamName?: string;
+  coordinator_id?: string;
   [key: string]: any;
 }
 
@@ -40,6 +43,23 @@ export const momService = {
       // Agent can access their own MOMs
       return userProfile.email === mom.created_by;
     }
+    if (normalizedRole === 'sub_agent' || normalizedRole === 'subagent') {
+      if (userProfile.email === mom.created_by) return true;
+      // Also check if MOM belongs to any of their coordinators
+      const lookupId = userProfile.dbId || userProfile.id;
+      if (lookupId) {
+        const { data: sacRows } = await getSupabaseAdmin()
+          .from('sub_agent_coordinators')
+          .select('coordinator_id')
+          .eq('sub_agent_id', lookupId) as { data: Array<{ coordinator_id: string }> | null; error: any };
+        if (sacRows && sacRows.length > 0) {
+          const { data: coords } = await getSupabaseAdmin()
+            .from('user_profiles').select('email').in('id', sacRows.map(r => r.coordinator_id));
+          const coordinatorEmails = (coords as any[])?.map((c: any) => c.email) || [];
+          return coordinatorEmails.includes(mom.created_by);
+        }
+      }
+    }
     return false;
   },
 
@@ -67,7 +87,26 @@ export const momService = {
     
     if (normalizedRole === 'agent') {
       query = query.eq('created_by', userProfile.email);
-      // console.log(`👤 Agent filter - showing MOMs created by: ${userProfile.email}`);
+    } else if (normalizedRole === 'subagent' || normalizedRole === 'sub_agent') {
+      // sub_agent sees MOMs created by their coordinators
+      const lookupId = userProfile.dbId || userProfile.id;
+      if (lookupId) {
+        const { data: sacRows } = await getSupabaseAdmin()
+          .from('sub_agent_coordinators').select('coordinator_id')
+          .eq('sub_agent_id', lookupId) as { data: Array<{ coordinator_id: string }> | null; error: any };
+        if (sacRows && sacRows.length > 0) {
+          const { data: coords } = await getSupabaseAdmin()
+            .from('user_profiles').select('email').in('id', sacRows.map(r => r.coordinator_id));
+          const coordinatorEmails = (coords as any[])?.map((c: any) => c.email).filter(Boolean) || [];
+          // Include MOMs created by sub_agent themselves OR by coordinators
+          const allEmails = [...coordinatorEmails, userProfile.email];
+          query = query.in('created_by', allEmails);
+        } else {
+          query = query.eq('created_by', userProfile.email);
+        }
+      } else {
+        query = query.eq('created_by', 'NON_EXISTENT_EMAIL');
+      }
     } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
       const teamName = userProfile.team_name || userProfile.teamName;
       if (teamName) {
@@ -239,6 +278,24 @@ export const momService = {
     
     if (normalizedRole === 'agent') {
       query = query.eq('created_by', userProfile.email);
+    } else if (normalizedRole === 'subagent' || normalizedRole === 'sub_agent') {
+      const lookupId = userProfile.dbId || userProfile.id;
+      if (lookupId) {
+        const { data: sacRows } = await getSupabaseAdmin()
+          .from('sub_agent_coordinators').select('coordinator_id')
+          .eq('sub_agent_id', lookupId) as { data: Array<{ coordinator_id: string }> | null; error: any };
+        if (sacRows && sacRows.length > 0) {
+          const { data: coords } = await getSupabaseAdmin()
+            .from('user_profiles').select('email').in('id', sacRows.map(r => r.coordinator_id));
+          const coordinatorEmails = (coords as any[])?.map((c: any) => c.email).filter(Boolean) || [];
+          const allEmails = [...coordinatorEmails, userProfile.email];
+          query = query.in('created_by', allEmails);
+        } else {
+          query = query.eq('created_by', userProfile.email);
+        }
+      } else {
+        query = query.eq('created_by', 'NON_EXISTENT_EMAIL');
+      }
     } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
       if (teamName) {
         query = query.eq('team', teamName);
@@ -249,7 +306,7 @@ export const momService = {
       // Admin sees all
     } else {
       console.warn(`⚠️ Unknown role: ${userProfile.role}, denying access to MOM statistics`);
-      query = query.eq('created_by', 'NON_EXISTENT_EMAIL'); // Deny for unknown roles
+      query = query.eq('created_by', 'NON_EXISTENT_EMAIL');
     }
     
     const { data: records } = await query;

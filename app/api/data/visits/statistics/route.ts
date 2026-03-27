@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
       fullName: statsUserProfile.fullName || statsUserProfile.full_name || statsUserProfile.email
     };
 
-    if (normalizedStatsRole === 'agent') {
+    if (normalizedStatsRole === 'agent' || normalizedStatsRole === 'sub_agent') {
       statistics = await visitService._getIndividualAgentStatistics(profileWithFullName as any);
     } else if (normalizedStatsRole === 'team_lead' || normalizedStatsRole === 'teamlead' || normalizedStatsRole === 'admin') {
       statistics = await visitService.getComprehensiveTeamVisitStatistics(profileWithFullName as any);

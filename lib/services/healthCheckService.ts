@@ -7,11 +7,14 @@ import { normalizeUserProfile } from '../../utils/authUtils';
 
 // Type definitions
 interface UserProfile {
+  id?: string;
+  dbId?: string; // user_profiles.id (DB row UUID) — used for junction table lookups
   email: string;
   fullName: string;
   role: string;
   team_name?: string;
-  teamName?: string; // Add camelCase for compatibility
+  teamName?: string;
+  coordinator_id?: string;
   [key: string]: any;
 }
 
@@ -50,6 +53,31 @@ export const healthCheckService = {
       
       if (normalizedRole === 'agent') {
         query = query.eq('kam_email', userProfile.email);
+      } else if (normalizedRole === 'subagent' || normalizedRole === 'sub_agent' || normalizedRole === 'boperson' || normalizedRole === 'bo_person') {
+        // sub_agent: look up all coordinators via junction table
+        // bo_person: single coordinator via coordinator_id
+        let coordinatorEmails: string[] = [];
+        if (normalizedRole === 'subagent' || normalizedRole === 'sub_agent') {
+          const lookupId = userProfile.dbId || userProfile.id;
+          const { data: sacRows } = await getSupabaseAdmin()
+            .from('sub_agent_coordinators')
+            .select('coordinator_id')
+            .eq('sub_agent_id', lookupId!) as { data: Array<{ coordinator_id: string }> | null; error: any };
+          if (sacRows && sacRows.length > 0) {
+            const { data: coords } = await getSupabaseAdmin()
+              .from('user_profiles').select('email').in('id', sacRows.map(r => r.coordinator_id));
+            coordinatorEmails = (coords as any[])?.map((c: any) => c.email) || [];
+          }
+        } else if (userProfile.coordinator_id) {
+          const { data: coord } = await getSupabaseAdmin()
+            .from('user_profiles').select('email').eq('id', userProfile.coordinator_id).single();
+          if (coord) coordinatorEmails = [(coord as any).email];
+        }
+        if (coordinatorEmails.length > 0) {
+          query = query.in('kam_email', coordinatorEmails);
+        } else {
+          query = query.eq('kam_email', 'NON_EXISTENT_EMAIL');
+        }
       } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
         const teamName = userProfile.team_name || userProfile.teamName;
         if (teamName) {
@@ -128,9 +156,27 @@ export const healthCheckService = {
     const isOwner = data.kam_email === userProfile.email;
     const isAdmin = normalizedRole === 'admin';
     const isTeamLead = normalizedRole === 'teamlead' || normalizedRole === 'team_lead';
+    const isSubAgent = normalizedRole === 'subagent' || normalizedRole === 'sub_agent';
 
-    if (!isAdmin && !isTeamLead && !isOwner) {
-        throw new Error(`Access denied: User ${userProfile.email} cannot create health check for ${data.kam_email}`);
+    // For sub_agent: check if kam_email belongs to one of their coordinators
+    let isSubAgentAuthorized = false;
+    if (isSubAgent) {
+      const lookupId = userProfile.dbId || userProfile.id;
+      if (lookupId) {
+        const { data: sacRows } = await getSupabaseAdmin()
+          .from('sub_agent_coordinators').select('coordinator_id')
+          .eq('sub_agent_id', lookupId) as { data: Array<{ coordinator_id: string }> | null; error: any };
+        if (sacRows && sacRows.length > 0) {
+          const { data: coords } = await getSupabaseAdmin()
+            .from('user_profiles').select('email').in('id', sacRows.map(r => r.coordinator_id));
+          const coordinatorEmails = (coords as any[])?.map((c: any) => c.email) || [];
+          isSubAgentAuthorized = coordinatorEmails.includes(data.kam_email);
+        }
+      }
+    }
+
+    if (!isAdmin && !isTeamLead && !isOwner && !isSubAgentAuthorized) {
+      throw new Error(`Access denied: User ${userProfile.email} cannot create health check for ${data.kam_email}`);
     }
 
     // If Team Lead, ensure it's for their team members
@@ -186,6 +232,7 @@ export const healthCheckService = {
       assessment_month: data.assessment_month,
       assessment_date: data.assessment_date,
       created_by: userProfile.email, // Explicitly set created_by to the authenticated user's email
+      actioned_by: userProfile.fullName, // Track who actually created this record
       created_at: now,
       updated_at: now,
     };
@@ -241,6 +288,25 @@ export const healthCheckService = {
     
     if (normalizedRole === 'agent') {
       query = query.eq('kam_email', userProfile.email);
+    } else if (normalizedRole === 'subagent' || normalizedRole === 'sub_agent') {
+      const lookupId = userProfile.dbId || userProfile.id;
+      if (lookupId) {
+        const { data: sacRows } = await getSupabaseAdmin()
+          .from('sub_agent_coordinators').select('coordinator_id')
+          .eq('sub_agent_id', lookupId) as { data: Array<{ coordinator_id: string }> | null; error: any };
+        if (sacRows && sacRows.length > 0) {
+          const { data: coords } = await getSupabaseAdmin()
+            .from('user_profiles').select('email').in('id', sacRows.map(r => r.coordinator_id));
+          const coordinatorEmails = (coords as any[])?.map((c: any) => c.email).filter(Boolean) || [];
+          query = coordinatorEmails.length > 0
+            ? query.in('kam_email', coordinatorEmails)
+            : query.eq('kam_email', 'NON_EXISTENT_EMAIL');
+        } else {
+          query = query.eq('kam_email', 'NON_EXISTENT_EMAIL');
+        }
+      } else {
+        query = query.eq('kam_email', 'NON_EXISTENT_EMAIL');
+      }
     } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
       if (teamName) {
         query = query.eq('team_name', teamName);
@@ -249,7 +315,7 @@ export const healthCheckService = {
       // Admin sees all
     } else {
       console.warn(`⚠️ Unknown role: ${userProfile.role}, denying access to health check statistics`);
-      query = query.eq('kam_email', 'NON_EXISTENT_EMAIL'); // Deny for unknown roles
+      query = query.eq('kam_email', 'NON_EXISTENT_EMAIL');
     }
     
     if (month) {
@@ -349,8 +415,37 @@ export const healthCheckService = {
         });
       }
       
-      // Now process the health check records
-      records?.forEach(record => {
+      // Fetch health checks per agent by kam_email (not team_name) to avoid missing records
+      // where team_name on the health_check record is null/mismatched
+      let agentRecords: HealthCheck[] = [];
+      if (agentProfiles && agentProfiles.length > 0) {
+        const agentEmails = agentProfiles.map(a => a.email);
+        let hcPage = 0;
+        const hcPageSize = 1000;
+        let hcHasMore = true;
+
+        while (hcHasMore) {
+          const start = hcPage * hcPageSize;
+          const end = start + hcPageSize - 1;
+          const { data: hcChunk } = await getSupabaseAdmin()
+            .from('health_checks')
+            .select('*')
+            .in('kam_email', agentEmails)
+            .eq('assessment_month', month || new Date().toISOString().slice(0, 7))
+            .range(start, end) as { data: HealthCheck[] | null; error: any };
+
+          if (hcChunk && hcChunk.length > 0) {
+            agentRecords = [...agentRecords, ...hcChunk];
+            hcHasMore = hcChunk.length === hcPageSize;
+            hcPage++;
+          } else {
+            hcHasMore = false;
+          }
+        }
+      }
+
+      // Now process the health check records using kam_email-based fetch
+      agentRecords.forEach(record => {
         const kamEmail = record.kam_email || 'Unknown';
         
         if (!agentMap.has(kamEmail)) {
@@ -440,6 +535,25 @@ export const healthCheckService = {
 
     if (normalizedRole === 'agent') {
       brandsQuery = brandsQuery.eq('kam_email_id', userProfile.email);
+    } else if (normalizedRole === 'subagent' || normalizedRole === 'sub_agent') {
+      const lookupId = userProfile.dbId || userProfile.id;
+      if (lookupId) {
+        const { data: sacRows } = await getSupabaseAdmin()
+          .from('sub_agent_coordinators').select('coordinator_id')
+          .eq('sub_agent_id', lookupId) as { data: Array<{ coordinator_id: string }> | null; error: any };
+        if (sacRows && sacRows.length > 0) {
+          const { data: coords } = await getSupabaseAdmin()
+            .from('user_profiles').select('email').in('id', sacRows.map(r => r.coordinator_id));
+          const coordinatorEmails = (coords as any[])?.map((c: any) => c.email).filter(Boolean) || [];
+          brandsQuery = coordinatorEmails.length > 0
+            ? brandsQuery.in('kam_email_id', coordinatorEmails)
+            : brandsQuery.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
+        } else {
+          brandsQuery = brandsQuery.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
+        }
+      } else {
+        brandsQuery = brandsQuery.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
+      }
     } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
       if (teamName) {
         const { data: teamMembers } = await getSupabaseAdmin()
@@ -519,9 +633,31 @@ export const healthCheckService = {
       .eq('assessment_month', month);
     
     // CRITICAL FIX: For agents, only get their own assessments
+    // For sub_agent, get coordinator agents' assessments
     // For team leads, get all team assessments
     if (normalizedRole === 'agent') {
       assessedQuery = assessedQuery.eq('kam_email', userProfile.email);
+    } else if (normalizedRole === 'subagent' || normalizedRole === 'sub_agent') {
+      const lookupId = userProfile.dbId || userProfile.id;
+      if (lookupId) {
+        const { data: sacRows } = await getSupabaseAdmin()
+          .from('sub_agent_coordinators').select('coordinator_id')
+          .eq('sub_agent_id', lookupId) as { data: Array<{ coordinator_id: string }> | null; error: any };
+        if (sacRows && sacRows.length > 0) {
+          const { data: coords } = await getSupabaseAdmin()
+            .from('user_profiles').select('email').in('id', sacRows.map(r => r.coordinator_id));
+          const coordinatorEmails = (coords as any[])?.map((c: any) => c.email).filter(Boolean) || [];
+          if (coordinatorEmails.length > 0) {
+            assessedQuery = assessedQuery.in('kam_email', coordinatorEmails);
+          } else {
+            assessedQuery = assessedQuery.eq('kam_email', 'NON_EXISTENT_EMAIL');
+          }
+        } else {
+          assessedQuery = assessedQuery.eq('kam_email', 'NON_EXISTENT_EMAIL');
+        }
+      } else {
+        assessedQuery = assessedQuery.eq('kam_email', 'NON_EXISTENT_EMAIL');
+      }
     } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
       if (teamName) {
         assessedQuery = assessedQuery.eq('team_name', teamName);
@@ -612,6 +748,25 @@ export const healthCheckService = {
 
     if (normalizedRole === 'agent') {
       brandsQuery = brandsQuery.eq('kam_email_id', userProfile.email);
+    } else if (normalizedRole === 'subagent' || normalizedRole === 'sub_agent') {
+      const lookupId = userProfile.dbId || userProfile.id;
+      if (lookupId) {
+        const { data: sacRows } = await getSupabaseAdmin()
+          .from('sub_agent_coordinators').select('coordinator_id')
+          .eq('sub_agent_id', lookupId) as { data: Array<{ coordinator_id: string }> | null; error: any };
+        if (sacRows && sacRows.length > 0) {
+          const { data: coords } = await getSupabaseAdmin()
+            .from('user_profiles').select('email').in('id', sacRows.map(r => r.coordinator_id));
+          const coordinatorEmails = (coords as any[])?.map((c: any) => c.email).filter(Boolean) || [];
+          brandsQuery = coordinatorEmails.length > 0
+            ? brandsQuery.in('kam_email_id', coordinatorEmails)
+            : brandsQuery.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
+        } else {
+          brandsQuery = brandsQuery.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
+        }
+      } else {
+        brandsQuery = brandsQuery.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
+      }
     } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
       if (teamName) {
         const { data: teamMembers } = await getSupabaseAdmin()
@@ -647,6 +802,25 @@ export const healthCheckService = {
     
     if (normalizedRole === 'agent') {
       assessedQuery = assessedQuery.eq('kam_email', userProfile.email);
+    } else if (normalizedRole === 'subagent' || normalizedRole === 'sub_agent') {
+      const lookupId = userProfile.dbId || userProfile.id;
+      if (lookupId) {
+        const { data: sacRows } = await getSupabaseAdmin()
+          .from('sub_agent_coordinators').select('coordinator_id')
+          .eq('sub_agent_id', lookupId) as { data: Array<{ coordinator_id: string }> | null; error: any };
+        if (sacRows && sacRows.length > 0) {
+          const { data: coords } = await getSupabaseAdmin()
+            .from('user_profiles').select('email').in('id', sacRows.map(r => r.coordinator_id));
+          const coordinatorEmails = (coords as any[])?.map((c: any) => c.email).filter(Boolean) || [];
+          assessedQuery = coordinatorEmails.length > 0
+            ? assessedQuery.in('kam_email', coordinatorEmails)
+            : assessedQuery.eq('kam_email', 'NON_EXISTENT_EMAIL');
+        } else {
+          assessedQuery = assessedQuery.eq('kam_email', 'NON_EXISTENT_EMAIL');
+        }
+      } else {
+        assessedQuery = assessedQuery.eq('kam_email', 'NON_EXISTENT_EMAIL');
+      }
     } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
       if (teamName) {
         assessedQuery = assessedQuery.eq('team_name', teamName);

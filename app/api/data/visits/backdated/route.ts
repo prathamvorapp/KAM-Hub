@@ -16,9 +16,9 @@ export async function POST(request: NextRequest) {
       }, { status: 401 });
     }
 
-    // Only Team Leads, Admins, and Agents can schedule backdated visits
+    // Only Team Leads, Admins, Agents and Sub-agents can schedule backdated visits
     const normalizedRole = user.role.toLowerCase().replace(/\s+/g, '_');
-    if (normalizedRole !== 'team_lead' && normalizedRole !== 'admin' && normalizedRole !== 'agent') {
+    if (normalizedRole !== 'team_lead' && normalizedRole !== 'admin' && normalizedRole !== 'agent' && normalizedRole !== 'sub_agent') {
       return NextResponse.json({
         success: false,
         error: 'Access denied - insufficient permissions'

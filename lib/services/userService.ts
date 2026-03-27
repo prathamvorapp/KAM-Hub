@@ -157,6 +157,14 @@ export class UserService {
       [UserRole.AGENT]: [
         'read_own',
         'write_own'
+      ],
+      [UserRole.SUB_AGENT]: [
+        'read_own',
+        'write_own'
+      ],
+      [UserRole.BO_PERSON]: [
+        'read_own',
+        'write_own'
       ]
     };
 
