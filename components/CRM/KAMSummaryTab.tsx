@@ -8,7 +8,7 @@ interface KAMSummary {
   team_name: string
   overdue_churn_count: number
   visit_this_month: string
-  health_checks_pending: number
+  engagement_calls_done: number
   demos_done_this_month: number
 }
 
@@ -117,7 +117,7 @@ export default function KAMSummaryTab() {
                 Visit This Month
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
-                Health Checks Pending
+                Engagement Calls Done
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
                 Demos Done This Month
@@ -159,13 +159,7 @@ export default function KAMSummaryTab() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    <span className={`px-2 py-1 rounded-full ${
-                      kam.health_checks_pending > 0 
-                        ? 'bg-orange-100 text-orange-800' 
-                        : 'bg-green-100 text-green-800'
-                    }`}>
-                      {kam.health_checks_pending}
-                    </span>
+                    {kam.engagement_calls_done}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {kam.demos_done_this_month}

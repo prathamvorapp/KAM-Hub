@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import DashboardLayout from '@/components/Layout/DashboardLayout'
 
@@ -28,6 +29,8 @@ interface HealthCheckStats {
 }
 
 export default function AdminHealthChecksPage() {
+  notFound()
+
   const { userProfile } = useAuth()
   const [stats, setStats] = useState<HealthCheckStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -122,24 +125,24 @@ export default function AdminHealthChecksPage() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
                 <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
                   <p className="text-blue-600 text-sm font-medium">Total Assessments</p>
-                  <p className="text-3xl font-bold text-blue-800 mt-2">{stats.total}</p>
+                  <p className="text-3xl font-bold text-blue-800 mt-2">{stats?.total}</p>
                 </div>
                 <div className="bg-green-50 rounded-lg p-4 border border-green-200">
                   <p className="text-green-600 text-sm font-medium">Healthy Brands</p>
                   <p className="text-3xl font-bold text-green-800 mt-2">
-                    {(stats.byHealthStatus['Green'] || 0) + (stats.byHealthStatus['Amber'] || 0)}
+                    {(stats?.byHealthStatus['Green'] || 0) + (stats?.byHealthStatus['Amber'] || 0)}
                   </p>
                 </div>
                 <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
                   <p className="text-orange-600 text-sm font-medium">Critical Brands</p>
                   <p className="text-3xl font-bold text-orange-800 mt-2">
-                    {(stats.byHealthStatus['Orange'] || 0) + (stats.byHealthStatus['Red'] || 0)}
+                    {(stats?.byHealthStatus['Orange'] || 0) + (stats?.byHealthStatus['Red'] || 0)}
                   </p>
                 </div>
                 <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                   <p className="text-gray-600 text-sm font-medium">Not Connected</p>
                   <p className="text-3xl font-bold text-gray-800 mt-2">
-                    {stats.byHealthStatus['Not Connected'] || 0}
+                    {stats?.byHealthStatus['Not Connected'] || 0}
                   </p>
                 </div>
               </div>
@@ -148,7 +151,7 @@ export default function AdminHealthChecksPage() {
               <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
                 <h2 className="text-xl font-semibold text-secondary-800 mb-4">Agent-wise Performance</h2>
                 
-                {stats.byAgent.length === 0 ? (
+                {stats?.byAgent.length === 0 ? (
                   <p className="text-secondary-600 text-center py-8">No agent data available for this month</p>
                 ) : (
                   <div className="overflow-x-auto">
@@ -166,7 +169,7 @@ export default function AdminHealthChecksPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {stats.byAgent.map((agent, index) => (
+                        {stats?.byAgent.map((agent, index) => (
                           <tr key={agent.kam_email} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                             <td className="py-3 px-4">
                               <div>
@@ -226,7 +229,7 @@ export default function AdminHealthChecksPage() {
               <div className="mt-8 bg-gray-50 rounded-lg p-6 border border-gray-200">
                 <h2 className="text-xl font-semibold text-secondary-800 mb-4">Brand Nature Distribution</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {Object.entries(stats.byBrandNature).map(([nature, count]) => (
+                  {Object.entries(stats?.byBrandNature ?? {}).map(([nature, count]) => (
                     <div key={nature} className="bg-white rounded-lg p-4 border border-gray-200">
                       <p className="text-secondary-600 text-sm">{nature}</p>
                       <p className="text-2xl font-bold text-secondary-800 mt-1">{count}</p>
@@ -239,7 +242,7 @@ export default function AdminHealthChecksPage() {
               <div className="mt-8 bg-gray-50 rounded-lg p-6 border border-gray-200">
                 <h2 className="text-xl font-semibold text-secondary-800 mb-4">Zone Distribution</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {Object.entries(stats.byZone).map(([zone, count]) => (
+                  {Object.entries(stats?.byZone ?? {}).map(([zone, count]) => (
                     <div key={zone} className="bg-white rounded-lg p-4 border border-gray-200">
                       <p className="text-secondary-600 text-sm">{zone}</p>
                       <p className="text-2xl font-bold text-secondary-800 mt-1">{count}</p>

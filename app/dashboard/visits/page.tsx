@@ -400,7 +400,7 @@ export default function VisitManagementPage() {
       });
       counts[brand.brandName] = {
         scheduled: brandVisits.length,
-        done: brandVisits.filter(v => v.visit_status === 'Visit Done').length,
+        done: brandVisits.filter(v => v.visit_status === 'Completed' && v.approval_status === 'Approved').length,
         total: 2,
       };
     }

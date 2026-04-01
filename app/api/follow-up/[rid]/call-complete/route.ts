@@ -42,7 +42,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const { error: updateError } = await getSupabaseAdmin()
       .from('churn_records')
-      // @ts-expect-error - Supabase type inference issue with update
       .update({
         follow_up_status: 'COMPLETED',
         is_follow_up_active: false,

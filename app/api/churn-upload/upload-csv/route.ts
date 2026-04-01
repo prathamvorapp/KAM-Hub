@@ -99,7 +99,8 @@ const transformCSVRowToChurnRecord = (row: any, uploadedBy: string) => {
 
 // Check if user is BO Team
 const isBOTeamMember = (userRole: string, userTeam?: string): boolean => {
-  return userRole === UserRole.ADMIN || 
+  const normalizedRole = userRole.toLowerCase().replace(/\s+/g, '_');
+  return normalizedRole === 'admin' || 
          userTeam?.toLowerCase() === 'bo' ||
          userTeam?.toLowerCase() === 'bo team';
 };

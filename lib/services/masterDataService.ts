@@ -155,8 +155,11 @@ export const masterDataService = {
       // console.log(`👑 Admin ${userProfile.email} - fetching brands for agent: ${agentEmail}`);
       query = query.eq('kam_email_id', agentEmail); // Admin can specify any agentEmail
     } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
-      // Team Lead can only fetch brands for agents within their team
-      if (userProfile.team_name) {
+      // Team Lead can fetch brands for agents within their team OR their own brands
+      if (userProfile.email === agentEmail) {
+        canAccess = true;
+        query = query.eq('kam_email_id', agentEmail);
+      } else if (userProfile.team_name) {
         const { data: teamMembers } = await getSupabaseAdmin()
           .from('user_profiles')
           .select('email')
@@ -166,10 +169,7 @@ export const masterDataService = {
         const agentEmails = teamMembers?.map(m => m.email) || [];
         if (agentEmails.includes(agentEmail)) {
           canAccess = true;
-          // console.log(`👥 Team Lead ${userProfile.email} - fetching brands for team member: ${agentEmail}`);
           query = query.eq('kam_email_id', agentEmail);
-        } else {
-          // console.log(`❌ Team Lead ${userProfile.email} attempted to fetch brands for unauthorized agent: ${agentEmail}`);
         }
       }
     } else if (normalizedRole === 'agent') {

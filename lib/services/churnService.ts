@@ -152,11 +152,15 @@ export const churnService = {
             .select('full_name')
             .eq('team_name', userProfile.team_name)
             .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
-          kamFilter = teamMembers?.map(m => m.full_name) || [];
-          console.log(`👥 Team Lead filter - showing records for team ${userProfile.team_name}:`, kamFilter);
+          const teamKams = teamMembers?.map(m => m.full_name) || [];
+          // Include Team Lead's own full_name to show brands directly assigned to them
+          const allKams = userProfile.fullName ? [...new Set([...teamKams, userProfile.fullName])] : teamKams;
+          kamFilter = allKams;
+          console.log(`👥 Team Lead filter - showing records for team ${userProfile.team_name} + Team Lead:`, kamFilter);
         } else {
-          console.log(`⚠️ Team Lead has no team_name, showing no records`);
-          kamFilter = [];
+          // Team Lead with no team, show only their own records
+          kamFilter = userProfile.fullName ? [userProfile.fullName] : [];
+          console.log(`⚠️ Team Lead has no team_name, showing only their own records:`, kamFilter);
         }
       } else if (normalizedRole === 'admin') {
         console.log(`👑 Admin - showing all records`);
@@ -167,29 +171,46 @@ export const churnService = {
       }
     }
     
-    let query = getSupabaseAdmin().from('churn_records').select('*', { count: 'exact' });
-    
-    if (kamFilter !== null && kamFilter.length > 0) { // Only apply filter if kamFilter is not null and has items
-      console.log(`🔒 Applying KAM filter:`, kamFilter);
-      query = query.in('kam', kamFilter);
-    } else if (kamFilter !== null && kamFilter.length === 0) {
-      // If kamFilter is explicitly empty (e.g., Team Lead with no team members, or unknown role),
-      // ensure no records are returned by adding a condition that will always fail
-      console.log(`🔒 Explicitly empty KAM filter, returning no records.`);
-      query = query.eq('rid', 'NON_EXISTENT_RID');
-    } else {
-      console.log(`🔓 No KAM filter applied (Admin or global view)`);
+    // Fetch ALL records in chunks to bypass Supabase's 1000-row default limit
+    const allRecords: ChurnRecord[] = [];
+    let chunkFrom = 0;
+    const chunkSize = 1000;
+    let hasMore = true;
+
+    while (hasMore) {
+      let query = getSupabaseAdmin()
+        .from('churn_records')
+        .select('*')
+        .range(chunkFrom, chunkFrom + chunkSize - 1);
+
+      if (kamFilter !== null && kamFilter.length > 0) {
+        console.log(`🔒 Applying KAM filter:`, kamFilter);
+        query = query.in('kam', kamFilter);
+      } else if (kamFilter !== null && kamFilter.length === 0) {
+        console.log(`� Explicitly empty KAM filter, returning no records.`);
+        query = query.eq('rid', 'NON_EXISTENT_RID');
+      } else {
+        console.log(`� No KAM filter applied (Admin or global view)`);
+      }
+
+      const { data: chunk, error } = await query as { data: ChurnRecord[] | null; error: any };
+
+      if (error) throw error;
+      if (!chunk || chunk.length === 0) break;
+
+      allRecords.push(...chunk);
+      hasMore = chunk.length === chunkSize;
+      chunkFrom += chunkSize;
     }
-    
-    const { data: allRecords, count } = await query as { data: ChurnRecord[] | null; count: number | null };
-    console.log(`📊 Query returned ${allRecords?.length || 0} records`);
+
+    console.log(`📊 Query returned ${allRecords.length} records`);
     
     // Log first few records to see KAM names
     if (allRecords && allRecords.length > 0) {
       console.log(`📋 Sample records (first 3):`, allRecords.slice(0, 3).map(r => ({ rid: r.rid, kam: r.kam, restaurant: r.restaurant_name })));
     }
     
-    let records = allRecords || [];
+    let records = allRecords;
     
     // AUTO-FIX: Update any records that have completed reasons but wrong status
     console.log(`🔧 Auto-fixing records with incorrect statuses...`);
@@ -471,7 +492,12 @@ export const churnService = {
           .eq('team_name', userProfile.team_name)
           .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
         const teamKams = teamMembers?.map(m => m.full_name) || [];
-        hasAccess = teamKams.includes(record.kam);
+        // Include Team Lead's own full_name for brands directly assigned to them
+        const allKams = userProfile.fullName ? [...new Set([...teamKams, userProfile.fullName])] : teamKams;
+        hasAccess = allKams.includes(record.kam);
+      } else {
+        // No team — only their own records
+        hasAccess = record.kam === userProfile.fullName;
       }
     } else if (normalizedRole === 'agent') {
       hasAccess = record.kam === userProfile.fullName;
@@ -596,9 +622,12 @@ export const churnService = {
           .select('full_name')
           .eq('team_name', userProfile.team_name)
           .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
-        kamFilter = teamMembers?.map(m => m.full_name) || [];
+        const teamKams = teamMembers?.map(m => m.full_name) || [];
+        // Include Team Lead's own full_name for brands directly assigned to them
+        kamFilter = userProfile.fullName ? [...new Set([...teamKams, userProfile.fullName])] : teamKams;
       } else {
-        kamFilter = []; // Team Lead with no team, no stats
+        // No team — only their own records
+        kamFilter = userProfile.fullName ? [userProfile.fullName] : [];
       }
     } else if (normalizedRole === 'admin') {
       kamFilter = null; // Admin sees all
@@ -681,7 +710,12 @@ export const churnService = {
           .eq('team_name', userProfile.team_name)
           .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
         const teamKams = teamMembers?.map(m => m.full_name) || [];
-        hasAccess = teamKams.includes(record.kam);
+        // Include Team Lead's own full_name for brands directly assigned to them
+        const allKams = userProfile.fullName ? [...new Set([...teamKams, userProfile.fullName])] : teamKams;
+        hasAccess = allKams.includes(record.kam);
+      } else {
+        // No team — only their own records
+        hasAccess = record.kam === userProfile.fullName;
       }
     } else if (normalizedRole === 'agent') {
       hasAccess = record.kam === userProfile.fullName;
@@ -1106,5 +1140,64 @@ export const churnService = {
     }
 
     return { successful, failed, errors };
+  },
+
+  // Update owner email
+  async updateOwnerEmail(params: {
+    rid: string;
+    owner_email: string;
+    userProfile: UserProfile;
+  }) {
+    const { rid, owner_email, userProfile: rawProfile } = params;
+    const userProfile = normalizeUserProfile(rawProfile);
+
+    const { data: record } = await getSupabaseAdmin()
+      .from('churn_records')
+      .select('*')
+      .eq('rid', rid)
+      .single() as { data: ChurnRecord | null; error: any };
+
+    if (!record) {
+      throw new Error(`Record with RID ${rid} not found`);
+    }
+
+    // Role-based access check (same pattern as updateChurnReason)
+    let hasAccess = false;
+    const normalizedRole = userProfile.role.toLowerCase().replace(/[_\s]/g, '');
+
+    if (normalizedRole === 'admin') {
+      hasAccess = true;
+    } else if (normalizedRole === 'teamlead' || normalizedRole === 'team_lead') {
+      if (userProfile.team_name) {
+        const { data: teamMembers } = await getSupabaseAdmin()
+          .from('user_profiles')
+          .select('full_name')
+          .eq('team_name', userProfile.team_name)
+          .eq('is_active', true) as { data: Array<{ full_name: string }> | null; error: any };
+        const teamKams = teamMembers?.map(m => m.full_name) || [];
+        const allKams = userProfile.fullName ? [...new Set([...teamKams, userProfile.fullName])] : teamKams;
+        hasAccess = allKams.includes(record.kam);
+      } else {
+        hasAccess = record.kam === userProfile.fullName;
+      }
+    } else if (normalizedRole === 'agent') {
+      hasAccess = record.kam === userProfile.fullName;
+    } else if (normalizedRole === 'subagent' || normalizedRole === 'sub_agent') {
+      const coordinatorNames = await getSubAgentCoordinatorNames(userProfile);
+      hasAccess = coordinatorNames.includes(record.kam);
+    }
+
+    if (!hasAccess) {
+      throw new Error(`Access denied: User ${userProfile.email} cannot update owner email for RID ${rid}`);
+    }
+
+    const { error } = await (getSupabaseAdmin()
+      .from('churn_records') as any)
+      .update({ owner_email, actioned_by: userProfile.email })
+      .eq('rid', rid);
+
+    if (error) throw new Error(`Failed to update owner email: ${error.message}`);
+
+    return { success: true };
   },
 };

@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
     // Get unique KAMs
     const uniqueKams = Array.from(
       new Map(kams.map((k: any) => [k.email, { kam_name: k.full_name, kam_email_id: k.email, team_name: k.team_name }])).values()
-    );
+    ) as Array<{ kam_name: string; kam_email_id: string; team_name: string }>;
 
     // Get churn data using churnService for each KAM to get accurate categorization
     const churnCategorizations = await Promise.all(
@@ -128,25 +128,25 @@ export async function GET(request: NextRequest) {
       return visitDate === currentMonth || scheduledDate === currentMonth;
     });
 
-    // Get health checks done this month for each KAM (paginated)
-    let healthChecks: any[] = [];
-    let hcPage = 0;
-    const hcPageSize = 1000;
-    let hasMoreHc = true;
-    while (hasMoreHc) {
-      const { data: pageData, error: healthError } = await supabase
-        .from('health_checks')
-        .select('kam_email, assessment_date')
-        .gte('assessment_date', firstDayOfMonth)
-        .lte('assessment_date', lastDayOfMonth)
-        .range(hcPage * hcPageSize, (hcPage + 1) * hcPageSize - 1);
-      if (healthError) throw healthError;
+    // Get engagement calls completed this month for each KAM
+    let engagementCalls: any[] = [];
+    let ecPage = 0;
+    const ecPageSize = 1000;
+    let hasMoreEc = true;
+    while (hasMoreEc) {
+      const { data: pageData, error: ecError } = await supabase
+        .from('engagement_calls')
+        .select('kam_email')
+        .eq('status', 'done')
+        .eq('month', currentMonth)
+        .range(ecPage * ecPageSize, (ecPage + 1) * ecPageSize - 1);
+      if (ecError) throw ecError;
       if (pageData && pageData.length > 0) {
-        healthChecks = [...healthChecks, ...pageData];
-        hasMoreHc = pageData.length === hcPageSize;
-        hcPage++;
+        engagementCalls = [...engagementCalls, ...pageData];
+        hasMoreEc = pageData.length === ecPageSize;
+        ecPage++;
       } else {
-        hasMoreHc = false;
+        hasMoreEc = false;
       }
     }
 
@@ -160,27 +160,6 @@ export async function GET(request: NextRequest) {
 
     if (demosError) throw demosError;
 
-    // Get all brands assigned to each KAM (paginated to avoid Supabase 1000-row default limit)
-    let allBrands: any[] = [];
-    let brandsPage = 0;
-    const brandsPageSize = 1000;
-    let hasMoreBrands = true;
-    while (hasMoreBrands) {
-      const { data: pageData, error: brandsError } = await supabase
-        .from('master_data')
-        .select('kam_email_id, id')
-        .in('kam_email_id', uniqueKams.map(k => k.kam_email_id))
-        .range(brandsPage * brandsPageSize, (brandsPage + 1) * brandsPageSize - 1);
-      if (brandsError) throw brandsError;
-      if (pageData && pageData.length > 0) {
-        allBrands = [...allBrands, ...pageData];
-        hasMoreBrands = pageData.length === brandsPageSize;
-        brandsPage++;
-      } else {
-        hasMoreBrands = false;
-      }
-    }
-
     // Build summary for each KAM
     const summary = uniqueKams.map(kam => {
       // Get overdue count from churn service categorization
@@ -189,12 +168,8 @@ export async function GET(request: NextRequest) {
       // Check if KAM did visit this month
       const hasVisit = visitsData?.some((v: any) => v.agent_id === kam.kam_email_id) || false;
 
-      // Count health checks pending (brands assigned but not assessed)
-      const healthChecksDone = healthChecks?.filter((h: any) => h.kam_email === kam.kam_email_id).length || 0;
-      
-      // Get total brands assigned to KAM
-      const totalBrands = allBrands?.filter((b: any) => b.kam_email_id === kam.kam_email_id).length || 0;
-      const healthChecksPending = Math.max(0, totalBrands - healthChecksDone);
+      // Count engagement calls completed this month
+      const engagementCallsDone = engagementCalls?.filter((e: any) => e.kam_email === kam.kam_email_id).length || 0;
 
       // Count demos done this month
       const demosDone = demos?.filter((d: any) => d.agent_id === kam.kam_email_id).length || 0;
@@ -205,7 +180,7 @@ export async function GET(request: NextRequest) {
         team_name: kam.team_name || 'N/A',
         overdue_churn_count: overdueCount,
         visit_this_month: hasVisit ? 'Yes' : 'No',
-        health_checks_pending: healthChecksPending,
+        engagement_calls_done: engagementCallsDone,
         demos_done_this_month: demosDone
       };
     });

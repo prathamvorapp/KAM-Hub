@@ -56,5 +56,5 @@ export function createServiceRoleClient() {
 }
 
 // Legacy exports for backward compatibility
-export const getSupabaseAdmin = createServiceRoleClient;
-export const supabase = createServiceRoleClient();
+export const getSupabaseAdmin = () => createServiceRoleClient() as any;
+export const supabase = createServiceRoleClient() as any;

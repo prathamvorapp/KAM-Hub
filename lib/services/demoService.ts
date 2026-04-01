@@ -74,8 +74,21 @@ export const demoService = {
       return teamName === demo.team_name;
     }
     if (normalizedRole === 'agent') {
-      // Agent can access their own demos
-      return userProfile.email === demo.agent_id;
+      // Agent can access their own demos (current agent_id)
+      if (userProfile.email === demo.agent_id) {
+        return true;
+      }
+      // Also allow access if the agent is the current KAM of the brand (transferred brand scenario)
+      // This lets the new KAM fill in conversion decisions on completed demos that stayed with original KAM
+      const { data: brandData } = await getSupabaseAdmin()
+        .from('master_data')
+        .select('kam_email_id')
+        .eq('id', demo.brand_id)
+        .single() as { data: { kam_email_id: string } | null; error: any };
+      if (brandData && brandData.kam_email_id === userProfile.email) {
+        return true;
+      }
+      return false;
     }
     if (normalizedRole === 'sub_agent' || normalizedRole === 'subagent') {
       // sub_agent can access any of their coordinators' demos
@@ -789,6 +802,42 @@ export const demoService = {
       }
     });
 
+    // Check if the brand has been transferred to a new KAM — if so, reassign demo to current KAM
+    let reassignFields: any = {};
+    const { data: brandData } = await getSupabaseAdmin()
+      .from('master_data')
+      .select('kam_email_id, kam_name, team_name')
+      .eq('id', demo.brand_id)
+      .single() as { data: { kam_email_id: string; kam_name: string; team_name: string } | null; error: any };
+
+    if (brandData && brandData.kam_email_id !== demo.agent_id) {
+      // Brand has been transferred — reassign this demo to the current KAM
+      const { data: newKamProfile } = await getSupabaseAdmin()
+        .from('user_profiles')
+        .select('email, full_name, team_name')
+        .eq('email', brandData.kam_email_id)
+        .single() as { data: { email: string; full_name: string; team_name: string } | null; error: any };
+
+      if (newKamProfile) {
+        const transferEntry = {
+          from_agent_id: demo.agent_id,
+          to_agent_id: newKamProfile.email,
+          transferred_at: now,
+          transferred_by: userProfile.email,
+          reason: `Reset by ${userProfile.role} — reassigned to current KAM`,
+          demo_status_at_transfer: demo.current_status,
+        };
+        const existingHistory = Array.isArray(demo.transfer_history) ? demo.transfer_history : [];
+        reassignFields = {
+          agent_id: newKamProfile.email,
+          agent_name: newKamProfile.full_name,
+          team_name: newKamProfile.team_name || demo.team_name,
+          transfer_history: [...existingHistory, transferEntry],
+        };
+        console.log(`🔄 [resetDemo] Reassigning demo to current KAM: ${newKamProfile.email}`);
+      }
+    }
+
     // Prepare update object
     const updateData: any = {
       // Reset all workflow fields
@@ -805,12 +854,15 @@ export const demoService = {
       demo_completed_date: null,
       demo_conducted_by: null,
       demo_completion_notes: null,
+      completed_by_agent_id: null,
+      completed_by_agent_name: null,
       conversion_status: null,
       non_conversion_reason: null,
       conversion_decided_at: null,
       current_status: "Step 1 Pending",
       workflow_completed: false,
       updated_at: now,
+      ...reassignFields,
     };
 
     // Only add reset_history if the column exists in the demo object

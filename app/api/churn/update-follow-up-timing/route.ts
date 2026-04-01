@@ -53,7 +53,6 @@ export async function PATCH(request: NextRequest) {
     // Update follow-up timing in Supabase
     const { error: updateError } = await getSupabaseAdmin()
       .from('churn_records')
-      // @ts-expect-error - Supabase type inference issue with update
       .update({
         next_reminder_time,
         follow_up_status,

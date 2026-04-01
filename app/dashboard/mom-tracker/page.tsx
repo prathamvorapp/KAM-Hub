@@ -49,6 +49,7 @@ function TicketsPageContent() {
   const visitId = searchParams.get('visit_id')
   const { userProfile, session } = useAuth() // Removed 'user' and 'loading: authLoading'
   const [momRecords, setMomRecords] = useState<MOMRecord[]>([])
+  const [agentNameMap, setAgentNameMap] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [approvalStatusFilter, setApprovalStatusFilter] = useState<string>('')
@@ -155,12 +156,14 @@ function TicketsPageContent() {
         } else {
           setMomRecords(records);
         }
-        
         // Auto-select the first matching MOM
         if (records.length > 0) {
           const visitMOM: any = records.find((mom: any) => mom.visit_id === visitId) || records[0];
           setSelectedMOM(visitMOM);
-          // console.log('🎯 Selected MOM:', visitMOM.ticket_id);
+          // Build agentNameMap from visitDetails if available
+          if (visitDetails?.agent_id && visitDetails?.agent_name) {
+            setAgentNameMap(prev => ({ ...prev, [visitDetails.agent_id]: visitDetails.agent_name }))
+          }
         } else {
           // console.log('⚠️ No MOM records found for visit:', visitId);
         }
@@ -189,6 +192,17 @@ function TicketsPageContent() {
         
         setMomRecords(filteredRecords);
         // console.log('📊 Normal search results:', filteredRecords.length, 'records found');
+        
+        // Build agentNameMap from visits for name resolution
+        try {
+          const visitsResp = await api.getVisits({})
+          const allVisits = visitsResp.data?.page || []
+          const nameMap: Record<string, string> = {}
+          allVisits.forEach((v: any) => {
+            if (v.agent_id && v.agent_name) nameMap[v.agent_id] = v.agent_name
+          })
+          setAgentNameMap(nameMap)
+        } catch {}
       }
       
     } catch (error) {
@@ -264,111 +278,156 @@ function TicketsPageContent() {
     }
   }
 
-  // CSV Download functionality
+  // HTML MOM Download functionality
   const downloadMOMAsCSV = (mom: MOMRecord) => {
-    if (!mom.open_points || mom.open_points.length === 0) {
-      alert('No open points available to download for this MOM.')
-      return
+    const brandName = mom.brand_name || 'Unknown Brand'
+    const visitDate = mom.created_at ? new Date(mom.created_at).toLocaleDateString('en-GB') : ''
+    
+    // Use agent_name from visitDetails if available, else agentNameMap, else userProfile name, else email
+    let kamName = mom.created_by || ''
+    if (visitDetails && visitDetails.agent_name && mom.visit_id === visitDetails.visit_id) {
+      kamName = visitDetails.agent_name
+    } else if (agentNameMap[mom.created_by]) {
+      kamName = agentNameMap[mom.created_by]
+    } else if (userProfile?.email === mom.created_by) {
+      kamName = userProfile?.fullName || mom.created_by || ''
     }
 
-    // Create CSV content with the specified format: Brand Name:Sr. No || Topic || Description || Status || To be responded by || Next Steps
-    const brandName = mom.brand_name || 'Unknown Brand'
-    const csvHeader = `${brandName}:Sr. No,Topic,Description,Status,To be responded by,Next Steps\n`
-    
-    const csvRows = mom.open_points.map((point, index) => {
-      // Escape CSV values by wrapping in quotes and escaping internal quotes
-      const escapeCSV = (value: string) => {
-        if (!value) return '""'
-        const escaped = value.replace(/"/g, '""')
-        return `"${escaped}"`
-      }
+    const pointsRows = (mom.open_points || []).map((point, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${point.topic || ''}</td>
+        <td>${(point.description || '').replace(/\n/g, '<br/>')}</td>
+        <td>${point.status || ''}</td>
+        <td>${point.owner_name || ''}</td>
+        <td>${(point.next_steps || '').replace(/\n/g, '<br/>')}</td>
+      </tr>`).join('')
 
-      const srNo = (index + 1).toString()
-      const topic = escapeCSV(point.topic)
-      const description = escapeCSV(point.description)
-      const status = escapeCSV(point.status)
-      const toBeRespondedBy = escapeCSV(point.owner_name)
-      const nextSteps = escapeCSV(point.next_steps || 'To be determined')
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>MOM - ${brandName}</title>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 13px; margin: 30px; color: #000; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+  td, th { border: 1px solid #000; padding: 6px 10px; vertical-align: top; }
+  .info-table td:first-child { font-weight: bold; white-space: nowrap; width: 200px; }
+  .points-table th { background-color: #f2f2f2; font-weight: bold; text-align: left; }
+  .points-table td:first-child { text-align: center; width: 50px; }
+</style>
+</head>
+<body>
+<table class="info-table">
+  <tr><td>Date</td><td>${visitDate}</td></tr>
+  <tr><td>Meeting</td><td>${brandName} &lt;&gt; Petpooja</td></tr>
+  <tr><td>Brand Type</td><td></td></tr>
+  <tr><td>Attendees - Brand</td><td></td></tr>
+  <tr><td>Attendees - Petpooja</td><td>${kamName}</td></tr>
+  <tr><td>Active Services</td><td></td></tr>
+</table>
+<table class="points-table">
+  <thead>
+    <tr>
+      <th>Sr. No.</th>
+      <th>Topic</th>
+      <th>Description</th>
+      <th>Status</th>
+      <th>To be responded by</th>
+      <th>Next Steps</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${pointsRows || '<tr><td colspan="6">No open points recorded.</td></tr>'}
+  </tbody>
+</table>
+</body>
+</html>`
 
-      return `${srNo},${topic},${description},${status},${toBeRespondedBy},${nextSteps}`
-    }).join('\n')
-
-    const csvContent = csvHeader + csvRows
-
-    // Create and download the file
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8;' })
     const link = document.createElement('a')
     const url = URL.createObjectURL(blob)
-    
     link.setAttribute('href', url)
-    link.setAttribute('download', `MOM_${brandName.replace(/[^a-zA-Z0-9]/g, '_')}_${mom.ticket_id}_${new Date().toISOString().split('T')[0]}.csv`)
+    link.setAttribute('download', `MOM_${brandName.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.html`)
     link.style.visibility = 'hidden'
-    
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-    
     URL.revokeObjectURL(url)
   }
 
-  // Download all MOMs as CSV
+  // Download all MOMs as HTML
   const downloadAllMOMsAsCSV = () => {
     if (momRecords.length === 0) {
       alert('No MOM records available to download.')
       return
     }
 
-    // Create CSV content for all MOMs
-    let csvContent = 'Brand Name,Sr. No,Topic,Description,Status,To be responded by,Next Steps,MOM Ticket ID,Created Date\n'
-    
-    momRecords.forEach(mom => {
+    const allSections = momRecords.map(mom => {
       const brandName = mom.brand_name || 'Unknown Brand'
+      const visitDate = mom.created_at ? new Date(mom.created_at).toLocaleDateString('en-GB') : ''
       
-      if (mom.open_points && mom.open_points.length > 0) {
-        mom.open_points.forEach((point, index) => {
-          // Escape CSV values
-          const escapeCSV = (value: string) => {
-            if (!value) return '""'
-            const escaped = value.replace(/"/g, '""')
-            return `"${escaped}"`
-          }
-
-          const srNo = (index + 1).toString()
-          const topic = escapeCSV(point.topic)
-          const description = escapeCSV(point.description)
-          const status = escapeCSV(point.status)
-          const toBeRespondedBy = escapeCSV(point.owner_name)
-          const nextSteps = escapeCSV(point.next_steps || 'To be determined')
-          const ticketId = escapeCSV(mom.ticket_id)
-          const createdDate = escapeCSV(new Date(mom.created_at).toLocaleDateString())
-
-          csvContent += `${escapeCSV(brandName)},${srNo},${topic},${description},${status},${toBeRespondedBy},${nextSteps},${ticketId},${createdDate}\n`
-        })
-      } else {
-        // Add a row even if no open points
-        const escapeCSV = (value: string) => {
-          if (!value) return '""'
-          const escaped = value.replace(/"/g, '""')
-          return `"${escaped}"`
-        }
-        
-        csvContent += `${escapeCSV(brandName)},1,"No open points","No open points recorded for this MOM","N/A","N/A","N/A",${escapeCSV(mom.ticket_id)},${escapeCSV(new Date(mom.created_at).toLocaleDateString())}\n`
+      let kamName = mom.created_by || ''
+      if (agentNameMap[mom.created_by]) {
+        kamName = agentNameMap[mom.created_by]
+      } else if (userProfile?.email === mom.created_by) {
+        kamName = userProfile?.fullName || mom.created_by || ''
       }
-    })
 
-    // Create and download the file
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const pointsRows = (mom.open_points || []).map((point, index) => `
+        <tr>
+          <td style="text-align:center">${index + 1}</td>
+          <td>${point.topic || ''}</td>
+          <td>${(point.description || '').replace(/\n/g, '<br/>')}</td>
+          <td>${point.status || ''}</td>
+          <td>${point.owner_name || ''}</td>
+          <td>${(point.next_steps || '').replace(/\n/g, '<br/>')}</td>
+        </tr>`).join('') || '<tr><td colspan="6">No open points recorded.</td></tr>'
+
+      return `
+        <div style="margin-bottom:40px; page-break-after:always;">
+          <table class="info-table">
+            <tr><td>Date</td><td>${visitDate}</td></tr>
+            <tr><td>Meeting</td><td>${brandName} &lt;&gt; Petpooja</td></tr>
+            <tr><td>Brand Type</td><td></td></tr>
+            <tr><td>Attendees - Brand</td><td></td></tr>
+            <tr><td>Attendees - Petpooja</td><td>${kamName}</td></tr>
+            <tr><td>Active Services</td><td></td></tr>
+          </table>
+          <table class="points-table">
+            <thead>
+              <tr><th>Sr. No.</th><th>Topic</th><th>Description</th><th>Status</th><th>To be responded by</th><th>Next Steps</th></tr>
+            </thead>
+            <tbody>${pointsRows}</tbody>
+          </table>
+        </div>`
+    }).join('')
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>All MOMs</title>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 13px; margin: 30px; color: #000; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+  td, th { border: 1px solid #000; padding: 6px 10px; vertical-align: top; }
+  .info-table td:first-child { font-weight: bold; white-space: nowrap; width: 200px; }
+  .points-table th { background-color: #f2f2f2; font-weight: bold; text-align: left; }
+</style>
+</head>
+<body>${allSections}</body>
+</html>`
+
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8;' })
     const link = document.createElement('a')
     const url = URL.createObjectURL(blob)
-    
     link.setAttribute('href', url)
-    link.setAttribute('download', `All_MOMs_${new Date().toISOString().split('T')[0]}.csv`)
+    link.setAttribute('download', `All_MOMs_${new Date().toISOString().split('T')[0]}.html`)
     link.style.visibility = 'hidden'
-    
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-    
     URL.revokeObjectURL(url)
   }
 
@@ -629,17 +688,15 @@ function TicketsPageContent() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {/* Download CSV Button for individual MOM */}
-                      {mom.open_points && mom.open_points.length > 0 && (
-                        <button
-                          onClick={() => downloadMOMAsCSV(mom)}
-                          className="flex items-center gap-1 px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded-md transition-colors font-medium shadow-sm"
-                          title="Download this MOM as CSV"
-                        >
-                          <Download className="w-3 h-3" />
-                          CSV
-                        </button>
-                      )}
+                      {/* Download MOM Button */}
+                      <button
+                        onClick={() => downloadMOMAsCSV(mom)}
+                        className="flex items-center gap-1 px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded-md transition-colors font-medium shadow-sm"
+                        title="Download MOM"
+                      >
+                        <Download className="w-3 h-3" />
+                        Download MOM
+                      </button>
                       <div className="text-right">
                         <div className="text-xs text-white/60">Ticket ID</div>
                         <div className="text-sm font-mono text-white">{mom.ticket_id}</div>

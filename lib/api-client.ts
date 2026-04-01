@@ -275,6 +275,22 @@ export const apiClient = {
     }
   },
 
+  // Update owner email
+  updateOwnerEmail: async (rid: string, ownerEmail: string) => {
+    try {
+      const response = await fetch(`/api/churn/update-email`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ rid, owner_email: ownerEmail })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Error updating owner email:', error);
+      return { success: false, error: 'Failed to update owner email' };
+    }
+  },
+
   // Update churn reason
   updateChurnReason: async (rid: string, churnReason: string, remarks?: string, mailSentConfirmation?: boolean) => { // Removed email parameter
     try {

@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
         .select('team_name')
         .eq('email', user.email)
         .single()
-        .then(r => (r.data as { team_name: string | null } | null)?.team_name));
+        .then((r: any) => (r.data as { team_name: string | null } | null)?.team_name));
 
       if (userTeam?.toLowerCase() !== team.toLowerCase()) {
         console.log(`❌ [API Auth] Team Lead ${user.email} attempted to view unauthorized team: ${team}`);

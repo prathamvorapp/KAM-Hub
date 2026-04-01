@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-auth';
-import { brandTransferService } from '@/lib/services';
+import { brandTransferService, engagementCallService } from '@/lib/services';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,6 +55,38 @@ export async function POST(request: NextRequest) {
       transferReason,
       transferYear
     }, user);
+
+    // Sync engagement calls for the current month after transfer
+    try {
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const { data: brandData } = await (await import('@/lib/supabase-server')).getSupabaseAdmin()
+        .from('master_data')
+        .select('brand_name, zone, id')
+        .eq('id', brandId)
+        .single();
+
+      const { data: newKam } = await (await import('@/lib/supabase-server')).getSupabaseAdmin()
+        .from('user_profiles')
+        .select('full_name, team_name')
+        .eq('email', toAgentEmail)
+        .single();
+
+      if (brandData && newKam) {
+        await engagementCallService.handleBrandTransfer({
+          month: currentMonth,
+          brandName: (brandData as any).brand_name,
+          brandId: (brandData as any).id,
+          fromKamEmail: fromAgentEmail,
+          toKamEmail: toAgentEmail,
+          toKamName: (newKam as any).full_name,
+          toTeamName: (newKam as any).team_name,
+          zone: (brandData as any).zone,
+        });
+      }
+    } catch (syncErr) {
+      // Non-fatal — log but don't fail the transfer
+      console.warn('[Transfer Brand] Engagement call sync failed:', syncErr);
+    }
 
     return NextResponse.json({
       success: true,

@@ -4,25 +4,12 @@ import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import DashboardLayout from '@/components/Layout/DashboardLayout'
-import HealthCheckTab from '@/components/CRM/HealthCheckTab'
 import ChurnTab from '@/components/CRM/ChurnTab'
 import VisitTab from '@/components/CRM/VisitTab'
 import DemoGiveTab from '@/components/CRM/DemoGiveTab'
 import MasterDataTab from '@/components/CRM/MasterDataTab'
 import KAMSummaryTab from '@/components/CRM/KAMSummaryTab'
-
-interface HealthCheckRecord {
-  check_id: string
-  assessment_date: string
-  kam_name: string
-  kam_email: string
-  zone: string
-  health_status: string
-  brand_nature: string
-  remarks: string
-  brand_name: string
-  team_name?: string
-}
+import EscalationsTab from '@/components/CRM/EscalationsTab'
 
 interface ChurnRecord {
   rid: string
@@ -39,12 +26,7 @@ interface ChurnRecord {
 export default function CRMPage() {
   const { userProfile } = useAuth()
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<'health' | 'churn' | 'visits' | 'demogive' | 'masterdata' | 'kamsummary'>('kamsummary')
-  
-  // Health Check States
-  const [healthRecords, setHealthRecords] = useState<HealthCheckRecord[]>([])
-  const [healthLoading, setHealthLoading] = useState(true)
-  const [healthError, setHealthError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'churn' | 'visits' | 'demogive' | 'masterdata' | 'kamsummary' | 'escalations'>('kamsummary')
   
   // Churn States
   const [churnRecords, setChurnRecords] = useState<ChurnRecord[]>([])
@@ -59,44 +41,9 @@ export default function CRMPage() {
 
   useEffect(() => {
     if (userProfile) {
-      fetchHealthChecks()
       fetchChurnData()
     }
   }, [userProfile])
-
-  const fetchHealthChecks = async () => {
-    try {
-      setHealthLoading(true)
-      setHealthError(null)
-      
-      let allRecords: HealthCheckRecord[] = []
-      let page = 1
-      const limit = 1000
-      let hasMore = true
-
-      while (hasMore) {
-        const response = await fetch(`/api/data/health-checks?limit=${limit}&page=${page}&viewAll=true`)
-        const result = await response.json()
-        
-        if (!response.ok || !result.success) {
-          throw new Error(result.error || 'Failed to fetch health checks')
-        }
-
-        const records = result.data.data || []
-        allRecords = [...allRecords, ...records]
-        
-        // Check if there are more records
-        hasMore = records.length === limit
-        page++
-      }
-
-      setHealthRecords(allRecords)
-    } catch (err) {
-      setHealthError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setHealthLoading(false)
-    }
-  }
 
   const fetchChurnData = async () => {
     try {
@@ -168,16 +115,6 @@ export default function CRMPage() {
                 📋 Master Data
               </button>
               <button
-                onClick={() => setActiveTab('health')}
-                className={`px-6 py-3 font-medium transition-colors whitespace-nowrap ${
-                  activeTab === 'health'
-                    ? 'border-b-2 border-primary-600 text-primary-600'
-                    : 'text-secondary-600 hover:text-secondary-800'
-                }`}
-              >
-                🏥 Health Check Data
-              </button>
-              <button
                 onClick={() => setActiveTab('churn')}
                 className={`px-6 py-3 font-medium transition-colors whitespace-nowrap ${
                   activeTab === 'churn'
@@ -207,6 +144,16 @@ export default function CRMPage() {
               >
                 🎯 Demo
               </button>
+              <button
+                onClick={() => setActiveTab('escalations')}
+                className={`px-6 py-3 font-medium transition-colors whitespace-nowrap ${
+                  activeTab === 'escalations'
+                    ? 'border-b-2 border-primary-600 text-primary-600'
+                    : 'text-secondary-600 hover:text-secondary-800'
+                }`}
+              >
+                🚨 Escalations
+              </button>
             </div>
 
             {activeTab === 'kamsummary' && (
@@ -215,14 +162,6 @@ export default function CRMPage() {
 
             {activeTab === 'masterdata' && (
               <MasterDataTab userProfile={userProfile} />
-            )}
-
-            {activeTab === 'health' && (
-              <HealthCheckTab
-                records={healthRecords}
-                loading={healthLoading}
-                error={healthError}
-              />
             )}
 
             {activeTab === 'churn' && (
@@ -239,6 +178,10 @@ export default function CRMPage() {
 
             {activeTab === 'demogive' && (
               <DemoGiveTab />
+            )}
+
+            {activeTab === 'escalations' && (
+              <EscalationsTab />
             )}
           </div>
         </div>

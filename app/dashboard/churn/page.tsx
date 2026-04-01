@@ -9,6 +9,7 @@ import DashboardLayout from '@/components/Layout/DashboardLayout'
 import Pagination from '@/components/Pagination'
 import SimpleChurnReasonModal from '@/components/SimpleChurnReasonModal'
 import ChurnReasonModal from '@/components/ChurnReasonModal'
+import UpdateEmailModal from '@/components/UpdateEmailModal'
 import ChurnCSVUploadModal from '@/components/ChurnCSVUploadModal'
 import ChurnAnalyticsDashboard from '@/components/ChurnAnalyticsDashboard'
 import { formatDDMMYYYYToMMMFormat } from '@/utils/dateUtils'
@@ -83,12 +84,7 @@ function ChurnDataPageContent() {
   const { userProfile, session } = useAuth()
   const [records, setRecords] = useState<ChurnRecord[]>([])
   const [allRecords, setAllRecords] = useState<ChurnRecord[]>([]) // Store all records for filtering
-  const [activeFilter, setActiveFilter] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      return sessionStorage.getItem('churnActiveFilter') || 'overdue'
-    }
-    return 'overdue'
-  }) // Track active filter
+  const [activeFilter, setActiveFilter] = useState<string>('overdue') // Track active filter
   const [pagination, setPagination] = useState<PaginationInfo>({
     page: 1,
     limit: 1000, // Increased to show all records
@@ -114,6 +110,7 @@ function ChurnDataPageContent() {
   const [selectedRecord, setSelectedRecord] = useState<ChurnRecord | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
+  const [emailModalRecord, setEmailModalRecord] = useState<ChurnRecord | null>(null)
   const [showAnalytics, setShowAnalytics] = useState(false) // DISABLED: Keep analytics hidden for now
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -418,7 +415,9 @@ function ChurnDataPageContent() {
         
         // Load data and ensure loading state is cleared even on error
         try {
-          await loadData(1, undefined, activeFilter)
+          const savedFilter = sessionStorage.getItem('churnActiveFilter') || activeFilter
+          setActiveFilter(savedFilter)
+          await loadData(1, undefined, savedFilter)
           // console.log('✅ [Churn Page] Data load completed')
         } catch (error) {
           console.error('❌ [Churn Page] Failed to load data:', error)
@@ -511,6 +510,15 @@ function ChurnDataPageContent() {
       console.error('Failed to update churn reason:', error)
       alert('Failed to update churn reason. Please try again.')
     }
+  }
+
+  const handleOwnerEmailSave = async (newEmail: string) => {
+    if (!emailModalRecord) return
+    const result = await api.updateOwnerEmail(emailModalRecord.rid, newEmail)
+    if (!result.success) throw new Error(result.error || 'Failed to update email')
+    setEmailModalRecord(null)
+    sessionStorage.setItem('churnActiveFilter', activeFilter)
+    window.location.reload()
   }
 
   const getChurnReasonColor = (reason: string) => {
@@ -1011,7 +1019,18 @@ function ChurnDataPageContent() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="font-medium text-gray-900">{record.restaurant_name || 'N/A'}</div>
-                        <div className="text-sm text-gray-500">{record.owner_email || 'No email'}</div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-sm text-gray-500">{record.owner_email || 'No email'}</span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setEmailModalRecord(record) }}
+                            className="text-blue-500 hover:text-blue-700 p-0.5 rounded"
+                            title="Update owner email"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                              <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                            </svg>
+                          </button>
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {record.kam || 'N/A'}
@@ -1108,6 +1127,16 @@ function ChurnDataPageContent() {
           onUploadComplete={handleUploadComplete}
         />
       )}
+
+      {/* Update Email Modal */}
+      <UpdateEmailModal
+        isOpen={!!emailModalRecord}
+        onClose={() => setEmailModalRecord(null)}
+        onSave={handleOwnerEmailSave}
+        currentEmail={emailModalRecord?.owner_email || ''}
+        rid={emailModalRecord?.rid || ''}
+        restaurantName={emailModalRecord?.restaurant_name || ''}
+      />
       
       {/* Debug Info */}
       {process.env.NODE_ENV === 'development' && (

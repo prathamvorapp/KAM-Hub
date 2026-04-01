@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { LogOut, User, Menu, X, Bell, Settings } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FollowUpNotifications } from '../FollowUpNotifications'
+import { EscalationNotifications } from '../EscalationNotifications'
 
 interface User {
   id: string;
@@ -94,10 +95,12 @@ export default function Navbar({ userProfile }: NavbarProps) {
             {/* Follow-Up Notifications */}
             <FollowUpNotifications 
               onReminderClick={(rid) => {
-                // Navigate to churn page and open the specific RID modal
                 router.push(`/dashboard/churn?rid=${rid}`);
               }}
             />
+
+            {/* Escalation Notifications */}
+            <EscalationNotifications />
 
             {/* User Profile */}
             {userProfile ? (

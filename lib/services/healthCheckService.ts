@@ -81,7 +81,20 @@ export const healthCheckService = {
       } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
         const teamName = userProfile.team_name || userProfile.teamName;
         if (teamName) {
-          query = query.eq('team_name', teamName);
+          // Fetch team member emails and filter by kam_email to avoid missing records
+          // where team_name column is null/mismatched on older health_check rows
+          const { data: teamMembers } = await getSupabaseAdmin()
+            .from('user_profiles')
+            .select('email')
+            .eq('team_name', teamName)
+            .in('role', ['agent', 'Agent', 'team_lead', 'Team Lead']) as { data: Array<{ email: string }> | null; error: any };
+          // Always include the team lead's own email in case they have brands assigned
+          const teamEmails = [...new Set([...(teamMembers?.map(m => m.email) || []), userProfile.email])];
+          if (teamEmails.length > 0) {
+            query = query.in('kam_email', teamEmails);
+          } else {
+            query = query.eq('kam_email', 'NON_EXISTENT_EMAIL');
+          }
         }
       } else if (normalizedRole === 'admin') {
         // Admin sees all
@@ -560,11 +573,12 @@ export const healthCheckService = {
           .from('user_profiles')
           .select('email')
           .eq('team_name', teamName)
-          .in('role', ['agent', 'Agent']) as { data: Array<{ email: string }> | null; error: any };
+          .in('role', ['agent', 'Agent', 'team_lead', 'Team Lead']) as { data: Array<{ email: string }> | null; error: any };
         
-        const agentEmails = teamMembers?.map(m => m.email) || [];
-        if (agentEmails.length > 0) {
-          brandsQuery = brandsQuery.in('kam_email_id', agentEmails);
+        // Always include the team lead's own email in case they have brands assigned
+        const allEmails = [...new Set([...(teamMembers?.map(m => m.email) || []), userProfile.email])];
+        if (allEmails.length > 0) {
+          brandsQuery = brandsQuery.in('kam_email_id', allEmails);
         } else {
           brandsQuery = brandsQuery.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
         }
@@ -659,8 +673,20 @@ export const healthCheckService = {
         assessedQuery = assessedQuery.eq('kam_email', 'NON_EXISTENT_EMAIL');
       }
     } else if (normalizedRole === 'team_lead' || normalizedRole === 'teamlead') {
+      // Filter by kam_email (not team_name) to avoid missing records where team_name is null/mismatched
       if (teamName) {
-        assessedQuery = assessedQuery.eq('team_name', teamName);
+        const { data: teamMembers } = await getSupabaseAdmin()
+          .from('user_profiles')
+          .select('email')
+          .eq('team_name', teamName)
+          .in('role', ['agent', 'Agent', 'team_lead', 'Team Lead']) as { data: Array<{ email: string }> | null; error: any };
+        // Always include the team lead's own email
+        const allEmails = [...new Set([...(teamMembers?.map(m => m.email) || []), userProfile.email])];
+        if (allEmails.length > 0) {
+          assessedQuery = assessedQuery.in('kam_email', allEmails);
+        } else {
+          assessedQuery = assessedQuery.eq('kam_email', 'NON_EXISTENT_EMAIL');
+        }
       }
     }
     
@@ -773,11 +799,12 @@ export const healthCheckService = {
           .from('user_profiles')
           .select('email')
           .eq('team_name', teamName)
-          .in('role', ['agent', 'Agent']) as { data: Array<{ email: string }> | null; error: any };
+          .in('role', ['agent', 'Agent', 'team_lead', 'Team Lead']) as { data: Array<{ email: string }> | null; error: any };
         
-        const agentEmails = teamMembers?.map(m => m.email) || [];
-        if (agentEmails.length > 0) {
-          brandsQuery = brandsQuery.in('kam_email_id', agentEmails);
+        // Always include the team lead's own email in case they have brands assigned
+        const allEmails = [...new Set([...(teamMembers?.map(m => m.email) || []), userProfile.email])];
+        if (allEmails.length > 0) {
+          brandsQuery = brandsQuery.in('kam_email_id', allEmails);
         } else {
           brandsQuery = brandsQuery.eq('kam_email_id', 'NON_EXISTENT_EMAIL');
         }

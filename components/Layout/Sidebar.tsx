@@ -14,7 +14,9 @@ import {
   BarChart3,
   ThumbsUp,
   ChevronUp,
-  Building2
+  Building2,
+  Phone,
+  AlertTriangle
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -38,7 +40,9 @@ const allModules = [
   { name: 'Visits', href: '/dashboard/visits', icon: MapPin, color: 'from-green-500 to-emerald-500', roles: ['agent', 'sub_agent', 'team_lead', 'admin'] },
   { name: 'Approvals', href: '/dashboard/approvals', icon: ThumbsUp, color: 'from-yellow-500 to-orange-500', roles: ['team_lead'] },
   { name: 'Demos', href: '/dashboard/demos', icon: Presentation, color: 'from-purple-500 to-violet-500', roles: ['agent', 'sub_agent', 'team_lead', 'admin'] },
-  { name: 'Health Check-ups', href: '/dashboard/health-checks', icon: Heart, color: 'from-rose-500 to-red-500', roles: ['agent', 'sub_agent', 'team_lead', 'admin'] },
+  // { name: 'Health Check-ups', href: '/dashboard/health-checks', icon: Heart, color: 'from-rose-500 to-red-500', roles: ['agent', 'sub_agent', 'team_lead', 'admin'] }, // temporarily hidden
+  { name: 'Engagement Calls', href: '/dashboard/engagement-calls', icon: Phone, color: 'from-teal-500 to-cyan-500', roles: ['agent', 'sub_agent', 'team_lead', 'admin'] },
+  { name: 'Escalation Tracker', href: '/dashboard/escalations', icon: AlertTriangle, color: 'from-red-500 to-orange-500', roles: ['agent', 'sub_agent', 'team_lead', 'admin'] },
   { name: 'MOM Tracker', href: '/dashboard/mom-tracker', icon: Ticket, color: 'from-orange-500 to-amber-500', roles: ['agent', 'sub_agent', 'team_lead', 'admin'] },
   { name: 'Brand Management', href: '/admin/transfer-brand', icon: Building2, color: 'from-blue-500 to-indigo-500', roles: ['agent', 'sub_agent', 'team_lead', 'admin'] },
 ]

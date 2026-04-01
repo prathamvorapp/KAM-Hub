@@ -67,12 +67,18 @@ export const UpdateFollowUpTimingSchema = z.object({
   follow_up_status: z.string(),
 });
 
+export const UpdateOwnerEmailSchema = z.object({
+  rid: z.string(),
+  owner_email: z.string().email('Valid email is required'),
+});
+
 // Type exports
 export type ChurnRecord = z.infer<typeof ChurnRecordSchema>;
 export type ChurnCSVRow = z.infer<typeof ChurnCSVRowSchema>;
 export type ChurnQuery = z.infer<typeof ChurnQuerySchema>;
 export type UpdateChurnReason = z.infer<typeof UpdateChurnReasonSchema>;
 export type UpdateFollowUpTiming = z.infer<typeof UpdateFollowUpTimingSchema>;
+export type UpdateOwnerEmail = z.infer<typeof UpdateOwnerEmailSchema>;
 
 // Response types
 export interface ChurnDataResponse {
