@@ -241,6 +241,16 @@ export const demoService = {
       teamName: userProfile.team_name || userProfile.teamName
     });
     
+    // For agents, pre-fetch brand IDs where they are the current KAM (handles transferred brands)
+    let agentKamBrandIds: string[] = [];
+    if (normalizedRole === 'agent') {
+      const { data: kamBrands } = await getSupabaseAdmin()
+        .from('master_data')
+        .select('id')
+        .eq('kam_email_id', userProfile.email) as { data: Array<{ id: string }> | null; error: any };
+      agentKamBrandIds = kamBrands?.map(b => b.id) || [];
+    }
+
     // Fetch all demos in batches to avoid 1000 row limit
     let allDemos: Demo[] = [];
     let from = 0;
@@ -282,7 +292,13 @@ export const demoService = {
           query = query.eq('agent_id', 'NON_EXISTENT_EMAIL');
         }
       } else {
-        query = query.eq('agent_id', userProfile.email);
+        // Agent sees their own demos AND demos for brands where they are the current KAM
+        // (covers transferred brand scenario where demo agent_id wasn't updated)
+        if (agentKamBrandIds.length > 0) {
+          query = query.or(`agent_id.eq.${userProfile.email},brand_id.in.(${agentKamBrandIds.join(',')})`);
+        } else {
+          query = query.eq('agent_id', userProfile.email);
+        }
       }
       
       const { data: batch, error } = await query.range(from, from + batchSize - 1) as { data: Demo[] | null; error: any };
@@ -533,8 +549,8 @@ export const demoService = {
         demo_completed_date: now,
         demo_conducted_by: params.conductedBy,
         demo_completion_notes: params.completionNotes,
-        completed_by_agent_id: demo.agent_id,
-        completed_by_agent_name: demo.agent_name,
+        completed_by_agent_id: userProfile.email,
+        completed_by_agent_name: userProfile.full_name || demo.agent_name,
         current_status: "Feedback Awaited",
         updated_at: now,
       })
@@ -1033,8 +1049,8 @@ export const demoService = {
         demo_completed_date: now,
         demo_conducted_by: params.conductedBy,
         demo_completion_notes: params.completionNotes,
-        completed_by_agent_id: demo.agent_id,
-        completed_by_agent_name: demo.agent_name,
+        completed_by_agent_id: userProfile.email,
+        completed_by_agent_name: userProfile.full_name || demo.agent_name,
         // Step 5
         conversion_status: params.conversionStatus,
         non_conversion_reason: params.nonConversionReason,

@@ -16,7 +16,8 @@ import {
   ChevronUp,
   Building2,
   Phone,
-  AlertTriangle
+  AlertTriangle,
+  LineChart
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -45,6 +46,7 @@ const allModules = [
   { name: 'Escalation Tracker', href: '/dashboard/escalations', icon: AlertTriangle, color: 'from-red-500 to-orange-500', roles: ['agent', 'sub_agent', 'team_lead', 'admin'] },
   { name: 'MOM Tracker', href: '/dashboard/mom-tracker', icon: Ticket, color: 'from-orange-500 to-amber-500', roles: ['agent', 'sub_agent', 'team_lead', 'admin'] },
   { name: 'Brand Management', href: '/admin/transfer-brand', icon: Building2, color: 'from-blue-500 to-indigo-500', roles: ['agent', 'sub_agent', 'team_lead', 'admin'] },
+  { name: 'Dept. Insights', href: '/department-insights', icon: LineChart, color: 'from-violet-500 to-purple-500', roles: ['agent', 'sub_agent', 'team_lead', 'admin'] },
 ]
 
 export default function Sidebar({ userProfile }: SidebarProps) {

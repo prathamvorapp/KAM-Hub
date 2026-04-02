@@ -770,7 +770,7 @@ export const visitService = {
       description: `Minutes of Meeting for visit to ${brand_name}${params.is_resubmission ? ' - Resubmitted after feedback' : ''}`,
       status: 'Open',
       priority: 'Medium',
-      category: 'Visit MOM', // Proper category for visit MOMs
+      category: null, // 'Visit MOM' is not a valid DB enum value; use null and rely on the 'Visit MOM' title/description
       created_by: created_by,
       team: userProfile.team_name || userProfile.teamName || (visit as any).team_name,
       brand_name: brand_name,

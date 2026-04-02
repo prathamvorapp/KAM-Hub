@@ -361,6 +361,124 @@ export default function ChurnTab({ records, loading, error }: Props) {
       .sort((a, b) => b.totalChurn - a.totalChurn)
   }, [filteredRecords])
 
+  // Brand Churns report data
+  const brandChurnsData = useMemo(() => {
+    const now = new Date()
+    const months = [0, 1, 2].map(offset => {
+      const d = new Date(now.getFullYear(), now.getMonth() - offset, 1)
+      return { label: `${d.toLocaleString('default', { month: 'short' })}-${String(d.getFullYear()).slice(2)}`, month: d.getMonth(), year: d.getFullYear() }
+    })
+
+    const brandMap = new Map<string, {
+      kam: string
+      outlets: Map<string, { reason: string; date: string }>
+    }>()
+
+    filteredRecords.forEach(record => {
+      const brand = record.brand_name?.trim() || 'Unknown Brand'
+      const outlet = record.restaurant_name?.trim() || record.rid || '-'
+      const kam = record.kam?.trim() || '-'
+      const reason = record.churn_reason?.trim() || ''
+
+      if (!brandMap.has(brand)) brandMap.set(brand, { kam, outlets: new Map() })
+      const brandData = brandMap.get(brand)!
+      brandData.outlets.set(outlet, { reason, date: record.date || '' })
+    })
+
+    const categorize = (reason: string) => {
+      const r = reason.toLowerCase()
+      if (r.includes('temporarily closed') || r.includes('temp')) return 'tempClosed'
+      if (r.includes('permanently closed') || r.includes('perm')) return 'permClosed'
+      if (r.includes('out of sync') || r.includes('sync')) return 'outOfSync'
+      if (r.includes('renewal')) return 'renewalDue'
+      if (r.includes('event') || r.includes('demo')) return 'eventDemo'
+      if (reason !== '') return 'other'
+      return 'blank'
+    }
+
+    const parseRecordDate = (dateStr: string) => {
+      if (!dateStr) return null
+      const parts = dateStr.split('-')
+      if (parts.length === 3) return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`)
+      return new Date(dateStr)
+    }
+
+    return Array.from(brandMap.entries()).map(([brand, { kam, outlets }]) => {
+      const outletRows = Array.from(outlets.entries()).map(([outlet, { reason, date }]) => {
+        const cat = categorize(reason)
+        const monthCounts: Record<string, number> = {}
+        months.forEach(m => { monthCounts[m.label] = 0 })
+        const d = parseRecordDate(date)
+        if (d) {
+          const ml = months.find(m => m.month === d.getMonth() && m.year === d.getFullYear())
+          if (ml) monthCounts[ml.label] = 1
+        }
+        return { outlet, reason, cat, monthCounts }
+      })
+
+      // Brand-level totals
+      const totals = { tempClosed: 0, permClosed: 0, outOfSync: 0, renewalDue: 0, eventDemo: 0, other: 0, blank: 0 }
+      const brandMonthCounts: Record<string, number> = {}
+      months.forEach(m => { brandMonthCounts[m.label] = 0 })
+      outletRows.forEach(row => {
+        totals[row.cat as keyof typeof totals]++
+        months.forEach(m => { brandMonthCounts[m.label] += row.monthCounts[m.label] })
+      })
+
+      return { brand, kam, outletRows, totals, brandMonthCounts, months }
+    }).sort((a, b) => b.outletRows.length - a.outletRows.length)
+  }, [filteredRecords])
+
+  const [expandedBrands, setExpandedBrands] = useState<Set<string>>(new Set())
+  const [expandedKAMs, setExpandedKAMs] = useState<Set<string>>(new Set())
+  const [brandChurnPage, setBrandChurnPage] = useState(1)
+  const brandChurnPageSize = 10
+
+  const toggleBrand = (brand: string) => {
+    setExpandedBrands(prev => {
+      const next = new Set(prev)
+      next.has(brand) ? next.delete(brand) : next.add(brand)
+      return next
+    })
+  }
+
+  const toggleKAM = (key: string) => {
+    setExpandedKAMs(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
+  const pagedBrandChurns = useMemo(() => {
+    const start = (brandChurnPage - 1) * brandChurnPageSize
+    return brandChurnsData.slice(start, start + brandChurnPageSize)
+  }, [brandChurnsData, brandChurnPage])
+
+  const brandChurnTotalPages = Math.ceil(brandChurnsData.length / brandChurnPageSize)
+
+  const downloadBrandChurnsCSV = () => {
+    if (brandChurnsData.length === 0) return
+    const months = brandChurnsData[0].months
+    const headers = ['Brand Name', 'KAM', 'Outlet Name', 'Temp Closed', 'Perm Closed', 'Out of Sync', 'Renewal Due', 'Event/Demo', 'Other', ...months.map(m => m.label)]
+    const rows: (string | number)[][] = []
+    brandChurnsData.forEach(b => {
+      rows.push([`"${b.brand}"`, `"${b.kam}"`, '', b.totals.tempClosed || '', b.totals.permClosed || '', b.totals.outOfSync || '', b.totals.renewalDue || '', b.totals.eventDemo || '', b.totals.other || '', ...months.map(m => b.brandMonthCounts[m.label] || '')])
+      b.outletRows.forEach(o => {
+        rows.push(['', '', `"${o.outlet}"`, o.cat === 'tempClosed' ? 1 : '', o.cat === 'permClosed' ? 1 : '', o.cat === 'outOfSync' ? 1 : '', o.cat === 'renewalDue' ? 1 : '', o.cat === 'eventDemo' ? 1 : '', o.cat === 'other' ? 1 : '', ...months.map(m => o.monthCounts[m.label] || '')])
+      })
+    })
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `brand_churn_analysis_${new Date().toISOString().split('T')[0]}.csv`
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   // Calculate totals for KAM Summary
   const kamSummaryTotals = useMemo(() => {
     return kamSummary.reduce(
@@ -781,6 +899,143 @@ export default function ChurnTab({ records, loading, error }: Props) {
             </table>
           </div>
         </div>
+      </div>
+
+      {/* Brand Churns Report */}
+      <div className="bg-gradient-to-br from-rose-50 to-orange-50 rounded-xl p-6 border border-rose-200 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-bold text-secondary-800">🏢 Brand-wise Churn Analysis</h3>
+          <button
+            onClick={downloadBrandChurnsCSV}
+            disabled={brandChurnsData.length === 0}
+            className="inline-flex items-center px-4 py-2 bg-rose-600 text-white text-sm font-medium rounded-lg hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Export CSV
+          </button>
+        </div>
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead className="bg-gray-100 border-b border-gray-300">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold text-secondary-700 border border-gray-200 min-w-[180px]">Brand Name</th>
+                  <th className="px-3 py-2 text-left font-semibold text-secondary-700 border border-gray-200 min-w-[140px]">KAM</th>
+                  <th className="px-3 py-2 text-left font-semibold text-secondary-700 border border-gray-200 min-w-[180px]">Outlet Name</th>
+                  <th className="px-3 py-2 text-center font-semibold text-secondary-700 border border-gray-200">Temp Closed</th>
+                  <th className="px-3 py-2 text-center font-semibold text-secondary-700 border border-gray-200">Perm Closed</th>
+                  <th className="px-3 py-2 text-center font-semibold text-secondary-700 border border-gray-200">Out of Sync</th>
+                  <th className="px-3 py-2 text-center font-semibold text-secondary-700 border border-gray-200">Renewal Due</th>
+                  <th className="px-3 py-2 text-center font-semibold text-secondary-700 border border-gray-200">Event/Demo</th>
+                  <th className="px-3 py-2 text-center font-semibold text-secondary-700 border border-gray-200">Other</th>
+                  {brandChurnsData[0]?.months.map(m => (
+                    <th key={m.label} className="px-3 py-2 text-center font-semibold text-secondary-700 border border-gray-200">{m.label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pagedBrandChurns.length === 0 ? (
+                  <tr><td colSpan={12} className="px-4 py-8 text-center text-secondary-500">No data available for the selected filters</td></tr>
+                ) : pagedBrandChurns.map((brandRow) => {
+                  const isBrandExpanded = expandedBrands.has(brandRow.brand)
+                  const kamKey = `${brandRow.brand}__${brandRow.kam}`
+                  const isKAMExpanded = expandedKAMs.has(kamKey)
+                  const months = brandRow.months
+                  return (
+                    <>
+                      {/* Brand row */}
+                      <tr key={`brand-${brandRow.brand}`} className="bg-blue-50 font-semibold border-t-2 border-blue-200">
+                        <td className="px-3 py-2 border border-gray-200">
+                          <button onClick={() => toggleBrand(brandRow.brand)} className="flex items-center gap-1 text-blue-800 hover:text-blue-600 font-semibold">
+                            <span>{isBrandExpanded ? '▼' : '▶'}</span>
+                            {brandRow.brand}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2 border border-gray-200 text-secondary-600"></td>
+                        <td className="px-3 py-2 border border-gray-200 text-secondary-600"></td>
+                        <td className="px-3 py-2 text-center border border-gray-200 text-blue-700">{brandRow.totals.tempClosed || ''}</td>
+                        <td className="px-3 py-2 text-center border border-gray-200 text-blue-700">{brandRow.totals.permClosed || ''}</td>
+                        <td className="px-3 py-2 text-center border border-gray-200 text-blue-700">{brandRow.totals.outOfSync || ''}</td>
+                        <td className="px-3 py-2 text-center border border-gray-200 text-blue-700">{brandRow.totals.renewalDue || ''}</td>
+                        <td className="px-3 py-2 text-center border border-gray-200 text-blue-700">{brandRow.totals.eventDemo || ''}</td>
+                        <td className="px-3 py-2 text-center border border-gray-200 text-blue-700">{brandRow.totals.other || ''}</td>
+                        {months.map(m => (
+                          <td key={m.label} className="px-3 py-2 text-center border border-gray-200 text-blue-700">{brandRow.brandMonthCounts[m.label] || ''}</td>
+                        ))}
+                      </tr>
+                      {/* KAM row */}
+                      {isBrandExpanded && (
+                        <tr key={`kam-${kamKey}`} className="bg-gray-50">
+                          <td className="px-3 py-2 border border-gray-200 pl-6 text-secondary-500"></td>
+                          <td className="px-3 py-2 border border-gray-200">
+                            <button onClick={() => toggleKAM(kamKey)} className="flex items-center gap-1 text-secondary-700 hover:text-secondary-900 font-medium">
+                              <span>{isKAMExpanded ? '▼' : '▶'}</span>
+                              {brandRow.kam}
+                            </button>
+                          </td>
+                          <td className="px-3 py-2 border border-gray-200"></td>
+                          <td className="px-3 py-2 text-center border border-gray-200 font-semibold">{brandRow.totals.tempClosed || ''}</td>
+                          <td className="px-3 py-2 text-center border border-gray-200 font-semibold">{brandRow.totals.permClosed || ''}</td>
+                          <td className="px-3 py-2 text-center border border-gray-200 font-semibold">{brandRow.totals.outOfSync || ''}</td>
+                          <td className="px-3 py-2 text-center border border-gray-200 font-semibold">{brandRow.totals.renewalDue || ''}</td>
+                          <td className="px-3 py-2 text-center border border-gray-200 font-semibold">{brandRow.totals.eventDemo || ''}</td>
+                          <td className="px-3 py-2 text-center border border-gray-200 font-semibold">{brandRow.totals.other || ''}</td>
+                          {months.map(m => (
+                            <td key={m.label} className="px-3 py-2 text-center border border-gray-200 font-semibold">{brandRow.brandMonthCounts[m.label] || ''}</td>
+                          ))}
+                        </tr>
+                      )}
+                      {/* Outlet rows */}
+                      {isBrandExpanded && isKAMExpanded && brandRow.outletRows.map((outletRow, oi) => (
+                        <tr key={`outlet-${brandRow.brand}-${oi}`} className="hover:bg-yellow-50">
+                          <td className="px-3 py-2 border border-gray-200"></td>
+                          <td className="px-3 py-2 border border-gray-200"></td>
+                          <td className="px-3 py-2 border border-gray-200 pl-8 text-secondary-700">• {outletRow.outlet}</td>
+                          <td className="px-3 py-2 text-center border border-gray-200">{outletRow.cat === 'tempClosed' ? 1 : ''}</td>
+                          <td className="px-3 py-2 text-center border border-gray-200">{outletRow.cat === 'permClosed' ? 1 : ''}</td>
+                          <td className="px-3 py-2 text-center border border-gray-200">{outletRow.cat === 'outOfSync' ? 1 : ''}</td>
+                          <td className="px-3 py-2 text-center border border-gray-200">{outletRow.cat === 'renewalDue' ? 1 : ''}</td>
+                          <td className="px-3 py-2 text-center border border-gray-200">{outletRow.cat === 'eventDemo' ? 1 : ''}</td>
+                          <td className="px-3 py-2 text-center border border-gray-200">{outletRow.cat === 'other' ? 1 : ''}</td>
+                          {months.map(m => (
+                            <td key={m.label} className="px-3 py-2 text-center border border-gray-200">{outletRow.monthCounts[m.label] || ''}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {/* Pagination */}
+        {brandChurnTotalPages > 1 && (
+          <div className="flex items-center justify-between mt-4">
+            <span className="text-sm text-secondary-600">
+              Showing {(brandChurnPage - 1) * brandChurnPageSize + 1}–{Math.min(brandChurnPage * brandChurnPageSize, brandChurnsData.length)} of {brandChurnsData.length} brands
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setBrandChurnPage(p => Math.max(1, p - 1))}
+                disabled={brandChurnPage === 1}
+                className="px-3 py-1 border border-gray-300 rounded-lg text-sm text-secondary-800 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              <span className="px-3 py-1 text-sm text-secondary-700">Page {brandChurnPage} of {brandChurnTotalPages}</span>
+              <button
+                onClick={() => setBrandChurnPage(p => Math.min(brandChurnTotalPages, p + 1))}
+                disabled={brandChurnPage === brandChurnTotalPages}
+                className="px-3 py-1 border border-gray-300 rounded-lg text-sm text-secondary-800 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {loading && (

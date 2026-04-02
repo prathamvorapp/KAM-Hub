@@ -1,0 +1,41 @@
+{
+  "name": "brand-journey-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "vitest run",
+    "test-ollama": "node test-ollama-connection.js",
+    "setup-ai": "node -e \"console.log('Run: ollama pull qwen2.5:3b')\""
+  },
+  "dependencies": {
+    "date-fns": "^3.3.1",
+    "framer-motion": "^11.0.0",
+    "next": "^16.1.6",
+    "papaparse": "^5.4.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.18",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^20.11.0",
+    "@types/papaparse": "^5.3.14",
+    "@types/react": "^18.2.48",
+    "@types/react-dom": "^18.2.18",
+    "autoprefixer": "^10.4.24",
+    "eslint": "^8.56.0",
+    "eslint-config-next": "^16.1.6",
+    "fast-check": "^3.15.0",
+    "jsdom": "^28.0.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.3.3",
+    "vitest": "^4.0.18"
+  }
+}

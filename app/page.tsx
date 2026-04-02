@@ -11,7 +11,7 @@ export default function HomePage() {
   useEffect(() => {
     // Redirect based on auth state
     if (session && userProfile) {
-      router.push('/dashboard/churn') // Redirect to churn page instead of empty dashboard
+      router.push('/dashboard')
     } else {
       router.push('/login')
     }

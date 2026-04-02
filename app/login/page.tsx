@@ -90,7 +90,7 @@ export default function LoginPage() {
       
       // Get redirect path from URL or default to churn page (not empty dashboard)
       const searchParams = new URLSearchParams(window.location.search)
-      const redirectPath = searchParams.get('redirect') || '/dashboard/churn'
+      const redirectPath = searchParams.get('redirect') || '/dashboard'
       
       // Small delay to ensure session is fully established
       await new Promise(resolve => setTimeout(resolve, 500))

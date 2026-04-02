@@ -204,7 +204,10 @@ export async function GET(request: NextRequest) {
     
     // Process demos
     demos?.forEach((demo: Demo) => {
-      const agentEmail = demo.agent_id;
+      // Credit the agent who actually completed the demo (completed_by_agent_id),
+      // falling back to the originally assigned agent_id
+      const agentEmail = (demo as any).completed_by_agent_id || demo.agent_id;
+      const agentName = (demo as any).completed_by_agent_name || demo.agent_name;
       
       if (!agentEmail) {
         console.warn(`⚠️ Demo without agent_id:`, demo.demo_id);
@@ -214,7 +217,7 @@ export async function GET(request: NextRequest) {
       if (!agentMap.has(agentEmail)) {
         console.log(`📝 Creating agent entry from demo: ${agentEmail}`);
         agentMap.set(agentEmail, {
-          agent_name: demo.agent_name,
+          agent_name: agentName,
           agent_email: agentEmail,
           team_name: demo.team_name,
           total_brands: 0,
